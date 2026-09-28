@@ -126,8 +126,15 @@ jobs:
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
 
+      # Note: this now includes tests/fixtures/ (deliberately smelly ground
+      # truth, see below) — most of the findings below are those files
+      # working exactly as designed, not real debt in this repo's own
+      # source. The ground-truth test right after this is the real check.
       - name: Real scan (ruff + pylint + vulture) against this repo
         run: uv run python3 scripts/craftcov.py --no-cache
+
+      - name: Ground-truth regression (tests/fixtures/ — every detector fires correctly)
+        run: uv run python3 tests/test_fixtures.py
 
   # Diff-aware: only meaningful against a PR's base branch.
   tidy:

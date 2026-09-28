@@ -167,6 +167,11 @@ templates/
   ci-job.yml              job fragment for .github/workflows/ci.yml
   update-check.yml        weekly drift-check + auto-PR (see "Staying up to date")
 bootstrap.sh              installer/updater
+tests/
+  fixtures/               one small file per detectable heuristic, ground
+                          truth for craftCov's detectors (see craftCov below)
+  test_fixtures.py         runs craftcov.py against fixtures/, checks each
+                          detector fired where it should
 
 CLAUDE.md, .pre-commit-config.yaml, .claude/skills/tidy-first/SKILL.md
                           this repo applies its own tooling to itself —
@@ -417,6 +422,25 @@ it's a report, meant for a human to look at and decide what's worth a
 principle as the rest of this catalog. Wiring it into CI as a hard gate
 (e.g. "fail if total > N") is a reasonable thing to add in a fork or a
 future version, deliberately not the default here.
+
+**Testing the detectors: `tests/fixtures/`.** One small, hand-authored file
+per detectable heuristic — each with a docstring naming exactly what it's
+built to trigger and why — plus `clean.py`, a negative control genuinely
+free of all eight (its functions are called from an `if __name__ ==
+"__main__":` block so vulture doesn't flag them as unused, which would
+defeat the point). `tests/test_fixtures.py` runs `craftcov.py` against that
+directory and asserts each detector fired on its own fixture; CI runs it on
+every push. Checks are presence-based, not exact-match — real code
+routinely trips more than one heuristic at once (the
+`replace-conditional-with-polymorphism` fixture also legitimately trips
+`guard-clauses` and `explaining-constant`; that's the fixture being honest
+about how code actually behaves, not test pollution to suppress). Added
+after the `min_lines=4` miscalibration above was found and fixed by
+comparing against real PMD CPD output — the two are complementary, not
+redundant: this fixture corpus catches "did a detector regress or start
+misfiring" on every push; the PMD-style comparison is what catches "is the
+*threshold* reasonable" in the first place. Neither substitutes for the
+other, which is why both exist now.
 
 ## Design choices worth knowing about
 
