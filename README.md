@@ -48,7 +48,7 @@ It answers two separate questions, on purpose:
    the subset of the catalog that has a real mechanical proxy — see
    **craftCov** below for exactly which 8 of 31 that is, and why the rest
    deliberately aren't automated.
-7. **Refactor First**, an optional mechanical gate on top of craftCov
+7. **Refactor First**, the second default CI gate, built on craftCov
    (`scripts/check_refactor_first.py`) — for those 8 detectable heuristics,
    a touched file's total must go down from where the branch diverged (or
    stay at 0). Unlike the message-pattern ratchet, this checks the
@@ -57,27 +57,34 @@ It answers two separate questions, on purpose:
 
 ## Requirements
 
-**The ratchet itself needs nothing beyond `bash`, `git`, and standard POSIX
-text tools** (`grep`, `sed`, `sort`, `uniq`, `wc`) — every dev machine and
-every GitHub Actions `ubuntu-latest` runner already has all of this. Neither
-script parses `catalog.yaml` or `CRAFTSMANSHIP.md` at runtime, so those stay
-plain files to read, not a load-bearing dependency. Nothing to `pip install`
-or `npm install`, and the CI job template needs no setup step.
+**The message-pattern ratchet itself needs nothing beyond `bash`, `git`, and
+standard POSIX text tools** (`grep`, `sed`, `sort`, `uniq`, `wc`) — every dev
+machine and every GitHub Actions `ubuntu-latest` runner already has all of
+this. Neither script parses `catalog.yaml` or `CRAFTSMANSHIP.md` at runtime,
+so those stay plain files to read, not a load-bearing dependency.
 
-Two things are **optional**, only if you use that specific piece:
+**The full default install — both CI gates, message-pattern ratchet and
+Refactor First — additionally needs craftCov's toolchain**, since Refactor
+First is built on top of it:
+
+- `scripts/craftcov.py` and `scripts/check_refactor_first.py` need PyYAML
+  importable, plus whichever of `ruff` / `pylint` / `vulture` the catalog's
+  `detectors` actually use — add a `craftcov` extra to your own dependency
+  file; see **craftCov** below for the exact block to copy. `uv sync --extra
+  craftcov` (this repo has a `pyproject.toml` for exactly this) installs all
+  three; a repo that only wants a subset of the detectable heuristics can
+  install fewer.
+
+One thing stays genuinely optional, since it's a convenience, not a gate:
 
 - The pre-push hook template needs [`prek`](https://prek.j178.dev) or
   [`pre-commit`](https://pre-commit.com) installed — craft-gate doesn't ship
   or install either. No pre-commit framework in your repo yet? Skip this and
-  rely on the CI job alone; the two enforcement points are independent.
-- Consuming `catalog.yaml` programmatically (building your own tooling on
-  top, not just running the ratchet) needs a YAML parser, e.g. `PyYAML`.
-- `scripts/craftcov.py` (see **craftCov** below) is the one script here
-  that isn't plain bash. It needs PyYAML importable, plus whichever of
-  `ruff` / `pylint` / `vulture` the catalog's `detectors` actually use —
-  `uv sync --extra craftcov` (this repo has a `pyproject.toml` for exactly
-  this) installs all three; a repo that only wants a subset of the
-  detectable heuristics can install fewer.
+  rely on the CI jobs alone; local and CI enforcement are independent.
+
+Don't want Refactor First at all — the message-pattern ratchet alone is
+enough for your repo? It stands on its own with zero dependencies; just
+leave the `refactor-first` job and the `craftcov` extra out.
 
 ## How to install in an existing repo
 
@@ -103,7 +110,7 @@ too much per project to auto-merge safely):
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gate(s) — the ratchet, plus an optional Refactor First job if you've installed craftCov | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates — the ratchet and Refactor First (needs craftCov's toolchain — see Requirements) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/CLAUDE.md.snippet.md` | `CLAUDE.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 
@@ -279,6 +286,19 @@ row's `name` field, not a new entry.
 
 A coverage-report-style scan — like `coverage.py`'s report, but for the
 catalog's mechanically-checkable heuristics instead of executed lines.
+
+In your own repo's dependency file, this is the `craftcov` extra to add
+(exact versions this release expects — see this repo's own `pyproject.toml`
+for the copy-paste source of truth):
+
+```toml
+craftcov = [
+    "pyyaml>=6.0",    # skip if already a dependency
+    "ruff>=0.13",
+    "pylint>=3.3",
+    "vulture>=2.14",
+]
+```
 
 ```bash
 uv sync --extra craftcov                      # installs ruff/pylint/vulture into .venv
@@ -477,7 +497,7 @@ file (still a full corpus scan underneath — `dupes` needs every file to find
 a match's other half, so `--file` only filters what's *reported*, never what
 gets scanned) for working through that file's present heuristics one at a
 time; `scripts/check_refactor_first.py` is the CI-side enforcement, wired in
-as the optional `refactor-first` job.
+as the `refactor-first` job — the second default gate, alongside `tidy`.
 
 **Testing the detectors: `tests/fixtures/`.** One small, hand-authored file
 per detectable heuristic — each with a docstring naming exactly what it's

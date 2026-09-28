@@ -40,7 +40,7 @@ see README), skip the judgment call: `scripts/craftcov.py --file <path>`
 before touching a file, fix one instance of every heuristic it finds
 present, bundle it all into one `tidy(multi):` commit (see
 `CRAFTSMANSHIP.md`'s "Refactor First" for the exact convention). CI's
-optional `refactor-first` job (`scripts/check_refactor_first.py`,
+`refactor-first` job (`scripts/check_refactor_first.py`,
 `templates/ci-job.yml`) enforces the *outcome* — a touched file's total
 across those heuristics must go down, or stay at 0 — the same
 `Tidy-Exempt:` trailer bypasses it too.

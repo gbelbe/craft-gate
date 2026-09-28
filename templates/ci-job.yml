@@ -1,6 +1,6 @@
-# Add this job to your .github/workflows/ci.yml. Text-only check on commit
-# messages — no deps to install, no build — so it costs seconds, not a real
-# CI pass. Set the branch name in the two places marked below.
+# Add both jobs to your .github/workflows/ci.yml — the two default
+# enforcement points this tool ships (CRAFTSMANSHIP.md's "The ratchet" and
+# "Refactor First"). Set the branch name in the places marked below.
 
   tidy:
     name: Tidy First ratchet
@@ -14,14 +14,12 @@
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
-# Optional, separate job — only add this one if you've also installed
-# craftCov (`uv sync --extra craftcov`; see README's craftCov section) and
-# want its "Refactor First" gate enforced (CRAFTSMANSHIP.md's "Refactor
-# First"): fails a PR when a touched .py file's total across the 8
-# mechanically-detectable heuristics didn't go down (or, starting from 0,
-# went up at all). Needs the full toolchain, so costs a real CI pass unlike
-# the `tidy` job above — that's why it's a separate job, and separately
-# optional.
+# A separate job, not a step in `tidy` above, because it's a real CI pass —
+# it needs craftCov's toolchain (`uv sync --extra craftcov`; see README's
+# craftCov section and pyproject.toml's `craftcov` extra) where `tidy` above
+# needs nothing beyond bash. Fails a PR when a touched .py file's total
+# across the 8 mechanically-detectable heuristics didn't go down (or,
+# starting from 0, went up at all) — see CRAFTSMANSHIP.md's "Refactor First".
   refactor-first:
     name: Refactor First gate
     runs-on: ubuntu-latest
