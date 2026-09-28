@@ -44,6 +44,24 @@ It answers two separate questions, on purpose:
    wire up by hand (a pre-commit hook, a CI job, a CLAUDE.md section). It
    never silently merges into files that vary per project.
 
+## Requirements
+
+**The ratchet itself needs nothing beyond `bash`, `git`, and standard POSIX
+text tools** (`grep`, `sed`, `sort`, `uniq`, `wc`) — every dev machine and
+every GitHub Actions `ubuntu-latest` runner already has all of this. Neither
+script parses `catalog.yaml` or `CRAFTSMANSHIP.md` at runtime, so those stay
+plain files to read, not a load-bearing dependency. Nothing to `pip install`
+or `npm install`, and the CI job template needs no setup step.
+
+Two things are **optional**, only if you use that specific piece:
+
+- The pre-push hook template needs [`prek`](https://prek.j178.dev) or
+  [`pre-commit`](https://pre-commit.com) installed — craft-gate doesn't ship
+  or install either. No pre-commit framework in your repo yet? Skip this and
+  rely on the CI job alone; the two enforcement points are independent.
+- Consuming `catalog.yaml` programmatically (building your own tooling on
+  top, not just running the ratchet) needs a YAML parser, e.g. `PyYAML`.
+
 ## Quickstart
 
 ```bash
