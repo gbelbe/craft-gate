@@ -12,7 +12,7 @@
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
 # scripts/craftcov.py, scripts/check_refactor_first.py,
-# .claude/skills/tidy-first/SKILL.md, and
+# scripts/check_complexity_ratchet.py, .claude/skills/tidy-first/SKILL.md, and
 # .craft-gate-version (a plain-text marker of which release this checkout
 # came from — see templates/update-check.yml, which reads it to detect
 # drift). It never edits CLAUDE.md, .pre-commit-config.yaml, or your CI
@@ -51,7 +51,10 @@ copy_file "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_r
 copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
 copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
 copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refactor_first.py"
-chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py"
+copy_file "$SRC_DIR/scripts/check_complexity_ratchet.py" "$TARGET/scripts/check_complexity_ratchet.py"
+chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" \
+  "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py" \
+  "$TARGET/scripts/check_complexity_ratchet.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 # Record which release this came from, so a consumer's update-check workflow
@@ -76,17 +79,25 @@ echo "     Merge its 'local' repo block into .pre-commit-config.yaml"
 echo "     (or use it as your starting file if you don't have one yet),"
 echo "     then: prek install --hook-type pre-push"
 echo
-echo "  2. Wire both default CI gates — the ratchet and Refactor First:"
+echo "  2. Wire all three default CI gates — the ratchet, Refactor First,"
+echo "     and the complexity ratchet:"
 echo "       cat '$SRC_DIR/templates/ci-job.yml'"
-echo "     Add both jobs to .github/workflows/ci.yml, set your branch name."
+echo "     Add all three jobs to .github/workflows/ci.yml, set your branch name."
 echo "     Refactor First needs craftCov's own tools on top: add a 'craftcov'"
 echo "     extra (ruff/pylint/vulture — pyyaml too, unless already a dependency)"
-echo "     to your dependency file. See README's craftCov section for the"
-echo "     exact versions this release expects."
+echo "     to your dependency file. The complexity ratchet needs its own"
+echo "     'complexity' extra (radon, cognitive-complexity). See README's"
+echo "     craftCov and 'The complexity ratchet' sections for the exact"
+echo "     versions this release expects."
 echo
 echo "  3. Add the Tidy First section to CLAUDE.md:"
 echo "       cat '$SRC_DIR/templates/CLAUDE.md.snippet.md'"
 echo "     Append it to your project's CLAUDE.md (or create one)."
+echo
+echo "     Optional, not a craftsmanship gate (skip if you don't want"
+echo "     test-first/BDD mandated for every feature):"
+echo "       cat '$SRC_DIR/templates/tdd-bdd-yagni.snippet.md'"
+echo "     A TDD+BDD+YAGNI workflow section for CLAUDE.md."
 echo
 echo "  4. Stop needing to remember to re-run this:"
 echo "       cp '$SRC_DIR/templates/update-check.yml' .github/workflows/craft-gate-update.yml"

@@ -2,8 +2,13 @@
 """craftCov — a coverage-report-style scan of the craftsmanship catalog.
 
 Honest about its limits before anything else: only the entries in
-catalog.yaml that carry `detectors` (8 of 31 as of this writing — see
-`--list-detectors`) have a real mechanical proxy. Three engines reused, one
+catalog.yaml that carry `detectors` (8 of 35 as of this writing — see
+`--list-detectors`) have a real mechanical proxy here. Four more
+(cyclomatic/cognitive complexity, invariant return, duplicated literal)
+are covered by a separate script, `check_complexity_ratchet.py` — this
+module has no awareness of it, so they show as "needs judgment" below even
+though they are, in fact, mechanically checked elsewhere; see
+CRAFTSMANSHIP.md's "The complexity ratchet". Three engines reused, one
 technique ported rather than reimplemented from scratch:
 
   - `ruff` (Rust, already a dependency in every repo this ships to, ships

@@ -53,6 +53,38 @@ jobs:
           python3 -m py_compile scripts/check_refactor_first.py
           echo "OK"
 
+      - name: check_complexity_ratchet.py compiles, pure-logic functions are correct
+        run: |
+          python3 -m py_compile scripts/check_complexity_ratchet.py
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          from check_complexity_ratchet import find_violations, compute_duplicate_literals
+          from pathlib import Path
+          import tempfile
+
+          # a function pushed over threshold, and a new one born over threshold, both fire
+          base = {'a.py::f': 10}
+          head = {'a.py::f': 20, 'a.py::g': 16}
+          v = find_violations(base, head, threshold=15)
+          assert len(v) == 2, v
+          assert 'a.py::f' in v[0] and '10' in v[0] and '20' in v[0]
+          assert 'a.py::g' in v[1] and 'new function' in v[1]
+
+          # grandfathered: unchanged-and-already-bad, or refactored down, neither fires
+          assert find_violations({'a.py::f': 20}, {'a.py::f': 20}, threshold=15) == []
+          assert find_violations({'a.py::f': 20}, {'a.py::f': 12}, threshold=15) == []
+
+          # duplicated-string-literal needs no radon/cognitive-complexity (pure ast)
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(tmp)
+              (root / 'x.py').write_text('a = \"hello world\"\nb = \"hello world\"\nc = \"hello world\"\n')
+              dup = compute_duplicate_literals(root)
+              assert any('hello world' in k for k in dup), dup
+
+          print('check_complexity_ratchet.py OK')
+          "
+
       - name: dupes algorithm smoke test (no external tool needed)
         run: |
           python3 -c "
@@ -209,3 +241,22 @@ jobs:
 
       - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
         run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"
+
+  # Independent of craftCov — own script, own catalog entries (CG032-
+  # CG035), own toolchain (radon, cognitive-complexity).
+  complexity:
+    name: Complexity ratchet (dogfood)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra complexity
+        run: uv sync --extra complexity
+
+      - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
+        run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"

@@ -44,3 +44,11 @@ present, bundle it all into one `tidy(multi):` commit (see
 `templates/ci-job.yml`) enforces the *outcome* — a touched file's total
 across those heuristics must go down, or stay at 0 — the same
 `Tidy-Exempt:` trailer bypasses it too.
+
+A third, independent gate covers cyclomatic/cognitive complexity,
+invariant return, and duplicated string literal (if you've installed the
+`complexity` extra — see README): `scripts/check_complexity_ratchet.py`
+(CI's `complexity` job) fails a touched function/literal whose metric got
+worse than where the branch diverged, grandfathering what's already there.
+`Tidy-Exempt:` bypasses this one too — one exemption mechanism for all
+three gates. See `CRAFTSMANSHIP.md`'s "The complexity ratchet".

@@ -1,6 +1,7 @@
-# Add both jobs to your .github/workflows/ci.yml — the two default
-# enforcement points this tool ships (CRAFTSMANSHIP.md's "The ratchet" and
-# "Refactor First"). Set the branch name in the places marked below.
+# Add all three jobs to your .github/workflows/ci.yml — the default
+# enforcement points this tool ships (CRAFTSMANSHIP.md's "The ratchet",
+# "Refactor First", and "The complexity ratchet"). Set the branch name in
+# the places marked below.
 
   tidy:
     name: Tidy First ratchet
@@ -36,3 +37,26 @@
 
       - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
         run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"
+
+# Independent of craftCov — its own script, its own catalog entries
+# (CG032-CG035), its own dependency extra (`uv sync --extra complexity`;
+# see README's "The complexity ratchet"). Fails a PR when a touched
+# function/literal's cyclomatic/cognitive complexity, invariant-return, or
+# duplicated-string-literal metric got worse than where the branch
+# diverged — grandfathers what's already there, blocks what gets worse.
+  complexity:
+    name: Complexity ratchet
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra complexity
+        run: uv sync --extra complexity
+
+      - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
+        run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"

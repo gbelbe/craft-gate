@@ -13,9 +13,9 @@ bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit r
 ```
 
 Or let CI's `validate` and `tidy` jobs do it — see `.github/workflows/ci.yml`.
-(`refactor-first`, same file, is diff-aware against a real base branch the
-same way `tidy` is — there's nothing useful to run locally for it outside a
-PR context; see below.)
+(`refactor-first` and `complexity`, same file, are diff-aware against a
+real base branch the same way `tidy` is — there's nothing useful to run
+locally for either outside a PR context; see below.)
 
 ## Tidy First & craftsmanship (mandatory before every feature/fix commit)
 
@@ -60,6 +60,13 @@ bundle it into one `tidy(multi):` commit (see CRAFTSMANSHIP.md's "Refactor
 First"). CI's `refactor-first` job (`scripts/check_refactor_first.py`)
 enforces the outcome — a touched file's total must go down, or stay at 0 —
 `Tidy-Exempt:` bypasses it too.
+
+A third, independent gate covers cyclomatic/cognitive complexity, invariant
+return, and duplicated string literal (CG032-CG035, no `detectors` field —
+craftcov.py has no awareness of it): `scripts/check_complexity_ratchet.py`
+(CI's `complexity` job) fails a touched function/literal whose metric got
+worse than where the branch diverged. Same `Tidy-Exempt:` bypass. See
+CRAFTSMANSHIP.md's "The complexity ratchet".
 
 ## Editing this repo specifically
 

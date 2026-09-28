@@ -21,9 +21,10 @@ It answers two separate questions, on purpose:
 ## What it actually does
 
 1. **A named, attributed catalog** (`CRAFTSMANSHIP.md` / `catalog.yaml`) —
-   31 entries: 15 structural tidyings (Beck), 9 smell-and-fix pairs
-   (Fowler), 6 new-code design principles (Martin, Beck), and the
-   legacy-code method (Feathers). Every entry cites its source — "Feature
+   35 entries: 15 structural tidyings (Beck), 13 smell-and-fix pairs
+   (Fowler, McCabe, SonarSource), 6 new-code design principles (Martin,
+   Beck), and the legacy-code method (Feathers). Every entry cites its
+   source — "Feature
    Envy (Fowler, *Refactoring*)" is a specific, checkable claim; "this could
    be cleaner" is not.
 2. **A commit convention** that keeps structural and behavioral changes in
@@ -46,7 +47,7 @@ It answers two separate questions, on purpose:
 6. **craftCov**, a coverage-report-style scan (`scripts/craftcov.py`,
    reusing ruff/pylint/vulture, plus a ported duplicate-code detector) for
    the subset of the catalog that has a real mechanical proxy — see
-   **craftCov** below for exactly which 8 of 31 that is, and why the rest
+   **craftCov** below for exactly which 8 of 35 that is, and why the rest
    deliberately aren't automated.
 7. **Refactor First**, the second default CI gate, built on craftCov
    (`scripts/check_refactor_first.py`) — for those 8 detectable heuristics,
@@ -54,6 +55,12 @@ It answers two separate questions, on purpose:
    stay at 0). Unlike the message-pattern ratchet, this checks the
    *outcome*, not just that a commit happened — see **craftCov** below and
    `CRAFTSMANSHIP.md`'s "Refactor First".
+8. **The complexity ratchet**, a third default CI gate, independent of
+   craftCov (`scripts/check_complexity_ratchet.py`) — cyclomatic/cognitive
+   complexity, invariant return, and duplicated string literal (4 more
+   catalog entries), diff-aware the same way Refactor First is: a touched
+   function/literal must not get worse from where the branch diverged. See
+   `CRAFTSMANSHIP.md`'s "The complexity ratchet".
 
 ## Requirements
 
@@ -100,23 +107,32 @@ bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 This copies the files craft-gate fully owns — `CRAFTSMANSHIP.md`,
 `catalog.yaml`, `scripts/check_tidy_ratchet.sh`,
 `scripts/report_tidy_history.sh`, `scripts/craftcov.py`,
-`scripts/check_refactor_first.py`, `.claude/skills/tidy-first/SKILL.md`, and
-a `.craft-gate-version` marker — into your repo. Nothing else is touched.
+`scripts/check_refactor_first.py`, `scripts/check_complexity_ratchet.py`,
+`.claude/skills/tidy-first/SKILL.md`, and a `.craft-gate-version` marker —
+into your repo. Nothing else is touched.
 
-**2. Wire up the four manual steps it prints** (each one is a template file
+**2. Wire up the manual steps it prints** (each one is a template file
 you merge or copy, not something bootstrap.sh guesses at, because these vary
 too much per project to auto-merge safely):
 
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates — the ratchet and Refactor First (needs craftCov's toolchain — see Requirements) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates — the ratchet, Refactor First, and the complexity ratchet (the latter two each need their own toolchain — see Requirements) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/CLAUDE.md.snippet.md` | `CLAUDE.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 
 Step 4 is the one that matters most in practice — without it, staying
 current requires remembering to re-run `bootstrap.sh` by hand. See **Staying
 up to date** below for what it actually does.
+
+**Optional, not printed by `bootstrap.sh`** (a methodology choice, not a
+craftsmanship gate — most repos won't want every one of these defaults):
+`templates/tdd-bdd-yagni.snippet.md`, appended to `CLAUDE.md` alongside
+step 3, mandates writing a Gherkin `.feature` file and listing every test
+case *before* any implementation, with an explicit YAGNI challenge to the
+request first. Skip it if your project doesn't use BDD/Gherkin, or doesn't
+want test-first mandated for every feature.
 
 **3. Confirm it works:**
 
@@ -166,22 +182,26 @@ CRAFTSMANSHIP.md         procedure, commit convention, legacy-code method
 catalog.yaml              the actual catalog data — edit this, not the
                           tables in CRAFTSMANSHIP.md directly
 pyproject.toml            PyYAML (base) + ruff/pylint/vulture (the
-                          `craftcov` extra) — `uv sync --extra craftcov`
+                          `craftcov` extra) + radon/cognitive-complexity
+                          (the `complexity` extra)
 scripts/
-  check_tidy_ratchet.sh   the CI/pre-push ratchet
-  report_tidy_history.sh  the periodic exemption-ratio / sources report
-  render_catalog.py       catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
-  craftcov.py             coverage-style scan for the detectable heuristics
-  check_refactor_first.py CI gate: a touched file's craftCov total must go
+  check_tidy_ratchet.sh    the CI/pre-push ratchet
+  report_tidy_history.sh   the periodic exemption-ratio / sources report
+  render_catalog.py        catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
+  craftcov.py              coverage-style scan for the detectable heuristics
+  check_refactor_first.py  CI gate: a touched file's craftCov total must go
                           down (or stay 0) vs. where the branch diverged
-  next_version.py         Conventional-Commits -> semver, used by release.yml
+  check_complexity_ratchet.py  CI gate: cyclomatic/cognitive complexity,
+                          invariant return, duplicated literal (CG032-CG035)
+  next_version.py          Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                thin Claude Code wrapper around CRAFTSMANSHIP.md
 templates/
-  CLAUDE.md.snippet.md    section to paste into your CLAUDE.md
-  pre-commit-hook.yaml    hook entry for .pre-commit-config.yaml
-  ci-job.yml              job fragment for .github/workflows/ci.yml
-  update-check.yml        weekly drift-check + auto-PR (see "Staying up to date")
+  CLAUDE.md.snippet.md      section to paste into your CLAUDE.md
+  tdd-bdd-yagni.snippet.md  optional companion section (see "How to install")
+  pre-commit-hook.yaml      hook entry for .pre-commit-config.yaml
+  ci-job.yml                job fragment for .github/workflows/ci.yml
+  update-check.yml          weekly drift-check + auto-PR (see "Staying up to date")
 bootstrap.sh              installer/updater
 tests/
   fixtures/               one small file per detectable heuristic, ground
@@ -282,6 +302,17 @@ whether an existing `id` already covers your fix before adding a new one; a
 new smell that shares a known remedy is a one-line addition to an existing
 row's `name` field, not a new entry.
 
+**A `detectors` field means specifically "craftcov.py's own scan covers
+this"** — only add one if you're wiring up ruff/pylint/vulture/dupes (see
+**craftCov** below for the schema). A smell with a *different* mechanical
+check — your own script, not craftcov.py's four engines — gets no
+`detectors` field at all; document the check itself in its own
+CRAFTSMANSHIP.md section instead, the way `check_complexity_ratchet.py`
+has "The complexity ratchet." Leaving `detectors` off doesn't mean
+"unchecked," just "not craftCov's job" — `--list-detectors` will call it
+"needs judgment" regardless, since that's genuinely true from craftCov's
+own point of view.
+
 ## craftCov
 
 A coverage-report-style scan — like `coverage.py`'s report, but for the
@@ -337,9 +368,15 @@ By file (top 15)
 By class (top 15, module-level findings excluded)
 By library (top-level directory)
 
-8/31 heuristics have an automatic detector (25%) — the rest need the
+8/35 heuristics have an automatic detector (22%) — the rest need the
 procedure in CRAFTSMANSHIP.md (ask the developer), not a scan.
 ```
+
+craftCov's own accounting stops there — it has no awareness of
+`scripts/check_complexity_ratchet.py`, a fully separate script. Four more
+catalog entries (CG032-CG035: cyclomatic/cognitive complexity, invariant
+return, duplicated literal) are mechanically enforced by that ratchet
+instead — see "The complexity ratchet" below, not craftCov's own report.
 
 **Changes since last run.** Every run saves its by-heuristic totals to
 `.craftcov_last_report.json` (gitignored — it's a local run-to-run diary, not
@@ -517,6 +554,68 @@ redundant: this fixture corpus catches "did a detector regress or start
 misfiring" on every push; the PMD-style comparison is what catches "is the
 *threshold* reasonable" in the first place. Neither substitutes for the
 other, which is why both exist now.
+
+## The complexity ratchet
+
+A second diff-aware gate, fully independent of craftCov (different script,
+different catalog entries, its own dependency extra) — for the 4 catalog
+entries it covers (CG032-CG035), a touched function/literal's metric must
+not get worse from where the branch diverged, the same "grandfather what's
+already there, block what gets worse" rule Refactor First uses:
+
+```toml
+complexity = [
+    "radon>=6.0",
+    "cognitive-complexity>=1.3",
+]
+```
+
+```bash
+uv sync --extra complexity
+uv run python3 scripts/check_complexity_ratchet.py --base origin/main
+```
+
+```
+Complexity ratchet: 2 violation(s):
+  - ster/tui/query_screen.py::QueryScreen._render_results: cyclomatic complexity 12 -> 18 (> 15) — refactor to reduce cyclomatic complexity instead of adding to it
+  - ster/tui/query_screen.py::QueryScreen._render_results: new function with cognitive complexity 16 (> 15) — keep new functions at or below 15
+```
+
+**Four checks, one mechanism:**
+
+- **Cyclomatic complexity** (McCabe, 1976) and **cognitive complexity**
+  (SonarQube S3776) — same threshold (15), reported separately because
+  they measure different things: cyclomatic counts independent paths,
+  cognitive charges for *nesting*, so a function radon calls simple can
+  still fail cognitive.
+- **Invariant return** (S3516) — every `return` in a function hands back
+  the same never-rebound name; two returns of a mutated list read as two
+  outcomes but are one.
+- **Duplicated string literal** (S1192) — the same literal (5+ chars)
+  repeated 3+ times in one file (not per-function — that's the rule's own
+  granularity), excluding docstrings.
+
+**Grandfathered, not retroactive.** A function already over threshold that
+you don't touch isn't a violation; the same function made *more* complex
+is. This is deliberate — the point is "don't make it worse," not "fix
+everything that already exists" (that's a separate, much bigger
+conversation the ratchet doesn't try to force).
+
+**Diff-aware via a throwaway `git worktree`**, same technique as
+`check_refactor_first.py`: one worktree checkout of the base ref computes
+all four metrics at once (checking out the base is the slow part; doing it
+once per metric would multiply that cost), compared against the current
+tree. A file move counts as a change to everything it carries — there's no
+rename-awareness, so a function that only moved to a new file is evaluated
+like new code, not matched against its old location.
+
+**Ported from a real, load-bearing script, not written from scratch for
+this repo.** Originated in a project that hit SonarQube's cognitive-
+complexity and duplicated-literal rules often enough to want them caught
+locally, before a push, rather than after — the two smells beyond plain
+cyclomatic complexity are checked against the *reference implementation*
+(the `cognitive-complexity` package) rather than a re-derivation, because
+the point is to agree with SonarQube's own server, not approximate it.
 
 ## Design choices worth knowing about
 
