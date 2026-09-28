@@ -39,6 +39,9 @@ jobs:
             bash -n "$f" && echo "OK $f"
           done
 
+      - name: CRAFTSMANSHIP.md is regenerated from catalog.yaml
+        run: python3 scripts/render_catalog.py --check
+
       - name: next_version.py bump-level logic (smoke test, no pytest dependency)
         run: |
           python3 -c "

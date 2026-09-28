@@ -34,7 +34,7 @@
   kind: tidying
   source: "Kent Beck, Tidy First? (2023)"
   smell: You need to change a function's calling shape
-  action: Introduce the calling shape you want, delegating to the existing implementation
+  action: Introduce the calling shape you want, delegating to the existing implementation, before touching behavior
 
 - id: reading-order
   name: Reading Order
@@ -103,7 +103,7 @@
   name: Explaining Comment
   kind: tidying
   source: "Kent Beck, Tidy First? (2023)"
-  smell: The why isn't inferable from the code
+  smell: The *why* isn't inferable from the code
   action: Add a comment — but only for the why, never the what
 
 - id: delete-redundant-comment
@@ -138,14 +138,14 @@
   name: Primitive Obsession
   kind: smell-fix
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
-  smell: A raw string/int stands in for a real domain concept
+  smell: "A raw string/int stands in for a real domain concept (money, a URI, a version)"
   action: Give the concept its own type
 
 - id: hide-delegate
   name: Message Chains
   kind: smell-fix
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
-  smell: "a.getB().getC().getD() reaches through several objects (Law of Demeter)"
+  smell: "`a.getB().getC().getD()` reaches through several objects (Law of Demeter)"
   action: Hide the chain behind a method on the first object
 
 - id: replace-conditional-with-polymorphism
@@ -160,7 +160,7 @@
   kind: smell-fix
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
   smell: Abstraction or a hook built for a future that hasn't arrived
-  action: Collapse it back to what's actually used
+  action: Collapse it back to what's actually used — this is YAGNI already sitting in the code
 
 - id: replace-inheritance-with-delegation
   name: Refused Bequest

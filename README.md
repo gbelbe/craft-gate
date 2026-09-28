@@ -62,19 +62,47 @@ Two things are **optional**, only if you use that specific piece:
 - Consuming `catalog.yaml` programmatically (building your own tooling on
   top, not just running the ratchet) needs a YAML parser, e.g. `PyYAML`.
 
-## Quickstart
+## How to install in an existing repo
+
+**1. Run the installer**, from a checkout of a tagged release (not piped
+over the network — you're about to run this against your own repo, read it
+first):
 
 ```bash
-# clone a tagged release rather than piping this over the network
 git clone --branch v0.1.0 --depth 1 https://github.com/gbelbe/craft-gate /tmp/craft-gate
 bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 ```
 
-This copies `CRAFTSMANSHIP.md`, `catalog.yaml`, the two scripts, and the
-Claude Code skill into your repo, then prints the three manual steps (all
-templates provided) to wire the ratchet into your pre-commit hooks, your CI,
-and your `CLAUDE.md`. Re-run it any time to pull an update — it only touches
-the files it owns.
+This copies the files craft-gate fully owns — `CRAFTSMANSHIP.md`,
+`catalog.yaml`, `scripts/check_tidy_ratchet.sh`,
+`scripts/report_tidy_history.sh`, `.claude/skills/tidy-first/SKILL.md`, and
+a `.craft-gate-version` marker — into your repo. Nothing else is touched.
+
+**2. Wire up the four manual steps it prints** (each one is a template file
+you merge or copy, not something bootstrap.sh guesses at, because these vary
+too much per project to auto-merge safely):
+
+| # | What | Template | Goes into |
+|---|---|---|---|
+| 1 | Pre-push hook | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
+| 2 | CI gate | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 3 | Agent guidance | `templates/CLAUDE.md.snippet.md` | `CLAUDE.md` |
+| 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
+
+Step 4 is the one that matters most in practice — without it, staying
+current requires remembering to re-run `bootstrap.sh` by hand. See **Staying
+up to date** below for what it actually does.
+
+**3. Confirm it works:**
+
+```bash
+bash scripts/check_tidy_ratchet.sh --base origin/main   # your default branch
+```
+
+That's the whole install. No package manager, no lockfile entry — see
+**Requirements** above for exactly what has to already be on the machine
+(short version: `bash` and `git`, nothing else, unless you opt into the
+pre-commit-hook step).
 
 ## Example
 
@@ -107,12 +135,15 @@ scripts/report_tidy_history.sh
 ## Repo layout
 
 ```
-CRAFTSMANSHIP.md         the actual content — catalog, procedure, commit
-                          convention, legacy-code method. Tool-agnostic.
-catalog.yaml              machine-readable mirror of the catalog table
+CRAFTSMANSHIP.md         procedure, commit convention, legacy-code method
+                          (hand-written) + the two catalog tables
+                          (generated — see catalog.yaml). Tool-agnostic.
+catalog.yaml              the actual catalog data — edit this, not the
+                          tables in CRAFTSMANSHIP.md directly
 scripts/
   check_tidy_ratchet.sh   the CI/pre-push ratchet
   report_tidy_history.sh  the periodic exemption-ratio / sources report
+  render_catalog.py       catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
   next_version.py         Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                thin Claude Code wrapper around CRAFTSMANSHIP.md
@@ -155,6 +186,66 @@ it just force-pushes the same branch and updates the existing PR rather than
 piling up duplicates. Nothing auto-merges — review it like any other
 dependency bump. No new credentials: it uses the repo's own default
 `GITHUB_TOKEN`, and craft-gate is only ever read from, never written to.
+
+## How to add a new heuristic / rule
+
+For the common case — a named smell with a fix (the `tidying` and
+`smell-fix` tables), which is most of the catalog — this is a one-file edit:
+
+**1. Add an entry to `catalog.yaml`:**
+
+```yaml
+- id: your-fix-name          # kebab-case, names the FIX, not the smell —
+                              # this becomes the tidy(your-fix-name): commit type
+  name: The Smell's Name     # what a reader recognizes ("Feature Envy")
+  kind: smell-fix            # tidying | smell-fix | principle | workflow — see below
+  source: "Author, Title (year)"   # exact citation — this is what makes a
+                                    # tidy(...) commit a checkable claim later
+  smell: What you'd notice that makes you reach for this
+  action: What the fix actually does
+```
+
+**2. Regenerate `CRAFTSMANSHIP.md` from it:**
+
+```bash
+python3 scripts/render_catalog.py
+```
+
+This rewrites the two generated tables (between the `<!-- BEGIN GENERATED -->`
+/ `<!-- END GENERATED -->` markers) to match `catalog.yaml`, and touches
+nothing else in the file — the procedure, the principles, the legacy-code
+workflow all stay hand-written. CI's `validate` job runs the same script
+with `--check` and fails the PR if you edited `catalog.yaml` and forgot to
+regenerate, so this can't silently drift.
+
+**3. Open a PR.** That's it for the common case — two files change
+(`catalog.yaml` and the regenerated `CRAFTSMANSHIP.md`), CI either passes or
+tells you exactly what to run.
+
+**The `kind` field** decides which section an entry lands in and whether
+it's auto-generated:
+
+| `kind` | What it means | Generated? |
+|---|---|---|
+| `tidying` | Structural-only move (Beck's *Tidy First?* sense) — a commit's tests must be identical before/after | Yes — table |
+| `smell-fix` | A named design smell and its standard fix (Fowler's sense) — broader than structural-only | Yes — table |
+| `principle` | A new-code design rule, not a retrospective commit type (Clean Code, XP's simple design, Metz) | No — prose |
+| `workflow` | A named procedure, not a single fix (Feathers' characterization-test method) | No — prose |
+
+`principle` and `workflow` entries don't reduce to one table row without
+losing the nuance that makes them useful — adding one means writing a short
+prose section in `CRAFTSMANSHIP.md` by hand (near the existing "New-code
+principles" or "Working with legacy code" sections) *and* adding the
+`catalog.yaml` entry, so the structured record still exists for tooling that
+wants it. `render_catalog.py` won't touch or validate that prose — it only
+owns the two tables.
+
+**Naming the `id`:** name it after the *fix*, not the smell — `extract-class`
+reads correctly in a commit (`tidy(extract-class): ...`) for "Large Class",
+"God Class," and "Divergent Change" alike, since they share one fix. Check
+whether an existing `id` already covers your fix before adding a new one; a
+new smell that shares a known remedy is a one-line addition to an existing
+row's `name` field, not a new entry.
 
 ## Design choices worth knowing about
 

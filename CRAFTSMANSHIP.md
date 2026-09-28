@@ -1,9 +1,12 @@
 # Craftsmanship catalog
 
-This is the source of truth. It does not assume any particular AI tool or
-editor — a human contributor, a CI script, or an agent can all read this file
-directly. Tool-specific wrappers (a Claude Code skill, a pre-commit hook, a
-CI job) point back here rather than re-stating it.
+This is the source of truth for everything except the two catalog tables
+below, which are generated from `catalog.yaml` — edit that file, not the
+tables here directly (see the repo's README, "How to add a new heuristic").
+This file does not assume any particular AI tool or editor — a human
+contributor, a CI script, or an agent can all read it directly. Tool-specific
+wrappers (a Claude Code skill, a pre-commit hook, a CI job) point back here
+rather than re-stating it.
 
 Two separate concerns, on purpose:
 
@@ -66,6 +69,10 @@ first, then tidy under its safety net.
 Small, purely structural moves: they don't change behavior, so a tidying
 commit's test results must be identical before and after.
 
+<!-- BEGIN GENERATED: tidying -->
+<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
+     hand-edit this table; edit catalog.yaml and run that script instead.
+     See CONTRIBUTING.md. -->
 | id | Name | Smell / when to reach for it | What it does |
 |---|---|---|---|
 | `guard-clauses` | Guard Clauses | Deeply nested conditionals hide the common case | Replace nested conditionals with early returns |
@@ -83,6 +90,7 @@ commit's test results must be identical before and after.
 | `one-pile` | One Pile | Related elements scattered with no visible shape | Temporarily collapse them to see the whole shape before re-splitting sensibly |
 | `explaining-comment` | Explaining Comment | The *why* isn't inferable from the code | Add a comment — but only for the why, never the what |
 | `delete-redundant-comment` | Delete Redundant Comment | A comment just restates the code | Remove it |
+<!-- END GENERATED: tidying -->
 
 ### Smells and their fixes — Fowler (with Beck), *Refactoring*, 2nd ed. (2018)
 
@@ -90,6 +98,10 @@ Broader than Tidy First's structural-only scope — these describe design
 problems and their standard fixes. They apply to existing code you're about
 to touch *and* are worth watching for while writing new code.
 
+<!-- BEGIN GENERATED: smell-fix -->
+<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
+     hand-edit this table; edit catalog.yaml and run that script instead.
+     See CONTRIBUTING.md. -->
 | id | Name (smell) | Smell / when to reach for it | What it does |
 |---|---|---|---|
 | `extract-class` | Large Class / God Class / Divergent Change | A class doing too much, or changing for many unrelated reasons | Split it along its actual responsibilities |
@@ -101,6 +113,7 @@ to touch *and* are worth watching for while writing new code.
 | `collapse-hierarchy` | Speculative Generality | Abstraction or a hook built for a future that hasn't arrived | Collapse it back to what's actually used — this is YAGNI already sitting in the code |
 | `replace-inheritance-with-delegation` | Refused Bequest | A subclass uses only a fraction of what it inherits | Prefer composition over the ill-fitting inheritance |
 | `consolidate-duplicate-conditional` | Shotgun Surgery (conditional form) | One logical decision is duplicated as near-identical conditionals in several places | Consolidate into one decision point |
+<!-- END GENERATED: smell-fix -->
 
 *Comments as a smell* (Fowler, and independently Martin below): a comment
 explaining *what* a block does is a signal the block wants a name, not a
