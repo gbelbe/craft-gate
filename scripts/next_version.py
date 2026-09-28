@@ -67,7 +67,7 @@ def next_version(current: str | None, level: str) -> str:
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(
         ["git", *args], capture_output=True, text=True, check=False
     ).stdout.strip()
 

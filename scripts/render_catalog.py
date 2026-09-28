@@ -37,8 +37,10 @@ TABLES = {
     ),
     "smell-fix": (
         "smell-fix",
-        "| Code | id | Name (smell) | Smell / when to reach for it | What it does |\n"
-        "|---|---|---|---|---|",
+        (
+            "| Code | id | Name (smell) | Smell / when to reach for it | What it does |\n"
+            "|---|---|---|---|---|"
+        ),
     ),
 }
 
@@ -55,9 +57,9 @@ def replace_between(text: str, tag: str, replacement: str) -> str:
     begin = f"<!-- BEGIN GENERATED: {tag} -->"
     end = f"<!-- END GENERATED: {tag} -->"
     note = (
-        f"<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't\n"
-        f"     hand-edit this table; edit catalog.yaml and run that script instead.\n"
-        f"     See CONTRIBUTING.md. -->"
+        "<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't\n"
+        "     hand-edit this table; edit catalog.yaml and run that script instead.\n"
+        "     See CONTRIBUTING.md. -->"
     )
     pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
     if not pattern.search(text):
@@ -83,7 +85,7 @@ def main() -> int:
 
     if check:
         print(f"✗ {DOC_PATH.name} is out of date with {CATALOG_PATH.name} — run:")
-        print(f"    python3 scripts/render_catalog.py")
+        print("    python3 scripts/render_catalog.py")
         return 1
 
     DOC_PATH.write_text(rendered)

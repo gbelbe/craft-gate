@@ -151,13 +151,16 @@ jobs:
         run: uv sync --extra craftcov
 
       # scripts/*.py ship verbatim into every consuming repo (bootstrap.sh
-      # copies them byte-for-byte) — a line ruff-format leaves too long here
-      # only ever surfaces downstream, as a consumer's own (usually
-      # stricter) ruff config failing on a file it never wrote. See
-      # pyproject.toml's [tool.ruff] comment for why line-length = 100.
-      - name: scripts/*.py fit this repo's own line-length (what every consumer inherits)
+      # copies them byte-for-byte) — anything ruff's default rule set would
+      # catch here (an unused import, a stray f-string prefix, a line over
+      # this repo's line-length = 100) only ever surfaces downstream
+      # otherwise, as a consumer's own (usually stricter) ruff config
+      # failing on a file it never wrote — caught the hard way once
+      # already (an unused `import shutil` this check didn't exist to
+      # catch). See pyproject.toml's [tool.ruff] comment for line-length.
+      - name: scripts/*.py pass ruff's default rules (what every consumer inherits)
         run: |
-          uv run ruff check --select E501 scripts/*.py
+          uv run ruff check scripts/*.py
           uv run ruff format --check scripts/*.py
 
       # Note: this now includes tests/fixtures/ (deliberately smelly ground
