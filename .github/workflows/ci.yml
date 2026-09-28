@@ -151,14 +151,17 @@ jobs:
         run: uv sync --extra craftcov
 
       # scripts/*.py ship verbatim into every consuming repo (bootstrap.sh
-      # copies them byte-for-byte) — anything ruff's default rule set would
-      # catch here (an unused import, a stray f-string prefix, a line over
-      # this repo's line-length = 100) only ever surfaces downstream
-      # otherwise, as a consumer's own (usually stricter) ruff config
-      # failing on a file it never wrote — caught the hard way once
-      # already (an unused `import shutil` this check didn't exist to
-      # catch). See pyproject.toml's [tool.ruff] comment for line-length.
-      - name: scripts/*.py pass ruff's default rules (what every consumer inherits)
+      # copies them byte-for-byte) — anything this select would catch here
+      # (an unused import, a stray f-string prefix, a bare `raise` inside
+      # except, a line over this repo's line-length = 100) only ever
+      # surfaces downstream otherwise, as a consumer's own ruff config
+      # failing on a file it never wrote — caught the hard way twice
+      # already. The select is the intersection every consumer this has
+      # actually shipped to (kai-ster, semanticdiff, semanticlint) enables
+      # — narrower than any one of them, so passing here means passing
+      # everywhere, not aimed at one repo's particular ignore list. See
+      # pyproject.toml's [tool.ruff] comment for line-length.
+      - name: scripts/*.py pass the rules every consumer repo enables
         run: |
           uv run ruff check scripts/*.py
           uv run ruff format --check scripts/*.py

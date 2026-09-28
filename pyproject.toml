@@ -28,3 +28,9 @@ line-length = 100  # every consuming repo checked so far (kai-ster, semanticdiff
 # semanticlint) independently settled on 100 — scripts/*.py are copied
 # verbatim into those repos, so matching it here means a consumer never has
 # to re-lint/reformat what bootstrap.sh gives it against its own house style.
+
+[tool.ruff.lint]
+# The intersection every consuming repo checked so far enables — narrower
+# than any one of them, so passing here means passing everywhere, not
+# tuned to one repo's particular select/ignore list.
+select = ["E", "W", "F", "I", "UP", "B", "C4", "SIM"]
