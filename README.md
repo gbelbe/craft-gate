@@ -44,9 +44,10 @@ It answers two separate questions, on purpose:
    wire up by hand (a pre-commit hook, a CI job, a CLAUDE.md section). It
    never silently merges into files that vary per project.
 6. **craftCov**, a coverage-report-style scan (`scripts/craftcov.py`,
-   reusing ruff/pylint/vulture) for the subset of the catalog that has a
-   real mechanical proxy — see **craftCov** below for exactly which 7 of 31
-   that is, and why the rest deliberately aren't automated.
+   reusing ruff/pylint/vulture, plus a ported duplicate-code detector) for
+   the subset of the catalog that has a real mechanical proxy — see
+   **craftCov** below for exactly which 8 of 31 that is, and why the rest
+   deliberately aren't automated.
 
 ## Requirements
 
@@ -275,36 +276,63 @@ uv run python3 scripts/craftcov.py --list-detectors  # which heuristics are dete
 
 ```
 craftCov — craftsmanship heuristic scan
-Scanned 668 files (0 changed, 668 from cache) in 0.03s
+Scanned 669 files (0 changed, 669 from cache) in 1.45s
+Duplicate-code pass: 1.10s (always full-corpus — see README)
 
 By heuristic
 CODE    ID                                      COUNT  SOURCE
-CG002   dead-code                                  36  Kent Beck, Tidy First? (2023)
+CG002   dead-code                                1685  Kent Beck, Tidy First? (2023)
+CG024   consolidate-duplicate-conditional         432  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 CG009   explaining-constant                       378  Kent Beck, Tidy First? (2023)
-CG016   extract-class                              17  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 CG018   introduce-parameter-object                  65  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
+CG016   extract-class                              17  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 CG001   guard-clauses                                1  Kent Beck, Tidy First? (2023)
 CG012   extract-helper                               1  Kent Beck, Tidy First? (2023)
-        TOTAL                                      498
+        TOTAL                                    2579
 
 By file (top 15)
 By class (top 15, module-level findings excluded)
 By library (top-level directory)
 
-7/31 heuristics have an automatic detector (22%) — the rest need the
+8/31 heuristics have an automatic detector (25%) — the rest need the
 procedure in CRAFTSMANSHIP.md (ask the developer), not a scan.
 ```
+
+Each duplicate is counted once *per copy*, not once per pair — a 2-copy
+duplicate is 2 findings, one at each location, the same "each flagged line
+counts" convention as every other detector here.
+
+**Calibrated against the real PMD CPD, not guessed.** The first version of
+this shipped with `min_lines=4` (pylint's own default) and reported 8778
+`consolidate-duplicate-conditional` findings on kai-ster — 84% of them were
+the minimum 4-5 line matches, and inspecting a sample turned up things like
+a bare `subprocess.run(..., capture_output=True, text=True, check=False)`
+call flagged as "duplicated" against three unrelated files: real, but not
+useful signal. Rather than guess a better number, installed PMD 7.9.0
+(needs a JVM — Java 17+; the project's own `min_lines` default doesn't, see
+below) and ran its actual CPD against the identical file set (`git
+ls-files`, same 669 files) at a few `--minimum-tokens` settings. Result:
+both tools **agree on the real duplicates** — PMD independently found the
+same 31-41-line duplicate in `ster/git/manager/_sync.py` this tool found —
+and PMD's own `--minimum-tokens=50` (common in its own examples; PMD ships
+no built-in default, unlike pylint) does *not* flag the bare
+`subprocess.run(...)` snippet standalone, only as part of a larger, real
+duplicate. Measuring tokens/line directly on this codebase (~5.2) and
+testing several `min_lines` values against PMD's cluster counts at a few
+`--minimum-tokens` settings, `min_lines=8` landed closest in the same order
+of magnitude as PMD@50 — that's the new default (`catalog.yaml`'s comment
+on this entry has the full numbers). 8778 → 432, a 20x drop, from fixing
+the threshold alone — the algorithm itself needed no changes.
 
 **Honest about its limits, on purpose.** Real semantic smell detection
 (Feature Envy, Data Clumps *precisely* — not just "too many params," the
 *same group* repeating — Message Chains, Primitive Obsession, Refused
-Bequest, cross-file duplicate code) needs judgment a regex or AST check
-can't safely fake, or tooling that doesn't exist for Python (checked, while
-building this, against ruff's own open GitHub issues admitting the
-duplicate-code gap, and the academic design-smell-detection literature,
-which is Java/C#/C++-tooling-only — see **Backlog** below). So craftCov
-doesn't try to fake any of them. It reuses three engines for the entries
-where each is a decent proxy — 7 of 31:
+Bequest) needs judgment a regex or AST check can't safely fake, or tooling
+that doesn't exist for Python (checked against the academic
+design-smell-detection literature, which is Java/C#/C++-tooling-only). So
+craftCov doesn't try to fake any of them. It reuses three engines, and
+ports one technique, for the entries where each is a decent proxy — 8 of
+31:
 
 - [`ruff`](https://astral.sh/ruff) (Rust, a dependency your project almost
   certainly already has, own fast internal cache) — `guard-clauses`,
@@ -327,6 +355,22 @@ where each is a decent proxy — 7 of 31:
   quietly discarding it — tune with `--vulture-min-confidence N` once
   you've triaged a first pass and know your codebase's noise floor (its
   effect on the earlier example: `dead-code` 1685 → 36 at `N=80`).
+- **`dupes`** — not a subprocess, `scripts/craftcov.py`'s own code:
+  `consolidate-duplicate-conditional`, via a from-scratch port of the
+  rolling-hash line-window matching technique both PMD CPD (Karp-Rabin
+  string matching over a token stream — verified against PMD's own docs)
+  and pylint's own `R0801` checker (the same technique, one level coarser —
+  verified against pylint's actual source) use internally. Ported instead
+  of subprocessing pylint's checker because pylint's own CLI JSON only
+  gives ONE of a duplicate pair's two locations in structured form (the
+  other is free text embedded in the message), and its internal API
+  (`_compute_sims`) is private and churns across versions (this project's
+  own `pylint` dependency moved 3.x → 4.x mid-session). Costs nothing new
+  to install — stdlib only. Exact-match, like both reference tools'
+  default mode (no identifier/literal normalization — PMD's fuzzy Type-2
+  matching needs a real per-language tokenizer to do properly, out of
+  scope here); doesn't special-case docstrings the way pylint's checker
+  does either, so a duplicated docstring block is still reported.
 
 Every other entry shows `0` findings not because your code is clean by that
 measure, but because craftCov has nothing to say about it — see
@@ -342,20 +386,30 @@ excluded from this view rather than miscounted against "no class"), and by
 "library" (the top-level directory a file lives under — `ster`, `tests`,
 `scripts`, whatever your repo's layout is).
 
-**Caching, two layers.** ruff's own `.ruff_cache/` already skips re-linting
-unchanged files internally (pylint and vulture have no cache of their own).
-On top of that, craftCov keeps `.craftcov_cache.json`, keyed by each file's
-content hash (not mtime — a `touch` or a clean checkout with different
-timestamps doesn't cause a rescan) and by a path *relative* to the scan
-root (so the cache survives the repo moving to a different absolute path,
-e.g. a fresh clone in CI). Its cache also stores the class/function
-attribution none of the three tools track on their own, so a warm re-run
-skips re-parsing ASTs for unchanged files too, not just re-linting them. A
-cold run over kai-ster's ~670 files across all three tools took 9.7s; a
-warm one with nothing changed took 0.03s. One caveat: the cache doesn't
-know about scan *parameters* — changing `--vulture-min-confidence` between
-runs needs `--no-cache` to actually take effect, since the file itself
-didn't change.
+**Caching, per-file tools only.** ruff's own `.ruff_cache/` already skips
+re-linting unchanged files internally (pylint and vulture have no cache of
+their own). On top of that, craftCov keeps `.craftcov_cache.json`, keyed by
+each file's content hash (not mtime — a `touch` or a clean checkout with
+different timestamps doesn't cause a rescan) and by a path *relative* to
+the scan root (so the cache survives the repo moving to a different
+absolute path, e.g. a fresh clone in CI). Its cache also stores the
+class/function attribution none of the three subprocess tools track on
+their own, so a warm re-run skips re-parsing ASTs for unchanged files too,
+not just re-linting them. A cold run over kai-ster's ~670 files across
+ruff/pylint/vulture took 9.1s; warm, 1.45s (mostly just re-hashing 669
+files to confirm nothing changed). One caveat: the cache doesn't know
+about scan *parameters* — changing `--vulture-min-confidence` between runs
+needs `--no-cache` to actually take effect, since the file itself didn't
+change.
+
+**`dupes` doesn't participate in that cache, on purpose.** A duplicate only
+means anything relative to its *other* copy — if file B changes, file A's
+cached "duplicate of B" finding could go stale even though A itself didn't
+change, and per-file caching has no way to know that. So the duplicate-code
+pass always re-scans every file, every run, independent of the
+ruff/pylint/vulture changed/cached split above. In practice this is cheap
+enough not to matter: 1.40s over kai-ster's ~670 files / ~130k lines,
+whether cold or warm.
 
 **Not a gate.** Unlike `check_tidy_ratchet.sh`, craftCov doesn't fail CI —
 it's a report, meant for a human to look at and decide what's worth a
@@ -363,18 +417,6 @@ it's a report, meant for a human to look at and decide what's worth a
 principle as the rest of this catalog. Wiring it into CI as a hard gate
 (e.g. "fail if total > N") is a reasonable thing to add in a fork or a
 future version, deliberately not the default here.
-
-## Backlog
-
-- **Duplicate-code detection** (would newly detect
-  `consolidate-duplicate-conditional`, and more generally Shotgun Surgery):
-  the standard tool is PMD's CPD, which explicitly supports Python — but
-  needs a JVM, a much heavier dependency than anything else here, and cuts
-  against craftCov's "reuse a lightweight tool" approach. Next step:
-  investigate a pure-Python equivalent (e.g. pylint's own `R0801`
-  duplicate-code/similarity checker, already half-adopted here for
-  `extract-class`) before considering the JVM route. Deliberately not done
-  yet rather than rushed with the wrong dependency shape.
 
 ## Design choices worth knowing about
 

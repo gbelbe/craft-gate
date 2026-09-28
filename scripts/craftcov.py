@@ -2,9 +2,9 @@
 """craftCov — a coverage-report-style scan of the craftsmanship catalog.
 
 Honest about its limits before anything else: only the entries in
-catalog.yaml that carry `detectors` (7 of 31 as of this writing — see
-`--list-detectors`) have a real mechanical proxy. Three engines, each
-reused rather than reimplemented:
+catalog.yaml that carry `detectors` (8 of 31 as of this writing — see
+`--list-detectors`) have a real mechanical proxy. Three engines reused, one
+technique ported rather than reimplemented from scratch:
 
   - `ruff` (Rust, already a dependency in every repo this ships to, ships
     its own fast internal cache) — guard-clauses, dead-code,
@@ -30,13 +30,26 @@ reused rather than reimplemented:
     `--vulture-min-confidence` once you've triaged a first pass and know
     your codebase's noise floor. The per-finding confidence is preserved in
     `--verbose`/JSON output for exactly this triage.
+  - `dupes` (this module's own code, not a subprocess) — a from-scratch
+    port of the rolling-hash line-window matching technique both PMD CPD
+    (Karp-Rabin string matching over a token stream, per PMD's own docs)
+    and pylint's own R0801 checker (same technique, one level coarser:
+    stripped lines instead of language tokens — verified against pylint's
+    actual source before porting) use — consolidate-duplicate-conditional.
+    Ported rather than subprocessing pylint's checker because its CLI only
+    puts ONE of a duplicate pair's two locations in structured JSON output
+    (the other is free text inside the message), and its internal API is
+    private/unstable across versions. See that section of this file for
+    the full explanation, including why it's corpus-wide (runs over every
+    file, every time — never through the per-file cache, unlike the three
+    subprocess engines above) and what "exact match, no docstring
+    special-casing" means for it in practice.
 
 Feature Envy, Data Clumps *precisely* (not just "too many params" — the
 *same group* repeating), Message Chains, Primitive Obsession, Refused
-Bequest, cross-file duplicate code, and every `principle`/`workflow` entry
-have no detector on purpose: no maintained, reusable Python tool exists for
-any of them (checked against ruff's own open issues, PMD's CPD — Java/JVM,
-out of scope here — and the design-smell-detection literature, which is
+Bequest, and every `principle`/`workflow` entry have no detector on
+purpose: no maintained, reusable Python tool exists for any of them
+(checked against the design-smell-detection literature, which is
 Java/C#/C++-tooling-only). A regex or AST check confident enough to report
 these would cry wolf more than it'd help. Those stay a job for the
 procedure in CRAFTSMANSHIP.md (read the code, ask the developer), not this
@@ -60,8 +73,9 @@ Requires (unlike the other craft-gate scripts, which are plain bash):
 PyYAML importable, plus whichever of `ruff` / `pylint` / `vulture` is on
 PATH for the detectors catalog.yaml actually uses — only invoked if at
 least one entry needs it, so a repo without pylint installed still gets
-the other two engines' findings, not a hard failure. `uv sync --extra
-craftcov` in this repo installs all three; see README's Requirements.
+the other engines' findings, not a hard failure. `dupes` needs nothing
+beyond the stdlib. `uv sync --extra craftcov` in this repo installs all
+three external engines; see README's Requirements.
 
 Usage:
     python3 scripts/craftcov.py                  # scan, text report
@@ -76,11 +90,13 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import io
 import json
 import re
 import subprocess
 import sys
 import time
+import tokenize
 from pathlib import Path
 
 import yaml
@@ -92,6 +108,7 @@ CACHE_VERSION = 4
 
 RULE_BASED_TOOLS = {"ruff", "pylint"}
 WHOLE_FILE_TOOLS = {"vulture"}
+CORPUS_TOOLS = {"dupes"}  # needs the whole file set at once, not per-file
 
 
 # ── catalog / detector mapping ────────────────────────────────────────────────
@@ -101,18 +118,25 @@ def load_catalog() -> list[dict]:
     return yaml.safe_load(CATALOG_PATH.read_text())
 
 
-def build_detector_index(catalog: list[dict]) -> tuple[dict[str, dict[str, dict]], dict[str, dict]]:
-    """(rule_maps, whole_tool_map).
+def build_detector_index(
+    catalog: list[dict],
+) -> tuple[dict[str, dict[str, dict]], dict[str, dict], dict[str, dict]]:
+    """(rule_maps, whole_tool_map, corpus_tool_map).
 
     rule_maps: tool -> {rule_code: catalog_entry}, for rule-granular tools
     (ruff, pylint). whole_tool_map: tool -> catalog_entry, for tools whose
     findings all mean one specific heuristic regardless of message
-    (vulture). Each (tool, rule) or (tool) claims exactly one entry by
-    construction — collisions are a catalog.yaml authoring error, not
-    something to silently pick a winner for.
+    (vulture) — one finding, one location. corpus_tool_map: tool ->
+    {"entry": catalog_entry, **config}, for tools that need the whole file
+    set at once rather than per-file (dupes — a duplicate only means
+    anything relative to its other copy, possibly in a different file).
+    Each (tool, rule) or (tool) claims exactly one entry by construction —
+    collisions are a catalog.yaml authoring error, not something to
+    silently pick a winner for.
     """
     rule_maps: dict[str, dict[str, dict]] = {}
     whole_tool: dict[str, dict] = {}
+    corpus_tool: dict[str, dict] = {}
     for entry in catalog:
         for d in entry.get("detectors", []):
             tool = d["tool"]
@@ -132,9 +156,16 @@ def build_detector_index(catalog: list[dict]) -> tuple[dict[str, dict[str, dict]
                         f"{whole_tool[tool]['id']} and {entry['id']} in catalog.yaml"
                     )
                 whole_tool[tool] = entry
+            elif tool in CORPUS_TOOLS:
+                if tool in corpus_tool:
+                    raise SystemExit(
+                        f"✗ {tool} (a corpus-wide detector) is claimed by both "
+                        f"{corpus_tool[tool]['entry']['id']} and {entry['id']} in catalog.yaml"
+                    )
+                corpus_tool[tool] = {"entry": entry, **{k: v for k, v in d.items() if k != "tool"}}
             else:
                 raise SystemExit(f"✗ catalog.yaml: unknown detector tool '{tool}' on {entry['id']}")
-    return rule_maps, whole_tool
+    return rule_maps, whole_tool, corpus_tool
 
 
 # ── file discovery ───────────────────────────────────────────────────────────
@@ -198,6 +229,148 @@ def enclosing_class(scopes: list[tuple[int, int, str, str]], line: int) -> str |
         if best is None or (end - start) < (best[1] - best[0]):
             best = (start, end, kind, qualname)
     return best[3] if best else None
+
+
+# ── duplicate code (ported, not subprocessed) ───────────────────────────────
+# Same core technique as both PMD CPD (Karp-Rabin rolling-hash string
+# matching over a token stream, per its own docs) and pylint's own R0801
+# checker (same technique, one level coarser: stripped *lines* rather than
+# language tokens) — verified against both before writing this, not
+# designed from scratch. Ported instead of subprocessing pylint because
+# pylint's CLI only puts ONE of a duplicate pair's two locations in
+# structured JSON; the other is embedded as free text inside the message,
+# and its internal API (`_compute_sims`) is private/unstable. This is ~60
+# lines once you already know the algorithm, and needs no new dependency.
+#
+# Corpus-wide by nature (a duplicate only means anything relative to its
+# other copy, possibly in a different file) — unlike ruff/pylint/vulture,
+# this always runs over every file, not just ones the per-file cache says
+# changed. See main()'s comment on why that's an acceptable trade rather
+# than a missed optimization.
+#
+# Exact-match only, like both reference tools' default mode — no
+# identifier/literal normalization (PMD's opt-in Type-2 fuzzy matching
+# needs a real per-language tokenizer to do properly; out of scope here).
+# Doesn't special-case docstrings the way pylint's checker does either (a
+# deliberate simplification) — a duplicated docstring block is still
+# reported, which is arguably still useful signal for this catalog entry.
+
+
+def strip_lines_for_dupes(source: str) -> list[tuple[int, str]]:
+    """(original_line_number, normalized_text) for every line with real
+    code content — comments and blank lines dropped. Uses `tokenize`, not a
+    regex, so a '#' inside a string literal is never mistaken for a
+    comment start."""
+    lines = source.splitlines()
+    comment_cols: dict[int, int] = {}
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type == tokenize.COMMENT:
+                comment_cols[tok.start[0]] = tok.start[1]
+    except (tokenize.TokenizeError, IndentationError, SyntaxError, ValueError):
+        pass  # fall back to no comment-stripping for a file tokenize can't handle
+
+    result: list[tuple[int, str]] = []
+    for i, raw in enumerate(lines, start=1):
+        text = (raw[: comment_cols[i]] if i in comment_cols else raw).strip()
+        if text:
+            result.append((i, text))
+    return result
+
+
+def find_duplicate_blocks(filtered_by_file: dict[str, list[tuple[int, str]]], min_lines: int) -> list[dict]:
+    """Hash every min_lines-line window per file; any hash shared by two
+    windows (same file or different) is a candidate duplicate, extended
+    forward line-by-line to its true length, then de-overlapped so one long
+    duplicate doesn't get reported as a pile of short overlapping ones."""
+    texts_by_file = {rel: [t for _, t in lines] for rel, lines in filtered_by_file.items()}
+
+    window_hash: dict[str, list[tuple[str, int]]] = {}
+    for rel, texts in texts_by_file.items():
+        for i in range(len(texts) - min_lines + 1):
+            key = hashlib.sha256("\n".join(texts[i : i + min_lines]).encode()).hexdigest()
+            window_hash.setdefault(key, []).append((rel, i))
+
+    raw_matches: list[tuple[str, int, int, str, int, int]] = []
+    seen_pairs: set[tuple[str, int, str, int]] = set()
+    for occurrences in window_hash.values():
+        if len(occurrences) < 2:
+            continue
+        for a in range(len(occurrences)):
+            for b in range(a + 1, len(occurrences)):
+                rel_a, i_a = occurrences[a]
+                rel_b, i_b = occurrences[b]
+                if rel_a == rel_b and i_a == i_b:
+                    continue
+                pair_key = (rel_a, i_a, rel_b, i_b)
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+                texts_a, texts_b = texts_by_file[rel_a], texts_by_file[rel_b]
+                length = min_lines
+                while (
+                    i_a + length < len(texts_a)
+                    and i_b + length < len(texts_b)
+                    and texts_a[i_a + length] == texts_b[i_b + length]
+                ):
+                    length += 1
+                raw_matches.append((rel_a, i_a, i_a + length, rel_b, i_b, i_b + length))
+
+    # Longer matches subsume the shorter, overlapping windows that also
+    # matched inside them — a 20-line duplicate would otherwise produce
+    # ~17 separate 4-line reports. Keep only matches not already covered by
+    # a longer one over the same (file, file) pair and overlapping range.
+    raw_matches.sort(key=lambda m: -(m[2] - m[1]))
+    covered: dict[tuple[str, str], list[tuple[int, int, int, int]]] = {}
+    kept: list[dict] = []
+    for rel_a, i_a, end_a, rel_b, i_b, end_b in raw_matches:
+        pair_key = (rel_a, rel_b) if rel_a <= rel_b else (rel_b, rel_a)
+        ranges = covered.setdefault(pair_key, [])
+        if any(i_a >= ca0 and end_a <= ca1 and i_b >= cb0 and end_b <= cb1 for ca0, ca1, cb0, cb1 in ranges):
+            continue
+        ranges.append((i_a, end_a, i_b, end_b))
+        kept.append(
+            {
+                "file_a": rel_a,
+                "start_a": filtered_by_file[rel_a][i_a][0],
+                "end_a": filtered_by_file[rel_a][end_a - 1][0],
+                "file_b": rel_b,
+                "start_b": filtered_by_file[rel_b][i_b][0],
+                "end_b": filtered_by_file[rel_b][end_b - 1][0],
+                "lines": end_a - i_a,
+            }
+        )
+    return kept
+
+
+def run_dupes(root: Path, rel_files: list[str], min_lines: int) -> list[dict]:
+    filtered_by_file = {rel: strip_lines_for_dupes((root / rel).read_text()) for rel in rel_files}
+    blocks = find_duplicate_blocks(filtered_by_file, min_lines)
+    items: list[dict] = []
+    for b in blocks:
+        items.append(
+            {
+                "rel": b["file_a"],
+                "line": b["start_a"],
+                "col": 0,
+                "tool": "dupes",
+                "rule": None,
+                "duplicate_of": f"{b['file_b']}:{b['start_b']}-{b['end_b']}",
+                "dup_lines": b["lines"],
+            }
+        )
+        items.append(
+            {
+                "rel": b["file_b"],
+                "line": b["start_b"],
+                "col": 0,
+                "tool": "dupes",
+                "rule": None,
+                "duplicate_of": f"{b['file_a']}:{b['start_a']}-{b['end_a']}",
+                "dup_lines": b["lines"],
+            }
+        )
+    return items
 
 
 # ── tool runners ──────────────────────────────────────────────────────────────
@@ -436,6 +609,8 @@ def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[s
         f"Scanned {timing['total_files']} files "
         f"({timing['changed']} changed, {timing['cached']} from cache) in {timing['elapsed']:.2f}s"
     )
+    if timing.get("dupes_elapsed", 0) > 0:
+        print(f"Duplicate-code pass: {timing['dupes_elapsed']:.2f}s (always full-corpus — see README)")
     print()
 
     if agg["total"] == 0:
@@ -474,7 +649,8 @@ def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[s
                 rule = f"{f['tool']}:{f['rule']}" if f["rule"] else f["tool"]
                 if f.get("confidence") is not None:
                     rule += f" {f['confidence']}%"
-                print(f"  {rel}:{f['line']}  {f['heuristic_code']} {f['heuristic_id']} ({rule}){scope}")
+                dup = f"  <-> {f['duplicate_of']} ({f['dup_lines']} lines)" if f.get("duplicate_of") else ""
+                print(f"  {rel}:{f['line']}  {f['heuristic_code']} {f['heuristic_id']} ({rule}){scope}{dup}")
 
     n_detectable = sum(1 for e in catalog_by_id.values() if e.get("detectors"))
     n_total = len(catalog_by_id)
@@ -498,6 +674,41 @@ def print_detector_list(catalog: list[dict]) -> None:
                 parts.append(f"{d['tool']}: {', '.join(d['rules'])}" if "rules" in d else d["tool"])
             status = " + ".join(parts)
         print(f"{e.get('code',''):7s} {e['id']:38s} {status}")
+
+
+def merge_corpus_findings(
+    root: Path, all_files: list[str], by_file: dict[str, list[dict]], corpus_tool: dict[str, dict]
+) -> None:
+    """Runs corpus-wide tools (currently just `dupes`) over every file,
+    every run — never through the per-file cache (see the module docstring
+    on `dupes`'s own section for why). Appends into by_file in place."""
+    if "dupes" not in corpus_tool:
+        return
+    cfg = corpus_tool["dupes"]
+    entry = cfg["entry"]
+    min_lines = cfg.get("min_lines", 8)  # see catalog.yaml's comment for the PMD-calibration behind this
+    items = run_dupes(root, all_files, min_lines)
+
+    scopes_cache: dict[str, list[tuple[int, int, str, str]]] = {}
+    for item in items:
+        rel = item["rel"]
+        if rel not in scopes_cache:
+            scopes_cache[rel] = build_scope_index((root / rel).read_text())
+        cls = enclosing_class(scopes_cache[rel], item["line"])
+        by_file.setdefault(rel, []).append(
+            {
+                "line": item["line"],
+                "col": item["col"],
+                "tool": item["tool"],
+                "rule": item["rule"],
+                "confidence": None,
+                "heuristic_id": entry["id"],
+                "heuristic_code": entry.get("code", ""),
+                "class": cls,
+                "duplicate_of": item["duplicate_of"],
+                "dup_lines": item["dup_lines"],
+            }
+        )
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -531,7 +742,7 @@ def main() -> int:
         print_detector_list(catalog)
         return 0
 
-    rule_maps, whole_tool = build_detector_index(catalog)
+    rule_maps, whole_tool, corpus_tool = build_detector_index(catalog)
     root = Path(args.path).resolve()
     cache_path = Path(args.cache_file)
 
@@ -558,7 +769,11 @@ def main() -> int:
     for stale in set(cached_files) - set(hashes):
         del cached_files[stale]
 
-    save_cache(cache_path, cache)
+    save_cache(cache_path, cache)  # before dupes: those never get persisted
+
+    dupes_t0 = time.monotonic()
+    merge_corpus_findings(root, files, by_file, corpus_tool)
+    dupes_elapsed = time.monotonic() - dupes_t0
 
     agg = aggregate(by_file)
     timing = {
@@ -566,6 +781,7 @@ def main() -> int:
         "changed": len(changed),
         "cached": len(unchanged),
         "elapsed": time.monotonic() - t0,
+        "dupes_elapsed": dupes_elapsed,
     }
 
     if args.format == "json":

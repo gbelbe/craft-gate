@@ -240,6 +240,25 @@
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
   smell: One logical decision is duplicated as near-identical conditionals in several places
   action: Consolidate into one decision point
+  # Broader proxy than the smell's own name: the detector (a ported,
+  # rolling-hash line-window match — see scripts/craftcov.py's "duplicate
+  # code" section) flags any exact-duplicate block >= min_lines, not
+  # specifically conditionals. Same kind of imprecision as
+  # introduce-parameter-object's "too many args" proxy for the narrower
+  # "same group repeats" smell — a real trade, not an oversight.
+  detectors:
+    - tool: dupes
+      # Calibrated against real PMD CPD output on kai-ster (~670 files),
+      # not borrowed from pylint's default (4) — that default flooded the
+      # report with trivial matches like a bare `subprocess.run(...,
+      # capture_output=True, text=True, check=False)` call, which PMD's
+      # own minimum-tokens=50 (a common value in its examples) does NOT
+      # flag standalone. min_lines=8 (~40-45 tokens on this codebase, ~5.2
+      # tokens/line measured directly) landed closest to PMD@50's finding
+      # count of the values tried. See README's craftCov section for the
+      # full comparison (both tools agree on the same real duplicates;
+      # only the noise floor differed).
+      min_lines: 8
 
 - id: function-does-one-thing
   code: CG025
