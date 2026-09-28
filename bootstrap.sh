@@ -29,12 +29,25 @@ echo "Installing/updating craft-gate in $TARGET ..."
 
 mkdir -p "$TARGET/scripts" "$TARGET/.claude/skills/tidy-first"
 
-cp "$SRC_DIR/CRAFTSMANSHIP.md" "$TARGET/CRAFTSMANSHIP.md"
-cp "$SRC_DIR/catalog.yaml" "$TARGET/catalog.yaml"
-cp "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_ratchet.sh"
-cp "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
+# Plain `cp` refuses when src and dst resolve to the literal same file — true
+# whenever this runs against craft-gate's own checkout (self-application) and
+# possible for any target already fully up to date. Compare content instead
+# of paths: skip only when the bytes already match, so both cases work and a
+# genuine update still copies.
+copy_file() {
+  local src="$1" dst="$2"
+  if [[ -f "$dst" ]] && cmp -s "$src" "$dst"; then
+    return 0
+  fi
+  cp "$src" "$dst"
+}
+
+copy_file "$SRC_DIR/CRAFTSMANSHIP.md" "$TARGET/CRAFTSMANSHIP.md"
+copy_file "$SRC_DIR/catalog.yaml" "$TARGET/catalog.yaml"
+copy_file "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_ratchet.sh"
+copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
 chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh"
-cp "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
+copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 echo "✓ copied CRAFTSMANSHIP.md, catalog.yaml, scripts/, .claude/skills/tidy-first/"
 echo
