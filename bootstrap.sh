@@ -11,7 +11,8 @@
 #
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
-# scripts/craftcov.py, .claude/skills/tidy-first/SKILL.md, and
+# scripts/craftcov.py, scripts/check_refactor_first.py,
+# .claude/skills/tidy-first/SKILL.md, and
 # .craft-gate-version (a plain-text marker of which release this checkout
 # came from — see templates/update-check.yml, which reads it to detect
 # drift). It never edits CLAUDE.md, .pre-commit-config.yaml, or your CI
@@ -49,7 +50,8 @@ copy_file "$SRC_DIR/catalog.yaml" "$TARGET/catalog.yaml"
 copy_file "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_ratchet.sh"
 copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
 copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
-chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" "$TARGET/scripts/craftcov.py"
+copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refactor_first.py"
+chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 # Record which release this came from, so a consumer's update-check workflow
@@ -74,9 +76,10 @@ echo "     Merge its 'local' repo block into .pre-commit-config.yaml"
 echo "     (or use it as your starting file if you don't have one yet),"
 echo "     then: prek install --hook-type pre-push"
 echo
-echo "  2. Wire the ratchet into CI:"
+echo "  2. Wire the ratchet into CI (plus the optional Refactor First gate,"
+echo "     if you've installed craftCov):"
 echo "       cat '$SRC_DIR/templates/ci-job.yml'"
-echo "     Add that job to .github/workflows/ci.yml, set your branch name."
+echo "     Add the job(s) you want to .github/workflows/ci.yml, set your branch name."
 echo
 echo "  3. Add the Tidy First section to CLAUDE.md:"
 echo "       cat '$SRC_DIR/templates/CLAUDE.md.snippet.md'"

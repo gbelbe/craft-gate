@@ -13,3 +13,28 @@
 
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
+
+# Optional, separate job — only add this one if you've also installed
+# craftCov (`uv sync --extra craftcov`; see README's craftCov section) and
+# want its "Refactor First" gate enforced (CRAFTSMANSHIP.md's "Refactor
+# First"): fails a PR when a touched .py file's total across the 8
+# mechanically-detectable heuristics didn't go down (or, starting from 0,
+# went up at all). Needs the full toolchain, so costs a real CI pass unlike
+# the `tidy` job above — that's why it's a separate job, and separately
+# optional.
+  refactor-first:
+    name: Refactor First gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
+        run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"

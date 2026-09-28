@@ -33,3 +33,14 @@ enforces the discipline — it fails a push/PR with no `tidy(...)` commit, no
 `test(characterize):` commit, and no `Tidy-Exempt:` trailer in range. It's a
 text check on commit messages only, so it costs milliseconds; it cannot judge
 whether the right tidying was picked.
+
+For the subset of the catalog craftCov can detect mechanically (`scripts/
+craftcov.py --list-detectors`, if you've installed the `craftcov` extra —
+see README), skip the judgment call: `scripts/craftcov.py --file <path>`
+before touching a file, fix one instance of every heuristic it finds
+present, bundle it all into one `tidy(multi):` commit (see
+`CRAFTSMANSHIP.md`'s "Refactor First" for the exact convention). CI's
+optional `refactor-first` job (`scripts/check_refactor_first.py`,
+`templates/ci-job.yml`) enforces the *outcome* — a touched file's total
+across those heuristics must go down, or stay at 0 — the same
+`Tidy-Exempt:` trailer bypasses it too.

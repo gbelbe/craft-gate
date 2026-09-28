@@ -48,6 +48,12 @@ It answers two separate questions, on purpose:
    the subset of the catalog that has a real mechanical proxy — see
    **craftCov** below for exactly which 8 of 31 that is, and why the rest
    deliberately aren't automated.
+7. **Refactor First**, an optional mechanical gate on top of craftCov
+   (`scripts/check_refactor_first.py`) — for those 8 detectable heuristics,
+   a touched file's total must go down from where the branch diverged (or
+   stay at 0). Unlike the message-pattern ratchet, this checks the
+   *outcome*, not just that a commit happened — see **craftCov** below and
+   `CRAFTSMANSHIP.md`'s "Refactor First".
 
 ## Requirements
 
@@ -86,7 +92,8 @@ bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 
 This copies the files craft-gate fully owns — `CRAFTSMANSHIP.md`,
 `catalog.yaml`, `scripts/check_tidy_ratchet.sh`,
-`scripts/report_tidy_history.sh`, `.claude/skills/tidy-first/SKILL.md`, and
+`scripts/report_tidy_history.sh`, `scripts/craftcov.py`,
+`scripts/check_refactor_first.py`, `.claude/skills/tidy-first/SKILL.md`, and
 a `.craft-gate-version` marker — into your repo. Nothing else is touched.
 
 **2. Wire up the four manual steps it prints** (each one is a template file
@@ -96,7 +103,7 @@ too much per project to auto-merge safely):
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gate | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gate(s) — the ratchet, plus an optional Refactor First job if you've installed craftCov | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/CLAUDE.md.snippet.md` | `CLAUDE.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 
@@ -158,6 +165,8 @@ scripts/
   report_tidy_history.sh  the periodic exemption-ratio / sources report
   render_catalog.py       catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
   craftcov.py             coverage-style scan for the detectable heuristics
+  check_refactor_first.py CI gate: a touched file's craftCov total must go
+                          down (or stay 0) vs. where the branch diverged
   next_version.py         Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                thin Claude Code wrapper around CRAFTSMANSHIP.md
@@ -278,6 +287,8 @@ uv run python3 scripts/craftcov.py --format json     # machine-readable
 uv run python3 scripts/craftcov.py --verbose         # + every finding, file:line
 uv run python3 scripts/craftcov.py --list-detectors  # which heuristics are detectable, and how
 uv run python3 scripts/craftcov.py --no-diff         # skip the "changes since last run" section
+uv run python3 scripts/craftcov.py --file path/to/f.py --class SomeClass  # scope the report (Refactor First)
+uv run python3 scripts/check_refactor_first.py --base origin/main         # CI's gate, runnable locally too
 ```
 
 ```
@@ -450,12 +461,23 @@ ruff/pylint/vulture changed/cached split above. In practice this is cheap
 enough not to matter: 1.40s over kai-ster's ~670 files / ~130k lines,
 whether cold or warm.
 
-**Not a gate.** Unlike `check_tidy_ratchet.sh`, craftCov doesn't fail CI —
+**Not a hard whole-repo gate.** A full `craftcov.py` run doesn't fail CI —
 it's a report, meant for a human to look at and decide what's worth a
 `tidy(...)` commit, the same "ask the developer, don't decide silently"
-principle as the rest of this catalog. Wiring it into CI as a hard gate
-(e.g. "fail if total > N") is a reasonable thing to add in a fork or a
-future version, deliberately not the default here.
+principle as the rest of this catalog. Failing CI on some absolute total
+(e.g. "fail if total > N") is a reasonable thing to add in a fork, but
+deliberately not the default here — a repo's *existing* debt shouldn't block
+an unrelated PR.
+
+What **does** gate CI is **Refactor First** (see `CRAFTSMANSHIP.md`) — not
+an absolute threshold, a relative one: a touched file's total must go down
+from where the branch diverged (or, starting from 0, stay there).
+`scripts/craftcov.py --file <path> [--class <name>]` scopes a report to one
+file (still a full corpus scan underneath — `dupes` needs every file to find
+a match's other half, so `--file` only filters what's *reported*, never what
+gets scanned) for working through that file's present heuristics one at a
+time; `scripts/check_refactor_first.py` is the CI-side enforcement, wired in
+as the optional `refactor-first` job.
 
 **Testing the detectors: `tests/fixtures/`.** One small, hand-authored file
 per detectable heuristic — each with a docstring naming exactly what it's

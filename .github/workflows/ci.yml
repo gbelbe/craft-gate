@@ -48,6 +48,11 @@ jobs:
           python3 scripts/craftcov.py --list-detectors > /dev/null
           echo "OK"
 
+      - name: check_refactor_first.py compiles
+        run: |
+          python3 -m py_compile scripts/check_refactor_first.py
+          echo "OK"
+
       - name: dupes algorithm smoke test (no external tool needed)
         run: |
           python3 -c "
@@ -167,3 +172,24 @@ jobs:
 
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
+
+  # Diff-aware like `tidy` above, but a mechanical count check rather than a
+  # commit-message pattern — needs the full craftcov toolchain (it re-scans
+  # both the PR head and the merge-base tree), so it's its own job rather
+  # than a step in the fast, dependency-free `tidy` job above.
+  refactor-first:
+    name: Refactor First gate (dogfood)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
+        run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"

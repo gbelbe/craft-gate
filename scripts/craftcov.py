@@ -726,6 +726,7 @@ def print_text_report(
     timing: dict,
     prev_snapshot: dict | None,
     show_diff: bool = True,
+    scope_label: str | None = None,
 ) -> None:
     print("craftCov — craftsmanship heuristic scan")
     print(
@@ -734,6 +735,8 @@ def print_text_report(
     )
     if timing.get("dupes_elapsed", 0) > 0:
         print(f"Duplicate-code pass: {timing['dupes_elapsed']:.2f}s (always full-corpus — see README)")
+    if scope_label:
+        print(f"Reporting scope: {scope_label} only (full corpus was still scanned — see --file's help)")
     print()
 
     if show_diff:
@@ -851,6 +854,19 @@ def main() -> int:
     parser.add_argument("--verbose", "-v", action="store_true", help="list every finding, not just the summary")
     parser.add_argument("--list-detectors", action="store_true", help="print which heuristics are detectable and how, then exit")
     parser.add_argument(
+        "--file",
+        default=None,
+        help="report only findings in this one file (a REPORT filter, applied after the full corpus scan — "
+        "dupes still needs every file scanned to find a match's other half, so this never restricts what "
+        "gets scanned, only what gets shown/counted). Path relative to --path, or absolute.",
+    )
+    parser.add_argument(
+        "--class",
+        dest="cls",
+        default=None,
+        help="further restrict --file to one enclosing class (module-level findings excluded). Ignored without --file.",
+    )
+    parser.add_argument(
         "--vulture-min-confidence",
         type=int,
         default=0,
@@ -874,7 +890,12 @@ def main() -> int:
     root = Path(args.path).resolve()
     cache_path = Path(args.cache_file)
     snapshot_path = Path(args.snapshot_file)
-    prev_snapshot = None if args.no_diff else load_report_snapshot(snapshot_path)
+    # --file scopes the report to a slice of the repo; the snapshot/diff
+    # feature is a whole-repo view (and shared by every scoped run, so a
+    # scoped run must not read or overwrite it — that'd corrupt the next
+    # whole-repo run's baseline with a single file's totals).
+    diff_active = not args.no_diff and not args.file
+    prev_snapshot = load_report_snapshot(snapshot_path) if diff_active else None
 
     t0 = time.monotonic()
     files = discover_python_files(root)  # relative paths
@@ -905,6 +926,17 @@ def main() -> int:
     merge_corpus_findings(root, files, by_file, corpus_tool)
     dupes_elapsed = time.monotonic() - dupes_t0
 
+    scope_label = None
+    if args.file:
+        target = _normalize_path(root, args.file)
+        if target is None or target not in files:
+            raise SystemExit(f"✗ --file {args.file!r} not found among this repo's tracked .py files (relative to {root})")
+        findings = by_file.get(target, [])
+        if args.cls:
+            findings = [f for f in findings if f.get("class") == args.cls]
+        by_file = {target: findings}
+        scope_label = f"{target}::{args.cls}" if args.cls else target
+
     agg = aggregate(by_file)
     timing = {
         "total_files": len(files),
@@ -915,8 +947,8 @@ def main() -> int:
     }
 
     if args.format == "json":
-        payload = {"summary": agg, "findings": by_file, "timing": timing}
-        if not args.no_diff:
+        payload = {"summary": agg, "findings": by_file, "timing": timing, "scope": scope_label}
+        if diff_active:
             payload["diff"] = {
                 "previous_generated_at": (prev_snapshot or {}).get("generated_at"),
                 "by_heuristic": [
@@ -926,9 +958,10 @@ def main() -> int:
             }
         print(json.dumps(payload, indent=2))
     else:
-        print_text_report(agg, catalog_by_id, by_file, args.verbose, timing, prev_snapshot, show_diff=not args.no_diff)
+        print_text_report(agg, catalog_by_id, by_file, args.verbose, timing, prev_snapshot, show_diff=diff_active, scope_label=scope_label)
 
-    save_report_snapshot(snapshot_path, agg)
+    if not args.file:
+        save_report_snapshot(snapshot_path, agg)
 
     return 0
 

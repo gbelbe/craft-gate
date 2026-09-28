@@ -235,6 +235,56 @@ commit, and no `Tidy-Exempt:` trailer. Text-only, no test run — costs
 milliseconds. It cannot judge whether the right tidying was picked, only
 that the discipline (or an explicit, reviewable exemption) was followed.
 
+## Refactor First — a mechanically-enforced instance of the procedure above
+
+For any heuristic craftCov can detect (see the README's craftCov section, or
+`scripts/craftcov.py --list-detectors` — 8 of the 31 entries above as of
+this writing), the "which tidying, ask the developer" judgment call in step
+3 of the procedure becomes fully mechanical instead:
+
+1. Before touching file `F`, scope craftCov to it:
+   `uv run python3 scripts/craftcov.py --file <F>`.
+2. For each detectable heuristic present (count > 0), fix exactly **one**
+   instance — the catalog's `action` field says what to do. A heuristic at
+   0 for this file needs nothing.
+3. Bundle every fix into **one** commit, not one per heuristic:
+
+   ```
+   tidy(multi): order_validator.py — one fix per present heuristic (4 -> 0)
+
+   Tidy-Scope: order_validator.py
+   Tidy-Fix: CG012 extract-helper (Kent Beck, Tidy First? 2023) 3->2
+   Tidy-Fix: CG002 dead-code (Kent Beck, Tidy First? 2023) 5->4
+   Tidy-Fix: CG009 explaining-constant (Kent Beck, Tidy First? 2023) 2->1
+   ```
+
+   `Tidy-Fix:` — repeated, one line per heuristic fixed — replaces the
+   single `Tidy-Type:`/`Tidy-Source:` pair for this bundled case: a
+   heuristic id, its source, and its before→after count in one line.
+   `Tidy-Scope:` stays as in the general convention above.
+4. Only then commit the feature/fix itself, as usual.
+
+**Bounded effort, not exhaustive.** This fixes one instance of every present
+heuristic type per touch, not the whole file — a heavily-smelly legacy file
+doesn't need to be perfect before a feature can land in it, just measurably
+better. Counts trend to zero over repeated touches, the same incremental
+spirit as the rest of this catalog.
+
+**Enforced, not just documented.** `scripts/check_refactor_first.py` (wired
+into CI as the `refactor-first` job, PR-only) fails a PR when a touched
+`.py` file's *total* across the 8 detectable heuristics didn't go down
+relative to where the branch diverged from its base — or, if the file was
+already at 0, went up at all. It re-scans the PR's merge-base tree and its
+head tree and compares per file (`dupes` needs every file scanned at each
+point to find a match's other half, so there's no cheaper way to get an
+accurate "before" count for one file). `Tidy-Exempt:` bypasses it the same
+way it bypasses the message-pattern ratchet below — one exemption
+mechanism, not two.
+
+This only covers the 8 mechanically-detectable heuristics. The other 23
+keep the judgment-call procedure above, backed only by the message-pattern
+ratchet below, not this count-based gate.
+
 ## Don't let the exemption become the rule
 
 `Tidy-Exempt:` trusts the author's judgment, which erodes under deadline
