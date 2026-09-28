@@ -31,8 +31,15 @@ DOC_PATH = ROOT / "CRAFTSMANSHIP.md"
 
 # tag -> (kind, table header)
 TABLES = {
-    "tidying": ("tidying", "| Code | id | Name | Smell / when to reach for it | What it does |\n|---|---|---|---|---|"),
-    "smell-fix": ("smell-fix", "| Code | id | Name (smell) | Smell / when to reach for it | What it does |\n|---|---|---|---|---|"),
+    "tidying": (
+        "tidying",
+        "| Code | id | Name | Smell / when to reach for it | What it does |\n|---|---|---|---|---|",
+    ),
+    "smell-fix": (
+        "smell-fix",
+        "| Code | id | Name (smell) | Smell / when to reach for it | What it does |\n"
+        "|---|---|---|---|---|",
+    ),
 }
 
 
@@ -54,7 +61,9 @@ def replace_between(text: str, tag: str, replacement: str) -> str:
     )
     pattern = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.DOTALL)
     if not pattern.search(text):
-        raise SystemExit(f"✗ sentinel '{tag}' not found in {DOC_PATH.name} — did someone remove it?")
+        raise SystemExit(
+            f"✗ sentinel '{tag}' not found in {DOC_PATH.name} — did someone remove it?"
+        )
     return pattern.sub(f"{begin}\n{note}\n{replacement}\n{end}", text)
 
 

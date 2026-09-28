@@ -22,3 +22,9 @@ craftcov = [
 
 [tool.uv]
 package = false  # a dependency anchor for `uv sync` / `uv run`, not a distributable library
+
+[tool.ruff]
+line-length = 100  # every consuming repo checked so far (kai-ster, semanticdiff,
+# semanticlint) independently settled on 100 — scripts/*.py are copied
+# verbatim into those repos, so matching it here means a consumer never has
+# to re-lint/reformat what bootstrap.sh gives it against its own house style.
