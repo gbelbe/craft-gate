@@ -120,6 +120,7 @@ templates/
   CLAUDE.md.snippet.md    section to paste into your CLAUDE.md
   pre-commit-hook.yaml    hook entry for .pre-commit-config.yaml
   ci-job.yml              job fragment for .github/workflows/ci.yml
+  update-check.yml        weekly drift-check + auto-PR (see "Staying up to date")
 bootstrap.sh              installer/updater
 
 CLAUDE.md, .pre-commit-config.yaml, .claude/skills/tidy-first/SKILL.md
@@ -141,6 +142,19 @@ number to remember to bump by hand, no separate publish step to run.
 
 Pin a specific version with `git clone --branch vX.Y.Z` (see Quickstart);
 `main` always has the latest, possibly-unreleased state.
+
+## Staying up to date
+
+`bootstrap.sh` alone requires someone to remember to re-run it, which
+defeats the point. Add `templates/update-check.yml` as
+`.github/workflows/craft-gate-update.yml` in the consuming repo and it stops
+being a thing to remember: a weekly job compares the repo's
+`.craft-gate-version` against craft-gate's latest release, and if they
+differ, runs `bootstrap.sh` and opens a PR with whatever changed. Re-running
+it just force-pushes the same branch and updates the existing PR rather than
+piling up duplicates. Nothing auto-merges — review it like any other
+dependency bump. No new credentials: it uses the repo's own default
+`GITHUB_TOKEN`, and craft-gate is only ever read from, never written to.
 
 ## Design choices worth knowing about
 

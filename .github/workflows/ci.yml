@@ -60,9 +60,10 @@ jobs:
           print('next_version.py OK')
           "
 
-      - name: templates/ci-job.yml and templates/pre-commit-hook.yaml are valid YAML
+      - name: templates/*.yml and templates/*.yaml are valid YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"
+          python3 -c "import yaml; yaml.safe_load(open('templates/update-check.yml')); print('update-check.yml OK')"
           python3 -c "
           import yaml
           # ci-job.yml is a fragment (a single job, indented as if under 'jobs:'),

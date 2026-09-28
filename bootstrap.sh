@@ -10,11 +10,13 @@
 #   bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 #
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
-# scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh, and
-# .claude/skills/tidy-first/SKILL.md. It never edits CLAUDE.md,
-# .pre-commit-config.yaml, or your CI workflow — those vary too much per
-# project to auto-merge safely; it prints what to add and where instead.
-# Safe to re-run any time to pull an update.
+# scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
+# .claude/skills/tidy-first/SKILL.md, and .craft-gate-version (a plain-text
+# marker of which release this checkout came from — see
+# templates/update-check.yml, which reads it to detect drift). It never
+# edits CLAUDE.md, .pre-commit-config.yaml, or your CI workflow — those vary
+# too much per project to auto-merge safely; it prints what to add and where
+# instead. Safe to re-run any time to pull an update.
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -49,7 +51,18 @@ copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy
 chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
+# Record which release this came from, so a consumer's update-check workflow
+# (templates/update-check.yml) has something to compare against without
+# needing to diff file contents itself. Best-effort: a shallow clone of a
+# tag describes as that tag; a full clone of main with no exact tag match
+# falls back to a short SHA rather than failing.
+VERSION="$(cd "$SRC_DIR" && git describe --tags --always 2>/dev/null || echo unknown)"
+if [[ ! -f "$TARGET/.craft-gate-version" ]] || [[ "$(cat "$TARGET/.craft-gate-version")" != "$VERSION" ]]; then
+  echo "$VERSION" > "$TARGET/.craft-gate-version"
+fi
+
 echo "✓ copied CRAFTSMANSHIP.md, catalog.yaml, scripts/, .claude/skills/tidy-first/"
+echo "  now on craft-gate $VERSION"
 echo
 echo "Manual steps left — these touch files that differ per repo, so they're"
 echo "not auto-merged:"
@@ -67,5 +80,10 @@ echo
 echo "  3. Add the Tidy First section to CLAUDE.md:"
 echo "       cat '$SRC_DIR/templates/CLAUDE.md.snippet.md'"
 echo "     Append it to your project's CLAUDE.md (or create one)."
+echo
+echo "  4. Stop needing to remember to re-run this:"
+echo "       cp '$SRC_DIR/templates/update-check.yml' .github/workflows/craft-gate-update.yml"
+echo "     Weekly workflow that checks for a new craft-gate release and opens"
+echo "     a PR with the diff if there is one. No new credentials needed."
 echo
 echo "Re-run this script any time to pull the latest catalog/scripts."
