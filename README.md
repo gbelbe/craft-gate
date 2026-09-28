@@ -43,10 +43,10 @@ It answers two separate questions, on purpose:
    the files this tool owns into your repo and tells you exactly what to
    wire up by hand (a pre-commit hook, a CI job, a CLAUDE.md section). It
    never silently merges into files that vary per project.
-6. **craftCov**, a coverage-report-style scan (`scripts/craftcov.py`) for
-   the subset of the catalog that has a real mechanical proxy — see
-   **craftCov** below for exactly which 6 of 31 that is, and why the rest
-   deliberately aren't automated.
+6. **craftCov**, a coverage-report-style scan (`scripts/craftcov.py`,
+   reusing ruff/pylint/vulture) for the subset of the catalog that has a
+   real mechanical proxy — see **craftCov** below for exactly which 7 of 31
+   that is, and why the rest deliberately aren't automated.
 
 ## Requirements
 
@@ -65,10 +65,12 @@ Two things are **optional**, only if you use that specific piece:
   rely on the CI job alone; the two enforcement points are independent.
 - Consuming `catalog.yaml` programmatically (building your own tooling on
   top, not just running the ratchet) needs a YAML parser, e.g. `PyYAML`.
-- `scripts/craftcov.py` (see **craftCov** below) is the one script here that
-  isn't plain bash: it needs `ruff` on PATH and PyYAML importable. Both are
-  already present in a typical Python project; craftCov doesn't add them,
-  it just isn't usable without them the way the ratchet is.
+- `scripts/craftcov.py` (see **craftCov** below) is the one script here
+  that isn't plain bash. It needs PyYAML importable, plus whichever of
+  `ruff` / `pylint` / `vulture` the catalog's `detectors` actually use —
+  `uv sync --extra craftcov` (this repo has a `pyproject.toml` for exactly
+  this) installs all three; a repo that only wants a subset of the
+  detectable heuristics can install fewer.
 
 ## How to install in an existing repo
 
@@ -148,6 +150,8 @@ CRAFTSMANSHIP.md         procedure, commit convention, legacy-code method
                           (generated — see catalog.yaml). Tool-agnostic.
 catalog.yaml              the actual catalog data — edit this, not the
                           tables in CRAFTSMANSHIP.md directly
+pyproject.toml            PyYAML (base) + ruff/pylint/vulture (the
+                          `craftcov` extra) — `uv sync --extra craftcov`
 scripts/
   check_tidy_ratchet.sh   the CI/pre-push ratchet
   report_tidy_history.sh  the periodic exemption-ratio / sources report
@@ -262,10 +266,11 @@ A coverage-report-style scan — like `coverage.py`'s report, but for the
 catalog's mechanically-checkable heuristics instead of executed lines.
 
 ```bash
-python3 scripts/craftcov.py                  # scan, text report
-python3 scripts/craftcov.py --format json     # machine-readable
-python3 scripts/craftcov.py --verbose         # + every finding, file:line
-python3 scripts/craftcov.py --list-detectors  # which heuristics are detectable, and how
+uv sync --extra craftcov                      # installs ruff/pylint/vulture into .venv
+uv run python3 scripts/craftcov.py                  # scan, text report
+uv run python3 scripts/craftcov.py --format json     # machine-readable
+uv run python3 scripts/craftcov.py --verbose         # + every finding, file:line
+uv run python3 scripts/craftcov.py --list-detectors  # which heuristics are detectable, and how
 ```
 
 ```
@@ -274,36 +279,61 @@ Scanned 668 files (0 changed, 668 from cache) in 0.03s
 
 By heuristic
 CODE    ID                                      COUNT  SOURCE
-CG009   explaining-constant                       382  Kent Beck, Tidy First? (2023)
+CG002   dead-code                                  36  Kent Beck, Tidy First? (2023)
+CG009   explaining-constant                       378  Kent Beck, Tidy First? (2023)
+CG016   extract-class                              17  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 CG018   introduce-parameter-object                  65  Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 CG001   guard-clauses                                1  Kent Beck, Tidy First? (2023)
 CG012   extract-helper                               1  Kent Beck, Tidy First? (2023)
-        TOTAL                                      449
+        TOTAL                                      498
 
 By file (top 15)
 By class (top 15, module-level findings excluded)
 By library (top-level directory)
 
-6/31 heuristics have an automatic detector (19%) — the rest need the
+7/31 heuristics have an automatic detector (22%) — the rest need the
 procedure in CRAFTSMANSHIP.md (ask the developer), not a scan.
 ```
 
 **Honest about its limits, on purpose.** Real semantic smell detection
 (Feature Envy, Data Clumps *precisely* — not just "too many params," the
 *same group* repeating — Message Chains, Primitive Obsession, Refused
-Bequest) needs judgment a regex or AST check can't safely fake; a detector
-confident enough to report those would cry wolf more than it'd help. So
-craftCov doesn't try. It reuses [`ruff`](https://astral.sh/ruff) (Rust, a
-dependency your project almost certainly already has, with its own fast
-internal cache) as the detection engine for the entries where a specific
-lint rule is a decent proxy — currently 6 of 31: `guard-clauses`,
-`dead-code`, `explaining-constant`, `extract-helper`,
-`introduce-parameter-object`, `replace-conditional-with-polymorphism`. Every
-other entry shows `0` findings not because your code is clean by that
+Bequest, cross-file duplicate code) needs judgment a regex or AST check
+can't safely fake, or tooling that doesn't exist for Python (checked, while
+building this, against ruff's own open GitHub issues admitting the
+duplicate-code gap, and the academic design-smell-detection literature,
+which is Java/C#/C++-tooling-only — see **Backlog** below). So craftCov
+doesn't try to fake any of them. It reuses three engines for the entries
+where each is a decent proxy — 7 of 31:
+
+- [`ruff`](https://astral.sh/ruff) (Rust, a dependency your project almost
+  certainly already has, own fast internal cache) — `guard-clauses`,
+  `dead-code`, `explaining-constant`, `extract-helper`,
+  `introduce-parameter-object`, `replace-conditional-with-polymorphism`.
+- `pylint`, scoped to exactly `R0902`/`R0904` (not a full pylint run) —
+  `extract-class` / God Class. ruff hasn't ported these two yet (one's
+  preview-only there, the other doesn't exist in ruff at all — checked
+  against ruff 0.16.9); upstream pylint's originals are stable.
+- `vulture` — a second, higher-recall pass for `dead-code` alongside ruff's
+  F401/F811/F841, catching unused functions/classes ruff's own-file-scoped
+  checks can't see. Verified on a real, framework-heavy codebase while
+  building this (kai-ster: pytest-bdd + Textual): vulture's own confidence
+  scores cluster hard into unused-*variables* at 100% (redundant with
+  ruff's F841) and unused functions/classes/methods at 60% (vulture's own
+  "fairly sure but could be wrong" floor — decorator-registered pytest-bdd
+  steps and Textual's `on_*` handlers score exactly here without being
+  genuinely dead). That 60% tier is also where all of vulture's unique
+  value lives, so craftCov reports it unfiltered by default rather than
+  quietly discarding it — tune with `--vulture-min-confidence N` once
+  you've triaged a first pass and know your codebase's noise floor (its
+  effect on the earlier example: `dead-code` 1685 → 36 at `N=80`).
+
+Every other entry shows `0` findings not because your code is clean by that
 measure, but because craftCov has nothing to say about it — see
 `--list-detectors` for exactly which is which, and `catalog.yaml`'s
-`detector` field to add more as ruff (or another tool) gains a rule that's
-a genuinely good proxy for something currently undetected.
+`detectors` field (a list — an entry can name more than one tool, as
+`dead-code` does) to add more as a rule or tool that's a genuinely good
+proxy shows up for something currently undetected.
 
 **Findings, aggregated four ways**: by heuristic (code, count, source — so
 you can see *which book* your codebase disagrees with most), by file, by
@@ -313,15 +343,19 @@ excluded from this view rather than miscounted against "no class"), and by
 `scripts`, whatever your repo's layout is).
 
 **Caching, two layers.** ruff's own `.ruff_cache/` already skips re-linting
-unchanged files internally. On top of that, craftCov keeps
-`.craftcov_cache.json`, keyed by each file's content hash (not mtime — a
-`touch` or a clean checkout with different timestamps doesn't cause a
-rescan) and by a path *relative* to the scan root (so the cache survives
-the repo moving to a different absolute path, e.g. a fresh clone in CI). Its
-cache also stores the class/function attribution ruff doesn't know about,
-so a warm re-run skips re-parsing ASTs for unchanged files too, not just
-skips re-linting them. A cold run over kai-ster's ~670 files took 0.52s; a
-warm one with nothing changed took 0.03s.
+unchanged files internally (pylint and vulture have no cache of their own).
+On top of that, craftCov keeps `.craftcov_cache.json`, keyed by each file's
+content hash (not mtime — a `touch` or a clean checkout with different
+timestamps doesn't cause a rescan) and by a path *relative* to the scan
+root (so the cache survives the repo moving to a different absolute path,
+e.g. a fresh clone in CI). Its cache also stores the class/function
+attribution none of the three tools track on their own, so a warm re-run
+skips re-parsing ASTs for unchanged files too, not just re-linting them. A
+cold run over kai-ster's ~670 files across all three tools took 9.7s; a
+warm one with nothing changed took 0.03s. One caveat: the cache doesn't
+know about scan *parameters* — changing `--vulture-min-confidence` between
+runs needs `--no-cache` to actually take effect, since the file itself
+didn't change.
 
 **Not a gate.** Unlike `check_tidy_ratchet.sh`, craftCov doesn't fail CI —
 it's a report, meant for a human to look at and decide what's worth a
@@ -329,6 +363,18 @@ it's a report, meant for a human to look at and decide what's worth a
 principle as the rest of this catalog. Wiring it into CI as a hard gate
 (e.g. "fail if total > N") is a reasonable thing to add in a fork or a
 future version, deliberately not the default here.
+
+## Backlog
+
+- **Duplicate-code detection** (would newly detect
+  `consolidate-duplicate-conditional`, and more generally Shotgun Surgery):
+  the standard tool is PMD's CPD, which explicitly supports Python — but
+  needs a JVM, a much heavier dependency than anything else here, and cuts
+  against craftCov's "reuse a lightweight tool" approach. Next step:
+  investigate a pure-Python equivalent (e.g. pylint's own `R0801`
+  duplicate-code/similarity checker, already half-adopted here for
+  `extract-class`) before considering the JVM route. Deliberately not done
+  yet rather than rushed with the wrong dependency shape.
 
 ## Design choices worth knowing about
 

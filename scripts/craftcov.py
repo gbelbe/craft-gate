@@ -2,37 +2,66 @@
 """craftCov — a coverage-report-style scan of the craftsmanship catalog.
 
 Honest about its limits before anything else: only the entries in
-catalog.yaml that carry a `detector` (6 of 31 as of this writing — see
-`--list-detectors`) have a real mechanical proxy. Reusing `ruff` (Rust,
-already a dependency in every repo this ships to, ships its own fast
-internal cache) as the detection engine gets guard-clauses, dead-code,
-explaining-constant, extract-helper, introduce-parameter-object, and
-replace-conditional-with-polymorphism — the subset where a lint rule is a
-decent proxy for the smell (extract-class/God Class has no detector: ruff's
-candidate rules are either preview-only or don't exist in stable form — see
-catalog.yaml). Feature Envy, Data Clumps *precisely* (not just "too many
-params" — the same group repeating), Message Chains, Primitive Obsession,
-Refused Bequest, and every `principle`/`workflow` entry have no detector on
-purpose: a regex or AST check confident enough to report them would cry
-wolf more than it'd help. Those stay a job for the procedure in
-CRAFTSMANSHIP.md (read the code, ask the developer), not this script.
-craftCov finds the mechanically-checkable subset; it is not a replacement
-for the judgment call the rest of the catalog asks for.
+catalog.yaml that carry `detectors` (7 of 31 as of this writing — see
+`--list-detectors`) have a real mechanical proxy. Three engines, each
+reused rather than reimplemented:
+
+  - `ruff` (Rust, already a dependency in every repo this ships to, ships
+    its own fast internal cache) — guard-clauses, dead-code,
+    explaining-constant, extract-helper, introduce-parameter-object,
+    replace-conditional-with-polymorphism.
+  - `pylint`, scoped to exactly two rules (R0902/R0904) — extract-class /
+    God Class. ruff hasn't ported these yet (R0904 is preview-only there,
+    R0902 doesn't exist in ruff at all); upstream pylint's originals are
+    stable, so this is the one entry that needs a second tool on PATH.
+  - `vulture` — a second, higher-recall pass for dead-code alongside
+    ruff's F401/F811/F841: catches unused module-level functions/classes
+    ruff's own-file-scoped checks can't see. Verified on a real, framework-
+    heavy codebase (kai-ster: pytest-bdd + Textual) while building this:
+    vulture's confidence scores cluster hard into two tiers — unused
+    *variables* at 100% (redundant with ruff's own F841, adds nothing) and
+    unused functions/classes/methods at 60% (vulture's own "fairly sure but
+    could be wrong" floor — decorator-registered step defs and Textual's
+    on_* handlers score exactly here without being genuinely dead). That
+    60% tier is also where all of vulture's actual unique value lives, so
+    craftCov reports it unfiltered by default (`--vulture-min-confidence 0`,
+    vulture's own default) rather than quietly discarding the one thing
+    ruff can't already tell you — raise the threshold yourself via
+    `--vulture-min-confidence` once you've triaged a first pass and know
+    your codebase's noise floor. The per-finding confidence is preserved in
+    `--verbose`/JSON output for exactly this triage.
+
+Feature Envy, Data Clumps *precisely* (not just "too many params" — the
+*same group* repeating), Message Chains, Primitive Obsession, Refused
+Bequest, cross-file duplicate code, and every `principle`/`workflow` entry
+have no detector on purpose: no maintained, reusable Python tool exists for
+any of them (checked against ruff's own open issues, PMD's CPD — Java/JVM,
+out of scope here — and the design-smell-detection literature, which is
+Java/C#/C++-tooling-only). A regex or AST check confident enough to report
+these would cry wolf more than it'd help. Those stay a job for the
+procedure in CRAFTSMANSHIP.md (read the code, ask the developer), not this
+script. craftCov finds the mechanically-checkable subset; it is not a
+replacement for the judgment call the rest of the catalog asks for.
 
 Caching: findings for a file are cached by its content hash, keyed by path
 relative to the scan root (so the cache survives the repo moving to a
 different absolute path). A re-run only re-scans files whose hash changed
 since the last run (or that are new); everything else is read back from
-`.craftcov_cache.json`. This is on top of, not instead of, ruff's own
-per-file cache (`.ruff_cache/`) — craftCov's cache also stores the
-class/function attribution (see below), which ruff doesn't know about, so
-re-running still avoids re-parsing unchanged files' ASTs.
+`.craftcov_cache.json`. This is on top of, not instead of, each tool's own
+cache where it has one (ruff's `.ruff_cache/`) — craftCov's cache also
+stores the class/function attribution none of the three tools track on
+their own, so a warm re-run skips re-parsing ASTs too, not just re-linting.
+
+When more than one tool flags the *same* line for the *same* heuristic
+(e.g. ruff's F401 and vulture both catch an unused import), it's counted
+once, not twice — see `scan_files`'s dedup.
 
 Requires (unlike the other craft-gate scripts, which are plain bash):
-`ruff` on PATH, and PyYAML importable (`pip install pyyaml` — every repo
-this ships to already has it via ruff/render_catalog.py's own CI use, but
-it isn't otherwise assumed anywhere else in craft-gate; see README's
-Requirements section).
+PyYAML importable, plus whichever of `ruff` / `pylint` / `vulture` is on
+PATH for the detectors catalog.yaml actually uses — only invoked if at
+least one entry needs it, so a repo without pylint installed still gets
+the other two engines' findings, not a hard failure. `uv sync --extra
+craftcov` in this repo installs all three; see README's Requirements.
 
 Usage:
     python3 scripts/craftcov.py                  # scan, text report
@@ -48,6 +77,7 @@ import argparse
 import ast
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import time
@@ -58,37 +88,53 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG_PATH = ROOT / "catalog.yaml"
 DEFAULT_CACHE_PATH = Path(".craftcov_cache.json")
-CACHE_VERSION = 2
+CACHE_VERSION = 4
+
+RULE_BASED_TOOLS = {"ruff", "pylint"}
+WHOLE_FILE_TOOLS = {"vulture"}
 
 
-# ── catalog / rule mapping ───────────────────────────────────────────────────
+# ── catalog / detector mapping ────────────────────────────────────────────────
 
 
 def load_catalog() -> list[dict]:
     return yaml.safe_load(CATALOG_PATH.read_text())
 
 
-def rule_to_heuristic_map(catalog: list[dict]) -> dict[str, dict]:
-    """ruff rule code -> the catalog entry it's a proxy for.
+def build_detector_index(catalog: list[dict]) -> tuple[dict[str, dict[str, dict]], dict[str, dict]]:
+    """(rule_maps, whole_tool_map).
 
-    Each rule maps to exactly one entry by construction (see catalog.yaml's
-    detector fields) — if that ever needs to change, this is where a rule
-    winning over another would be decided, and it should be a deliberate
-    choice, not silent.
+    rule_maps: tool -> {rule_code: catalog_entry}, for rule-granular tools
+    (ruff, pylint). whole_tool_map: tool -> catalog_entry, for tools whose
+    findings all mean one specific heuristic regardless of message
+    (vulture). Each (tool, rule) or (tool) claims exactly one entry by
+    construction — collisions are a catalog.yaml authoring error, not
+    something to silently pick a winner for.
     """
-    mapping: dict[str, dict] = {}
+    rule_maps: dict[str, dict[str, dict]] = {}
+    whole_tool: dict[str, dict] = {}
     for entry in catalog:
-        detector = entry.get("detector")
-        if not detector or detector.get("tool") != "ruff":
-            continue
-        for rule in detector["rules"]:
-            if rule in mapping:
-                raise SystemExit(
-                    f"✗ ruff rule {rule} is claimed by both "
-                    f"{mapping[rule]['id']} and {entry['id']} in catalog.yaml"
-                )
-            mapping[rule] = entry
-    return mapping
+        for d in entry.get("detectors", []):
+            tool = d["tool"]
+            if tool in RULE_BASED_TOOLS:
+                bucket = rule_maps.setdefault(tool, {})
+                for rule in d["rules"]:
+                    if rule in bucket:
+                        raise SystemExit(
+                            f"✗ {tool} rule {rule} is claimed by both "
+                            f"{bucket[rule]['id']} and {entry['id']} in catalog.yaml"
+                        )
+                    bucket[rule] = entry
+            elif tool in WHOLE_FILE_TOOLS:
+                if tool in whole_tool:
+                    raise SystemExit(
+                        f"✗ {tool} (a whole-file detector) is claimed by both "
+                        f"{whole_tool[tool]['id']} and {entry['id']} in catalog.yaml"
+                    )
+                whole_tool[tool] = entry
+            else:
+                raise SystemExit(f"✗ catalog.yaml: unknown detector tool '{tool}' on {entry['id']}")
+    return rule_maps, whole_tool
 
 
 # ── file discovery ───────────────────────────────────────────────────────────
@@ -154,7 +200,19 @@ def enclosing_class(scopes: list[tuple[int, int, str, str]], line: int) -> str |
     return best[3] if best else None
 
 
-# ── scanning ──────────────────────────────────────────────────────────────────
+# ── tool runners ──────────────────────────────────────────────────────────────
+# Each returns a flat list of {rel, line, col, tool, rule} — normalized
+# before anything downstream has to know these are three different tools.
+
+
+def _normalize_path(root: Path, raw: str) -> str | None:
+    p = Path(raw)
+    if not p.is_absolute():
+        p = (root / p).resolve()
+    try:
+        return str(p.relative_to(root))
+    except ValueError:
+        return None  # outside root somehow — caller skips rather than crashes
 
 
 def run_ruff(root: Path, rel_files: list[str], rules: list[str]) -> list[dict]:
@@ -166,44 +224,153 @@ def run_ruff(root: Path, rel_files: list[str], rules: list[str]) -> list[dict]:
             cwd=root,
             capture_output=True,
             text=True,
-            check=False,  # ruff exits 1 when it finds anything — that's not our error
+            check=False,  # ruff exits 1 when it finds anything — not our error
         )
     except FileNotFoundError:
-        raise SystemExit("✗ craftcov needs `ruff` on PATH — pip install ruff, or use your project's existing one.")
+        raise SystemExit("✗ craftcov needs `ruff` on PATH for this catalog's ruff-mapped entries — pip install ruff.")
     if proc.returncode not in (0, 1):
         raise SystemExit(f"✗ ruff failed:\n{proc.stderr}")
-    return json.loads(proc.stdout or "[]")
+    items = []
+    for item in json.loads(proc.stdout or "[]"):
+        rel = _normalize_path(root, item["filename"])
+        if rel is None:
+            continue
+        items.append(
+            {"rel": rel, "line": item["location"]["row"], "col": item["location"]["column"], "tool": "ruff", "rule": item["code"]}
+        )
+    return items
 
 
-def scan_files(root: Path, rel_files: list[str], rule_map: dict[str, dict]) -> dict[str, list[dict]]:
+def run_pylint(root: Path, rel_files: list[str], rules: list[str]) -> list[dict]:
+    if not rel_files:
+        return []
+    try:
+        proc = subprocess.run(
+            ["pylint", "--disable=all", f"--enable={','.join(rules)}", "--output-format=json", *rel_files],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,  # pylint's exit code is a findings bitmask, not a crash signal
+        )
+    except FileNotFoundError:
+        raise SystemExit(
+            "✗ craftcov needs `pylint` on PATH for this catalog's pylint-mapped entries "
+            "(extract-class) — pip install pylint, or drop that entry's detector in catalog.yaml."
+        )
+    try:
+        raw = json.loads(proc.stdout or "[]")
+    except json.JSONDecodeError:
+        raise SystemExit(f"✗ pylint produced unparseable output:\n{proc.stdout}\n{proc.stderr}")
+    items = []
+    for item in raw:
+        rel = _normalize_path(root, item["path"])
+        if rel is None:
+            continue
+        items.append({"rel": rel, "line": item["line"], "col": item.get("column", 0), "tool": "pylint", "rule": item["message-id"]})
+    return items
+
+
+_VULTURE_LINE = re.compile(r"^(?P<path>.+):(?P<line>\d+): .+ \((?P<pct>\d+)% confidence\)$")
+
+
+def run_vulture(root: Path, rel_files: list[str], min_confidence: int) -> list[dict]:
+    """min_confidence is vulture's own per-finding score, not craftcov's
+    invention — on a real codebase (kai-ster, checked while building this)
+    it clusters hard into two tiers: unused *variables* at 100% (redundant
+    with ruff's own F841 — vulture adds nothing there) and unused
+    functions/classes/methods at 60% (vulture's own floor for "fairly sure
+    but could be wrong" — decorator-registered pytest-bdd steps and
+    Textual's on_* naming-convention handlers are exactly the kind of
+    indirect-call pattern that scores here without being genuinely dead).
+    Default 0 (vulture's own default: report everything) trades precision
+    for recall on purpose — raise it via --vulture-min-confidence once
+    you've triaged a first pass and know your codebase's noise floor."""
+    if not rel_files:
+        return []
+    try:
+        proc = subprocess.run(
+            ["vulture", f"--min-confidence={min_confidence}", *rel_files],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,  # vulture exits non-zero when it finds anything — not our error
+        )
+    except FileNotFoundError:
+        raise SystemExit(
+            "✗ craftcov needs `vulture` on PATH for this catalog's vulture-mapped entries "
+            "(dead-code) — pip install vulture, or drop that entry's vulture detector in catalog.yaml."
+        )
+    items = []
+    for line in proc.stdout.splitlines():
+        m = _VULTURE_LINE.match(line)
+        if not m:
+            continue  # vulture has no machine-readable format; skip anything that doesn't parse rather than crash
+        rel = _normalize_path(root, m.group("path"))
+        if rel is None:
+            continue
+        items.append(
+            {
+                "rel": rel,
+                "line": int(m.group("line")),
+                "col": 0,
+                "tool": "vulture",
+                "rule": None,
+                "confidence": int(m.group("pct")),
+            }
+        )
+    return items
+
+
+# ── scanning ──────────────────────────────────────────────────────────────────
+
+
+def scan_files(
+    root: Path,
+    rel_files: list[str],
+    rule_maps: dict[str, dict[str, dict]],
+    whole_tool: dict[str, dict],
+    vulture_min_confidence: int = 0,
+) -> dict[str, list[dict]]:
     """relative path -> list of finding dicts, for exactly these files."""
-    raw = run_ruff(root, rel_files, sorted(rule_map))
+    raw_items: list[dict] = []
+    if "ruff" in rule_maps:
+        raw_items += run_ruff(root, rel_files, sorted(rule_maps["ruff"]))
+    if "pylint" in rule_maps:
+        raw_items += run_pylint(root, rel_files, sorted(rule_maps["pylint"]))
+    if "vulture" in whole_tool:
+        raw_items += run_vulture(root, rel_files, vulture_min_confidence)
+
     by_file: dict[str, list[dict]] = {rel: [] for rel in rel_files}
     scopes_cache: dict[str, list[tuple[int, int, str, str]]] = {}
+    seen: set[tuple[str, int, str]] = set()  # (rel, line, heuristic_id) — dedup across tools
 
-    for item in raw:
-        abs_path = Path(item["filename"])
-        if not abs_path.is_absolute():
-            abs_path = (root / abs_path).resolve()
-        try:
-            rel = str(abs_path.relative_to(root))
-        except ValueError:
-            continue  # outside root somehow — skip rather than crash
-        code = item["code"]
-        entry = rule_map.get(code)
+    for item in raw_items:
+        rel = item["rel"]
+        if rel not in by_file:
+            continue  # not one of the files we were asked to scan this run
+        if item["tool"] in RULE_BASED_TOOLS:
+            entry = rule_maps.get(item["tool"], {}).get(item["rule"])
+        else:
+            entry = whole_tool.get(item["tool"])
         if entry is None:
-            continue  # shouldn't happen (we only --select mapped rules), but don't crash on it
-        line = item["location"]["row"]
+            continue  # shouldn't happen (we only ask for mapped rules), but don't crash on it
+
+        dedup_key = (rel, item["line"], entry["id"])
+        if dedup_key in seen:
+            continue  # another tool already flagged this exact line for this heuristic
+        seen.add(dedup_key)
 
         if rel not in scopes_cache:
             scopes_cache[rel] = build_scope_index((root / rel).read_text())
-        cls = enclosing_class(scopes_cache[rel], line)
+        cls = enclosing_class(scopes_cache[rel], item["line"])
 
-        by_file.setdefault(rel, []).append(
+        by_file[rel].append(
             {
-                "line": line,
-                "col": item["location"]["column"],
-                "rule": code,
+                "line": item["line"],
+                "col": item["col"],
+                "tool": item["tool"],
+                "rule": item["rule"],
+                "confidence": item.get("confidence"),  # only vulture sets this
                 "heuristic_id": entry["id"],
                 "heuristic_code": entry.get("code", ""),
                 "class": cls,
@@ -304,9 +471,12 @@ def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[s
         for rel, findings in sorted(by_file.items()):
             for f in sorted(findings, key=lambda x: x["line"]):
                 scope = f" [{f['class']}]" if f["class"] else ""
-                print(f"  {rel}:{f['line']}  {f['heuristic_code']} {f['heuristic_id']}{scope}")
+                rule = f"{f['tool']}:{f['rule']}" if f["rule"] else f["tool"]
+                if f.get("confidence") is not None:
+                    rule += f" {f['confidence']}%"
+                print(f"  {rel}:{f['line']}  {f['heuristic_code']} {f['heuristic_id']} ({rule}){scope}")
 
-    n_detectable = sum(1 for e in catalog_by_id.values() if e.get("detector"))
+    n_detectable = sum(1 for e in catalog_by_id.values() if e.get("detectors"))
     n_total = len(catalog_by_id)
     print()
     print(
@@ -319,8 +489,14 @@ def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[s
 
 def print_detector_list(catalog: list[dict]) -> None:
     for e in catalog:
-        detector = e.get("detector")
-        status = f"ruff: {', '.join(detector['rules'])}" if detector else "— (needs judgment, see procedure)"
+        detectors = e.get("detectors")
+        if not detectors:
+            status = "— (needs judgment, see procedure)"
+        else:
+            parts = []
+            for d in detectors:
+                parts.append(f"{d['tool']}: {', '.join(d['rules'])}" if "rules" in d else d["tool"])
+            status = " + ".join(parts)
         print(f"{e.get('code',''):7s} {e['id']:38s} {status}")
 
 
@@ -335,6 +511,17 @@ def main() -> int:
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--verbose", "-v", action="store_true", help="list every finding, not just the summary")
     parser.add_argument("--list-detectors", action="store_true", help="print which heuristics are detectable and how, then exit")
+    parser.add_argument(
+        "--vulture-min-confidence",
+        type=int,
+        default=0,
+        metavar="N",
+        help="vulture's own confidence floor (0-100, default 0 = vulture's default: report everything). "
+        "On a real codebase this tends to cluster at 60%% (functions/classes/methods, vulture's own "
+        "'fairly sure but could be wrong' tier) and 100%% (unused variables, redundant with ruff's own "
+        "F841). The cache doesn't know about this flag — changing it between runs needs --no-cache "
+        "to actually take effect.",
+    )
     args = parser.parse_args()
 
     catalog = load_catalog()
@@ -344,7 +531,7 @@ def main() -> int:
         print_detector_list(catalog)
         return 0
 
-    rule_map = rule_to_heuristic_map(catalog)
+    rule_maps, whole_tool = build_detector_index(catalog)
     root = Path(args.path).resolve()
     cache_path = Path(args.cache_file)
 
@@ -357,7 +544,7 @@ def main() -> int:
     changed = [rel for rel in files if cached_files.get(rel, {}).get("hash") != hashes[rel]]
     unchanged = [rel for rel in files if rel not in changed]
 
-    new_findings = scan_files(root, changed, rule_map) if changed else {}
+    new_findings = scan_files(root, changed, rule_maps, whole_tool, args.vulture_min_confidence) if changed else {}
 
     by_file: dict[str, list[dict]] = {}
     for rel in unchanged:

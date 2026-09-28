@@ -26,9 +26,9 @@
   source: "Kent Beck, Tidy First? (2023)"
   smell: Deeply nested conditionals hide the common case
   action: Replace nested conditionals with early returns
-  detector:
-    tool: ruff
-    rules: [RET505]
+  detectors:
+    - tool: ruff
+      rules: [RET505]
 
 - id: dead-code
   code: CG002
@@ -37,9 +37,13 @@
   source: "Kent Beck, Tidy First? (2023)"
   smell: Code nothing calls
   action: Delete it
-  detector:
-    tool: ruff
-    rules: [F401, F811, F841]
+  detectors:
+    - tool: ruff
+      rules: [F401, F811, F841]
+    - tool: vulture   # second, higher-recall pass: catches unused
+                      # functions/classes/methods ruff's own-file-scoped
+                      # checks can't see. Lower precision by nature (it
+                      # reports its own confidence score per finding).
 
 - id: normalize-symmetries
   code: CG003
@@ -96,9 +100,9 @@
   source: "Kent Beck, Tidy First? (2023)"
   smell: A magic literal
   action: Replace it with a named constant
-  detector:
-    tool: ruff
-    rules: [PLR2004]
+  detectors:
+    - tool: ruff
+      rules: [PLR2004]
 
 - id: explicit-parameters
   code: CG010
@@ -123,9 +127,9 @@
   source: "Kent Beck, Tidy First? (2023)"
   smell: A coherent chunk of logic embedded inline
   action: Pull it into a named function
-  detector:
-    tool: ruff
-    rules: [PLR0915]
+  detectors:
+    - tool: ruff
+      rules: [PLR0915]
 
 - id: one-pile
   code: CG013
@@ -158,10 +162,14 @@
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
   smell: A class doing too much, or changing for many unrelated reasons
   action: Split it along its actual responsibilities
-  # No detector: ruff's too-many-public-methods (PLR0904) is preview-only
-  # (unstable, needs --preview) and too-many-instance-attributes (PLR0902)
-  # doesn't exist in the ruff version this was built against. Revisit if
-  # either stabilizes.
+  # ruff's own too-many-public-methods (PLR0904) is preview-only (needs
+  # --preview) and too-many-instance-attributes (PLR0902) doesn't exist in
+  # ruff at all — checked as of ruff 0.16.9. Their stable originals live in
+  # upstream pylint, so that's the detector, scoped to just these two rules
+  # rather than a full pylint run.
+  detectors:
+    - tool: pylint
+      rules: [R0902, R0904]
 
 - id: move-method
   code: CG017
@@ -178,9 +186,9 @@
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
   smell: The same group of parameters travels together across call sites
   action: Give the group its own type
-  detector:
-    tool: ruff
-    rules: [PLR0913]
+  detectors:
+    - tool: ruff
+      rules: [PLR0913]
 
 - id: replace-primitive-with-object
   code: CG019
@@ -205,9 +213,9 @@
   source: "Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)"
   smell: The same type-based branching logic scattered across the codebase
   action: Replace it with dispatch (polymorphism, a strategy, a registry)
-  detector:
-    tool: ruff
-    rules: [PLR0912]
+  detectors:
+    - tool: ruff
+      rules: [PLR0912]
 
 - id: collapse-hierarchy
   code: CG022

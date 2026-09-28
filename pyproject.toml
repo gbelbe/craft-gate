@@ -1,0 +1,24 @@
+[project]
+name = "craft-gate"
+version = "0.1.0"
+description = "Craftsmanship catalog + Tidy First ratchet + craftCov scanner"
+requires-python = ">=3.10"
+dependencies = [
+    # render_catalog.py and craftcov.py both parse catalog.yaml.
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# The detector engines craftcov.py shells out to. Split from the base
+# dependency on purpose: catalog.yaml/CRAFTSMANSHIP.md tooling (render,
+# ratchet, report) needs only PyYAML; scanning needs these too, and they're
+# heavier (a full lint/dead-code-analysis toolchain), so a consuming repo
+# that only wants the ratchet + catalog isn't forced to install them.
+craftcov = [
+    "ruff>=0.13",
+    "pylint>=3.3",
+    "vulture>=2.14",
+]
+
+[tool.uv]
+package = false  # a dependency anchor for `uv sync` / `uv run`, not a distributable library

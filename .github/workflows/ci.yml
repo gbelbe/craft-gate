@@ -83,6 +83,23 @@ jobs:
           print('ci-job.yml fragment OK')
           "
 
+  # Full end-to-end dogfood: real ruff/pylint/vulture invocations, not just
+  # --list-detectors' metadata check above. Separate job so the fast
+  # metadata-only validate job above doesn't wait on a uv sync.
+  craftcov:
+    name: craftCov full scan (dogfood)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Real scan (ruff + pylint + vulture) against this repo
+        run: uv run python3 scripts/craftcov.py --no-cache
+
   # Diff-aware: only meaningful against a PR's base branch.
   tidy:
     name: Tidy First ratchet (dogfood)
