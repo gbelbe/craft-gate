@@ -11,12 +11,12 @@
 #
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
-# .claude/skills/tidy-first/SKILL.md, and .craft-gate-version (a plain-text
-# marker of which release this checkout came from — see
-# templates/update-check.yml, which reads it to detect drift). It never
-# edits CLAUDE.md, .pre-commit-config.yaml, or your CI workflow — those vary
-# too much per project to auto-merge safely; it prints what to add and where
-# instead. Safe to re-run any time to pull an update.
+# scripts/craftcov.py, .claude/skills/tidy-first/SKILL.md, and
+# .craft-gate-version (a plain-text marker of which release this checkout
+# came from — see templates/update-check.yml, which reads it to detect
+# drift). It never edits CLAUDE.md, .pre-commit-config.yaml, or your CI
+# workflow — those vary too much per project to auto-merge safely; it prints
+# what to add and where instead. Safe to re-run any time to pull an update.
 set -euo pipefail
 
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,7 +48,8 @@ copy_file "$SRC_DIR/CRAFTSMANSHIP.md" "$TARGET/CRAFTSMANSHIP.md"
 copy_file "$SRC_DIR/catalog.yaml" "$TARGET/catalog.yaml"
 copy_file "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_ratchet.sh"
 copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
-chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh"
+copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
+chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" "$TARGET/scripts/craftcov.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 # Record which release this came from, so a consumer's update-check workflow

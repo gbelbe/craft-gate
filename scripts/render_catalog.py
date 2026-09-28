@@ -31,15 +31,16 @@ DOC_PATH = ROOT / "CRAFTSMANSHIP.md"
 
 # tag -> (kind, table header)
 TABLES = {
-    "tidying": ("tidying", "| id | Name | Smell / when to reach for it | What it does |\n|---|---|---|---|"),
-    "smell-fix": ("smell-fix", "| id | Name (smell) | Smell / when to reach for it | What it does |\n|---|---|---|---|"),
+    "tidying": ("tidying", "| Code | id | Name | Smell / when to reach for it | What it does |\n|---|---|---|---|---|"),
+    "smell-fix": ("smell-fix", "| Code | id | Name (smell) | Smell / when to reach for it | What it does |\n|---|---|---|---|---|"),
 }
 
 
 def render_table(entries: list[dict], header: str) -> str:
     lines = [header]
     for e in entries:
-        lines.append(f"| `{e['id']}` | {e['name']} | {e['smell']} | {e['action']} |")
+        code = e.get("code", "")
+        lines.append(f"| {code} | `{e['id']}` | {e['name']} | {e['smell']} | {e['action']} |")
     return "\n".join(lines)
 
 

@@ -42,6 +42,12 @@ jobs:
       - name: CRAFTSMANSHIP.md is regenerated from catalog.yaml
         run: python3 scripts/render_catalog.py --check
 
+      - name: craftcov.py compiles, catalog detector rules are well-formed
+        run: |
+          python3 -m py_compile scripts/craftcov.py
+          python3 scripts/craftcov.py --list-detectors > /dev/null
+          echo "OK"
+
       - name: next_version.py bump-level logic (smoke test, no pytest dependency)
         run: |
           python3 -c "

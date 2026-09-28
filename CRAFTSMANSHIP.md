@@ -73,23 +73,23 @@ commit's test results must be identical before and after.
 <!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
      hand-edit this table; edit catalog.yaml and run that script instead.
      See CONTRIBUTING.md. -->
-| id | Name | Smell / when to reach for it | What it does |
-|---|---|---|---|
-| `guard-clauses` | Guard Clauses | Deeply nested conditionals hide the common case | Replace nested conditionals with early returns |
-| `dead-code` | Dead Code | Code nothing calls | Delete it |
-| `normalize-symmetries` | Normalize Symmetries | Equivalent code expressed in different styles, hiding which differences are real | Make the style consistent so real differences stand out |
-| `new-interface-old-implementation` | New Interface, Old Implementation | You need to change a function's calling shape | Introduce the calling shape you want, delegating to the existing implementation, before touching behavior |
-| `reading-order` | Reading Order | Declarations aren't in the order a reader needs them | Reorder for the reader, not the writer |
-| `cohesion-order` | Cohesion Order | Things that change together live far apart | Put them physically together |
-| `move-declaration-init` | Move Declaration and Initialization Together | A variable's declaration is far from its use | Relocate it next to where it's set/used |
-| `explaining-variable` | Explaining Variable | An expression's meaning isn't obvious | Extract part of it into a well-named variable |
-| `explaining-constant` | Explaining Constant | A magic literal | Replace it with a named constant |
-| `explicit-parameters` | Explicit Parameters | A function reaches into shared/ambient state | Turn the implicit dependency into an explicit parameter |
-| `chunk-statements` | Chunk Statements | An undifferentiated wall of statements | Group related statements before extracting |
-| `extract-helper` | Extract Helper | A coherent chunk of logic embedded inline | Pull it into a named function |
-| `one-pile` | One Pile | Related elements scattered with no visible shape | Temporarily collapse them to see the whole shape before re-splitting sensibly |
-| `explaining-comment` | Explaining Comment | The *why* isn't inferable from the code | Add a comment — but only for the why, never the what |
-| `delete-redundant-comment` | Delete Redundant Comment | A comment just restates the code | Remove it |
+| Code | id | Name | Smell / when to reach for it | What it does |
+|---|---|---|---|---|
+| CG001 | `guard-clauses` | Guard Clauses | Deeply nested conditionals hide the common case | Replace nested conditionals with early returns |
+| CG002 | `dead-code` | Dead Code | Code nothing calls | Delete it |
+| CG003 | `normalize-symmetries` | Normalize Symmetries | Equivalent code expressed in different styles, hiding which differences are real | Make the style consistent so real differences stand out |
+| CG004 | `new-interface-old-implementation` | New Interface, Old Implementation | You need to change a function's calling shape | Introduce the calling shape you want, delegating to the existing implementation, before touching behavior |
+| CG005 | `reading-order` | Reading Order | Declarations aren't in the order a reader needs them | Reorder for the reader, not the writer |
+| CG006 | `cohesion-order` | Cohesion Order | Things that change together live far apart | Put them physically together |
+| CG007 | `move-declaration-init` | Move Declaration and Initialization Together | A variable's declaration is far from its use | Relocate it next to where it's set/used |
+| CG008 | `explaining-variable` | Explaining Variable | An expression's meaning isn't obvious | Extract part of it into a well-named variable |
+| CG009 | `explaining-constant` | Explaining Constant | A magic literal | Replace it with a named constant |
+| CG010 | `explicit-parameters` | Explicit Parameters | A function reaches into shared/ambient state | Turn the implicit dependency into an explicit parameter |
+| CG011 | `chunk-statements` | Chunk Statements | An undifferentiated wall of statements | Group related statements before extracting |
+| CG012 | `extract-helper` | Extract Helper | A coherent chunk of logic embedded inline | Pull it into a named function |
+| CG013 | `one-pile` | One Pile | Related elements scattered with no visible shape | Temporarily collapse them to see the whole shape before re-splitting sensibly |
+| CG014 | `explaining-comment` | Explaining Comment | The *why* isn't inferable from the code | Add a comment — but only for the why, never the what |
+| CG015 | `delete-redundant-comment` | Delete Redundant Comment | A comment just restates the code | Remove it |
 <!-- END GENERATED: tidying -->
 
 ### Smells and their fixes — Fowler (with Beck), *Refactoring*, 2nd ed. (2018)
@@ -102,17 +102,17 @@ to touch *and* are worth watching for while writing new code.
 <!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
      hand-edit this table; edit catalog.yaml and run that script instead.
      See CONTRIBUTING.md. -->
-| id | Name (smell) | Smell / when to reach for it | What it does |
-|---|---|---|---|
-| `extract-class` | Large Class / God Class / Divergent Change | A class doing too much, or changing for many unrelated reasons | Split it along its actual responsibilities |
-| `move-method` | Feature Envy / Data Class | A method more interested in another object's data than its own; or a class that's all data, no behavior | Move the method to the data (or the behavior into the data class) |
-| `introduce-parameter-object` | Data Clumps | The same group of parameters travels together across call sites | Give the group its own type |
-| `replace-primitive-with-object` | Primitive Obsession | A raw string/int stands in for a real domain concept (money, a URI, a version) | Give the concept its own type |
-| `hide-delegate` | Message Chains | `a.getB().getC().getD()` reaches through several objects (Law of Demeter) | Hide the chain behind a method on the first object |
-| `replace-conditional-with-polymorphism` | Repeated Switches | The same type-based branching logic scattered across the codebase | Replace it with dispatch (polymorphism, a strategy, a registry) |
-| `collapse-hierarchy` | Speculative Generality | Abstraction or a hook built for a future that hasn't arrived | Collapse it back to what's actually used — this is YAGNI already sitting in the code |
-| `replace-inheritance-with-delegation` | Refused Bequest | A subclass uses only a fraction of what it inherits | Prefer composition over the ill-fitting inheritance |
-| `consolidate-duplicate-conditional` | Shotgun Surgery (conditional form) | One logical decision is duplicated as near-identical conditionals in several places | Consolidate into one decision point |
+| Code | id | Name (smell) | Smell / when to reach for it | What it does |
+|---|---|---|---|---|
+| CG016 | `extract-class` | Large Class / God Class / Divergent Change | A class doing too much, or changing for many unrelated reasons | Split it along its actual responsibilities |
+| CG017 | `move-method` | Feature Envy / Data Class | A method more interested in another object's data than its own; or a class that's all data, no behavior | Move the method to the data (or the behavior into the data class) |
+| CG018 | `introduce-parameter-object` | Data Clumps | The same group of parameters travels together across call sites | Give the group its own type |
+| CG019 | `replace-primitive-with-object` | Primitive Obsession | A raw string/int stands in for a real domain concept (money, a URI, a version) | Give the concept its own type |
+| CG020 | `hide-delegate` | Message Chains | `a.getB().getC().getD()` reaches through several objects (Law of Demeter) | Hide the chain behind a method on the first object |
+| CG021 | `replace-conditional-with-polymorphism` | Repeated Switches | The same type-based branching logic scattered across the codebase | Replace it with dispatch (polymorphism, a strategy, a registry) |
+| CG022 | `collapse-hierarchy` | Speculative Generality | Abstraction or a hook built for a future that hasn't arrived | Collapse it back to what's actually used — this is YAGNI already sitting in the code |
+| CG023 | `replace-inheritance-with-delegation` | Refused Bequest | A subclass uses only a fraction of what it inherits | Prefer composition over the ill-fitting inheritance |
+| CG024 | `consolidate-duplicate-conditional` | Shotgun Surgery (conditional form) | One logical decision is duplicated as near-identical conditionals in several places | Consolidate into one decision point |
 <!-- END GENERATED: smell-fix -->
 
 *Comments as a smell* (Fowler, and independently Martin below): a comment
