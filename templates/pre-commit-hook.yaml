@@ -1,0 +1,18 @@
+# Add this `local` repo block to your .pre-commit-config.yaml.
+# If you don't have one yet, this is a complete minimal file on its own.
+#
+# Install: prek install --hook-type pre-push   (or: pre-commit install -t pre-push)
+# Run manually: bash scripts/check_tidy_ratchet.sh --base origin/<your-default-branch>
+
+default_install_hook_types: [pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      - id: tidy-ratchet
+        name: "tidy ratchet (tidy(<type>): / test(characterize): commit or Tidy-Exempt: trailer)"
+        entry: bash scripts/check_tidy_ratchet.sh --base origin/main  # ← set your default branch
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

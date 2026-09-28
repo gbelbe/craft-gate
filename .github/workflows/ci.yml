@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # This repo eats its own dog food: catalog.yaml must parse, the scripts
+  # must be valid shell, and its own commit history must follow the ratchet
+  # it ships to everyone else.
+  validate:
+    name: Validate catalog + scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: catalog.yaml parses, ids are unique
+        run: |
+          python3 -c "
+          import yaml
+          data = yaml.safe_load(open('catalog.yaml'))
+          ids = [d['id'] for d in data]
+          assert len(ids) == len(set(ids)), 'duplicate id in catalog.yaml'
+          for d in data:
+              assert d.get('kind') in {'tidying', 'smell-fix', 'principle', 'workflow'}, d
+              assert d.get('source'), f\"missing source: {d['id']}\"
+          print(f'{len(data)} entries OK')
+          "
+
+      - name: shell scripts parse
+        run: |
+          for f in scripts/*.sh; do
+            bash -n "$f" && echo "OK $f"
+          done
+
+      - name: templates/ci-job.yml and templates/pre-commit-hook.yaml are valid YAML
+        run: |
+          python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"
+          python3 -c "
+          import yaml
+          # ci-job.yml is a fragment (a single job, indented as if under 'jobs:'),
+          # not a standalone workflow — wrap it before parsing.
+          body = open('templates/ci-job.yml').read()
+          wrapped = 'jobs:\n' + body
+          yaml.safe_load(wrapped)
+          print('ci-job.yml fragment OK')
+          "
+
+  # Diff-aware: only meaningful against a PR's base branch.
+  tidy:
+    name: Tidy First ratchet (dogfood)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
+        run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
