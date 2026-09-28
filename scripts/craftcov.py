@@ -104,6 +104,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CATALOG_PATH = ROOT / "catalog.yaml"
 DEFAULT_CACHE_PATH = Path(".craftcov_cache.json")
+DEFAULT_SNAPSHOT_PATH = Path(".craftcov_last_report.json")
 CACHE_VERSION = 4
 
 RULE_BASED_TOOLS = {"ruff", "pylint"}
@@ -571,6 +572,58 @@ def save_cache(cache_path: Path, cache: dict) -> None:
     cache_path.write_text(json.dumps(cache, indent=0))
 
 
+# ── report snapshot (for the "changes since last run" diff) ─────────────────
+# Deliberately a separate file from .craftcov_cache.json, not a section of
+# it: the cache is about per-file findings for incremental *scanning*
+# (invalidated by --no-cache, doesn't cover dupes at all — see that
+# section); the snapshot is about "what did the summary look like last time
+# a report was shown," which should survive --no-cache (forcing a fresh
+# recompute doesn't mean you don't still want to know what changed) and
+# does need to cover dupes (it's just the aggregate, tool-agnostic).
+
+
+def load_report_snapshot(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None
+    if "by_heuristic" not in data:
+        return None  # schema changed — treat as "no previous snapshot" rather than crash
+    return data
+
+
+def save_report_snapshot(path: Path, agg: dict) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "by_heuristic": agg["by_heuristic"],
+                "total": agg["total"],
+            },
+            indent=2,
+        )
+    )
+
+
+def diff_by_heuristic(old: dict[str, int] | None, new: dict[str, int]) -> list[tuple[str, int, int]]:
+    """(heuristic_id, old_count, new_count) for every heuristic whose count
+    changed — old_count/new_count are 0 for a heuristic that's new or fully
+    resolved. Empty list (not None) when old is None (first-ever run) is the
+    caller's job to distinguish, since "no previous snapshot" and "nothing
+    changed" need different messages."""
+    ids = set(old or {}) | set(new)
+    changed = []
+    for hid in ids:
+        old_count = (old or {}).get(hid, 0)
+        new_count = new.get(hid, 0)
+        if old_count != new_count:
+            changed.append((hid, old_count, new_count))
+    changed.sort(key=lambda t: -abs(t[2] - t[1]))
+    return changed
+
+
 # ── aggregation + report ─────────────────────────────────────────────────────
 
 
@@ -603,7 +656,47 @@ def aggregate(by_file: dict[str, list[dict]]) -> dict:
     }
 
 
-def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[str, list[dict]], verbose: bool, timing: dict) -> None:
+def print_diff_section(prev_snapshot: dict | None, agg: dict, catalog_by_id: dict[str, dict]) -> None:
+    if prev_snapshot is None:
+        print("Changes since last run: none — this is the first run (no previous snapshot).")
+        print()
+        return
+
+    changed = diff_by_heuristic(prev_snapshot["by_heuristic"], agg["by_heuristic"])
+    when = prev_snapshot.get("generated_at", "an earlier run")
+    if not changed:
+        print(f"Changes since last run ({when}): none — identical totals.")
+        print()
+        return
+
+    print(f"Changes since last run ({when})")
+    for hid, old_count, new_count in changed:
+        code = catalog_by_id.get(hid, {}).get("code", "")
+        delta = new_count - old_count
+        sign = "+" if delta > 0 else ""
+        if old_count == 0:
+            tag = " (NEW)"
+        elif new_count == 0:
+            tag = " (RESOLVED)"
+        else:
+            tag = ""
+        print(f"  {code:7s} {hid:38s} {old_count:5d} -> {new_count:<5d} ({sign}{delta}){tag}")
+    old_total = prev_snapshot.get("total", 0)
+    total_delta = agg["total"] - old_total
+    sign = "+" if total_delta > 0 else ""
+    print(f"  {'':7s} {'TOTAL':38s} {old_total:5d} -> {agg['total']:<5d} ({sign}{total_delta})")
+    print()
+
+
+def print_text_report(
+    agg: dict,
+    catalog_by_id: dict[str, dict],
+    by_file: dict[str, list[dict]],
+    verbose: bool,
+    timing: dict,
+    prev_snapshot: dict | None,
+    show_diff: bool = True,
+) -> None:
     print("craftCov — craftsmanship heuristic scan")
     print(
         f"Scanned {timing['total_files']} files "
@@ -612,6 +705,9 @@ def print_text_report(agg: dict, catalog_by_id: dict[str, dict], by_file: dict[s
     if timing.get("dupes_elapsed", 0) > 0:
         print(f"Duplicate-code pass: {timing['dupes_elapsed']:.2f}s (always full-corpus — see README)")
     print()
+
+    if show_diff:
+        print_diff_section(prev_snapshot, agg, catalog_by_id)
 
     if agg["total"] == 0:
         print("No findings for the detectable heuristics. ✓")
@@ -719,6 +815,8 @@ def main() -> int:
     parser.add_argument("--path", default=".", help="repo root to scan (default: .)")
     parser.add_argument("--cache-file", default=str(DEFAULT_CACHE_PATH))
     parser.add_argument("--no-cache", action="store_true", help="ignore and overwrite the existing cache")
+    parser.add_argument("--snapshot-file", default=str(DEFAULT_SNAPSHOT_PATH), help="where the by-heuristic totals from this run are saved, to diff against next time")
+    parser.add_argument("--no-diff", action="store_true", help="don't print the 'changes since last run' section (the snapshot still updates for next time)")
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--verbose", "-v", action="store_true", help="list every finding, not just the summary")
     parser.add_argument("--list-detectors", action="store_true", help="print which heuristics are detectable and how, then exit")
@@ -745,6 +843,8 @@ def main() -> int:
     rule_maps, whole_tool, corpus_tool = build_detector_index(catalog)
     root = Path(args.path).resolve()
     cache_path = Path(args.cache_file)
+    snapshot_path = Path(args.snapshot_file)
+    prev_snapshot = None if args.no_diff else load_report_snapshot(snapshot_path)
 
     t0 = time.monotonic()
     files = discover_python_files(root)  # relative paths
@@ -785,9 +885,20 @@ def main() -> int:
     }
 
     if args.format == "json":
-        print(json.dumps({"summary": agg, "findings": by_file, "timing": timing}, indent=2))
+        payload = {"summary": agg, "findings": by_file, "timing": timing}
+        if not args.no_diff:
+            payload["diff"] = {
+                "previous_generated_at": (prev_snapshot or {}).get("generated_at"),
+                "by_heuristic": [
+                    {"heuristic_id": hid, "old": old_count, "new": new_count}
+                    for hid, old_count, new_count in diff_by_heuristic((prev_snapshot or {}).get("by_heuristic"), agg["by_heuristic"])
+                ],
+            }
+        print(json.dumps(payload, indent=2))
     else:
-        print_text_report(agg, catalog_by_id, by_file, args.verbose, timing)
+        print_text_report(agg, catalog_by_id, by_file, args.verbose, timing, prev_snapshot, show_diff=not args.no_diff)
+
+    save_report_snapshot(snapshot_path, agg)
 
     return 0
 

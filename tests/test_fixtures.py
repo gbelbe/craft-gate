@@ -46,13 +46,28 @@ MUST_BE_CLEAN = {"clean.py"}
 
 def main() -> int:
     cache = ROOT / ".craftcov_cache.json.fixtures_test"
+    snapshot = ROOT / ".craftcov_last_report.json.fixtures_test"
     proc = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "craftcov.py"), "--path", str(FIXTURES), "--cache-file", str(cache), "--no-cache", "--format", "json"],
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "craftcov.py"),
+            "--path",
+            str(FIXTURES),
+            "--cache-file",
+            str(cache),
+            "--snapshot-file",
+            str(snapshot),
+            "--no-cache",
+            "--no-diff",
+            "--format",
+            "json",
+        ],
         capture_output=True,
         text=True,
         cwd=ROOT,
     )
     cache.unlink(missing_ok=True)
+    snapshot.unlink(missing_ok=True)
     if proc.returncode != 0:
         print(f"✗ craftcov.py exited {proc.returncode}:\n{proc.stderr}", file=sys.stderr)
         return 1

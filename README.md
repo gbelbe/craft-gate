@@ -277,12 +277,19 @@ uv run python3 scripts/craftcov.py                  # scan, text report
 uv run python3 scripts/craftcov.py --format json     # machine-readable
 uv run python3 scripts/craftcov.py --verbose         # + every finding, file:line
 uv run python3 scripts/craftcov.py --list-detectors  # which heuristics are detectable, and how
+uv run python3 scripts/craftcov.py --no-diff         # skip the "changes since last run" section
 ```
 
 ```
 craftCov — craftsmanship heuristic scan
 Scanned 669 files (0 changed, 669 from cache) in 1.45s
 Duplicate-code pass: 1.10s (always full-corpus — see README)
+
+Changes since last run (2026-09-21T09:03:11Z)
+  CG002   dead-code                                1685 -> 1699  (+14)
+  CG024   consolidate-duplicate-conditional          432 -> 428   (-4)
+  CG012   extract-helper                                0 -> 1    (+1) (NEW)
+          TOTAL                                     2563 -> 2579  (+16)
 
 By heuristic
 CODE    ID                                      COUNT  SOURCE
@@ -302,6 +309,23 @@ By library (top-level directory)
 8/31 heuristics have an automatic detector (25%) — the rest need the
 procedure in CRAFTSMANSHIP.md (ask the developer), not a scan.
 ```
+
+**Changes since last run.** Every run saves its by-heuristic totals to
+`.craftcov_last_report.json` (gitignored — it's a local run-to-run diary, not
+a checked-in artifact) and, unless `--no-diff` is passed, diffs the new
+totals against that file before printing the rest of the report: a per-run
+"did this get better or worse" view with no extra scan, no extra tool
+invocation, just a comparison of two small JSON files. The first-ever run
+says so explicitly rather than printing a misleading all-zero diff. A
+heuristic whose old count was 0 is tagged `(NEW)`; one whose new count is 0
+is tagged `(RESOLVED)`. `--no-diff` skips *printing* the section (the
+snapshot file still gets updated, so a later diff-enabled run stays
+accurate) — useful for scripted/cron invocations where you don't want the
+extra lines but still want the history to keep advancing. `--format json`
+carries the same information under a `"diff"` key (a list of
+`{heuristic_id, old, new}`), present whenever `--no-diff` isn't. Point
+`--snapshot-file` at a different path to keep separate histories (e.g. one
+per branch, or one per CI job vs. local runs) instead of sharing the default.
 
 Each duplicate is counted once *per copy*, not once per pair — a 2-copy
 duplicate is 2 findings, one at each location, the same "each flagged line
