@@ -74,6 +74,25 @@ jobs:
           # below the threshold: no match
           assert find_duplicate_blocks(filtered, min_lines=5) == []
 
+          # import statements are excluded from the scan entirely: two files
+          # that only share their import block (no shared logic) must not
+          # be flagged as duplicated code — they share a library, not code
+          # this repo wrote.
+          imports_only_a = 'import os\nimport sys\nfrom pathlib import Path\n\ndef f():\n    return 1\n'
+          imports_only_b = 'import os\nimport sys\nfrom pathlib import Path\n\ndef g():\n    return 2\n'
+          filtered_imports = {
+              'a.py': strip_lines_for_dupes(imports_only_a),
+              'b.py': strip_lines_for_dupes(imports_only_b),
+          }
+          assert find_duplicate_blocks(filtered_imports, min_lines=3) == [], find_duplicate_blocks(filtered_imports, min_lines=3)
+
+          # a multi-line parenthesized import has ALL of its lines excluded,
+          # not just the first — real duplicated logic right after it is
+          # still found, starting after the import.
+          multiline_import = 'from typing import (\n    Any,\n    Dict,\n)\n\ndef h(x):\n    if x is None:\n        return None\n    return x + 1\n'
+          stripped_multiline = strip_lines_for_dupes(multiline_import)
+          assert stripped_multiline[0] == (6, 'def h(x):'), stripped_multiline
+
           print('dupes algorithm OK')
           "
 

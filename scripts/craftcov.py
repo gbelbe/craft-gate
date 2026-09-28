@@ -255,13 +255,39 @@ def enclosing_class(scopes: list[tuple[int, int, str, str]], line: int) -> str |
 # Doesn't special-case docstrings the way pylint's checker does either (a
 # deliberate simplification) — a duplicated docstring block is still
 # reported, which is arguably still useful signal for this catalog entry.
+#
+# Import statements ARE special-cased, on purpose, unlike PMD/pylint's own
+# checkers: two files both doing `import os / import sys / from pathlib
+# import Path` the same way isn't duplicated logic, it's every file in the
+# repo depending on the same libraries the same way — see
+# `_import_lines`/`strip_lines_for_dupes`.
+
+
+def _import_lines(source: str) -> set[int]:
+    """Every line number spanned by an `import`/`from ... import` statement,
+    anywhere in the file (not just top-level — a lazy import inside a
+    function is still a library, not code this repo wrote). AST-based, not
+    a line-prefix regex, so a multi-line parenthesized `from x import (a,
+    b, c)` has all of its lines excluded, not just the first."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    lines: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            end = getattr(node, "end_lineno", node.lineno)
+            lines.update(range(node.lineno, end + 1))
+    return lines
 
 
 def strip_lines_for_dupes(source: str) -> list[tuple[int, str]]:
-    """(original_line_number, normalized_text) for every line with real
-    code content — comments and blank lines dropped. Uses `tokenize`, not a
-    regex, so a '#' inside a string literal is never mistaken for a
-    comment start."""
+    """(original_line_number, normalized_text) for every line of code this
+    repo actually wrote — comments, blank lines, and import statements all
+    dropped. Comments via `tokenize`, not a regex, so a '#' inside a string
+    literal is never mistaken for a comment start; imports via `ast`, so a
+    library import can't masquerade as "duplicated logic" just because two
+    files both `import os, sys, json` the same way."""
     lines = source.splitlines()
     comment_cols: dict[int, int] = {}
     try:
@@ -271,8 +297,12 @@ def strip_lines_for_dupes(source: str) -> list[tuple[int, str]]:
     except (tokenize.TokenizeError, IndentationError, SyntaxError, ValueError):
         pass  # fall back to no comment-stripping for a file tokenize can't handle
 
+    skip = _import_lines(source)
+
     result: list[tuple[int, str]] = []
     for i, raw in enumerate(lines, start=1):
+        if i in skip:
+            continue
         text = (raw[: comment_cols[i]] if i in comment_cols else raw).strip()
         if text:
             result.append((i, text))

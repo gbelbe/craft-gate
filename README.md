@@ -353,6 +353,16 @@ of magnitude as PMD@50 — that's the new default (`catalog.yaml`'s comment
 on this entry has the full numbers). 8778 → 432, a 20x drop, from fixing
 the threshold alone — the algorithm itself needed no changes.
 
+**Only code this repo wrote, not the libraries it imports.** `import`/`from
+... import` lines (AST-located, so a multi-line parenthesized import has
+every line excluded, not just the first) are stripped before the
+duplicate-window scan even starts — two files that both do `import os`,
+`import sys`, `from pathlib import Path` the same way share a dependency,
+not duplicated logic, and shouldn't count as a `consolidate-duplicate-
+conditional` finding. Measured on kai-ster's same 669-file set: 432 → 384,
+48 of the post-PMD-calibration findings (~11%) were import-block matches,
+not real duplication.
+
 **Honest about its limits, on purpose.** Real semantic smell detection
 (Feature Envy, Data Clumps *precisely* — not just "too many params," the
 *same group* repeating — Message Chains, Primitive Obsession, Refused
