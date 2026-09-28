@@ -1,0 +1,18 @@
+# Install: prek install --hook-type pre-push   (or: pre-commit install -t pre-push)
+# Run manually: bash scripts/check_tidy_ratchet.sh --base origin/main
+#
+# This is templates/pre-commit-hook.yaml applied to this repo itself — see
+# CLAUDE.md's "Editing this repo specifically."
+
+default_install_hook_types: [pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      - id: tidy-ratchet
+        name: "tidy ratchet (tidy(<type>): / test(characterize): commit or Tidy-Exempt: trailer)"
+        entry: bash scripts/check_tidy_ratchet.sh --base origin/main
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

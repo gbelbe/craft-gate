@@ -1,0 +1,55 @@
+name: Release
+
+# Every push to main asks the commit log what version it earned, via
+# scripts/next_version.py (Conventional Commits: feat -> minor, fix/perf/
+# refactor/build/revert -> patch, a ! or BREAKING CHANGE: -> major, anything
+# else — docs/chore/test/ci/style — releases nothing). No separate
+# publish step to decouple from here (unlike a package that ships to a
+# registry), so tagging and creating the GitHub Release happen in one job.
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false   # never race two tags; let each finish
+
+jobs:
+  release:
+    name: Tag + release if the commits earned one
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the whole history, and every tag, or nothing resolves
+
+      - name: Work out the next version
+        id: next
+        run: |
+          version="$(python3 scripts/next_version.py)"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [ -z "$version" ]; then
+            echo "No releasable commits since the last tag — nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Next version: **${version}**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Tag and create the GitHub Release
+        if: steps.next.outputs.version != ''
+        env:
+          VERSION: ${{ steps.next.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "Tag ${VERSION} already exists — leaving it alone." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${VERSION}" -m "${VERSION}"
+          git push origin "${VERSION}"
+          gh release create "${VERSION}" --title "${VERSION}" --generate-notes
+          echo "Released ${VERSION}." >> "$GITHUB_STEP_SUMMARY"

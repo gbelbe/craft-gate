@@ -113,6 +113,7 @@ catalog.yaml              machine-readable mirror of the catalog table
 scripts/
   check_tidy_ratchet.sh   the CI/pre-push ratchet
   report_tidy_history.sh  the periodic exemption-ratio / sources report
+  next_version.py         Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                thin Claude Code wrapper around CRAFTSMANSHIP.md
 templates/
@@ -120,7 +121,26 @@ templates/
   pre-commit-hook.yaml    hook entry for .pre-commit-config.yaml
   ci-job.yml              job fragment for .github/workflows/ci.yml
 bootstrap.sh              installer/updater
+
+CLAUDE.md, .pre-commit-config.yaml, .claude/skills/tidy-first/SKILL.md
+                          this repo applies its own tooling to itself —
+                          produced by `bash bootstrap.sh .`, not hand-written
 ```
+
+## Versioning
+
+Every push to `main` runs `scripts/next_version.py` against the commits
+since the last tag: a Conventional Commits `feat:` bumps minor, `fix:` /
+`perf:` / `refactor:` / `build:` / `revert:` bump patch, a `!` or
+`BREAKING CHANGE:` footer bumps major (while the major is still `0`, a
+breaking change bumps minor instead — no accidental `1.0` from a stray
+`feat!:`), and anything else (`docs:`, `chore:`, `test:`, `ci:`, `style:`)
+releases nothing. If a release is due, `.github/workflows/release.yml` tags
+it and creates a GitHub Release with auto-generated notes — no version
+number to remember to bump by hand, no separate publish step to run.
+
+Pin a specific version with `git clone --branch vX.Y.Z` (see Quickstart);
+`main` always has the latest, possibly-unreleased state.
 
 ## Design choices worth knowing about
 

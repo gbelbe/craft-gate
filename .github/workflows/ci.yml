@@ -39,6 +39,27 @@ jobs:
             bash -n "$f" && echo "OK $f"
           done
 
+      - name: next_version.py bump-level logic (smoke test, no pytest dependency)
+        run: |
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          from next_version import bump_level, next_version
+
+          assert bump_level(['feat: x']) == 'minor'
+          assert bump_level(['fix: x']) == 'patch'
+          assert bump_level(['docs: x']) == None
+          assert bump_level(['feat!: x']) == 'major'
+          assert bump_level(['fix: x\n\nBREAKING CHANGE: y']) == 'major'
+          assert bump_level(['feat: x', 'fix: y']) == 'minor'  # highest wins
+          assert next_version(None, 'minor') == '0.1.0'
+          assert next_version('v0.1.0', 'minor') == '0.2.0'
+          assert next_version('v0.1.0', 'patch') == '0.1.1'
+          assert next_version('v0.9.0', 'major') == '0.10.0'  # 0.x stays 0.x
+          assert next_version('v1.2.3', 'major') == '2.0.0'
+          print('next_version.py OK')
+          "
+
       - name: templates/ci-job.yml and templates/pre-commit-hook.yaml are valid YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"
