@@ -48,10 +48,12 @@ across those heuristics must go down, or stay at 0 — the same
 A third, independent gate covers cyclomatic/cognitive complexity,
 invariant return, and duplicated string literal (if you've installed the
 `complexity` extra — see README): `scripts/check_complexity_ratchet.py`
-(CI's `complexity` job) fails a touched function/literal whose metric got
-worse than where the branch diverged, grandfathering what's already there.
-`Tidy-Exempt:` bypasses this one too — one exemption mechanism for all
-three gates. See `CRAFTSMANSHIP.md`'s "The complexity ratchet".
+(CI's `complexity` job) grandfathers a function/literal the diff never
+reaches, but one it *does* reach that's already over threshold must come
+out lower than it went in — unchanged doesn't pass, only a genuine
+decrease does (needn't reach the threshold in one PR). `Tidy-Exempt:`
+bypasses this one too — one exemption mechanism for all three gates. See
+`CRAFTSMANSHIP.md`'s "The complexity ratchet".
 
 **Write within these limits from the start, don't wait for a gate to catch
 it**: CRAFTSMANSHIP.md's "The mechanical floor" table has the *exact*

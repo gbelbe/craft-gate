@@ -186,9 +186,10 @@ place.
 
 A second diff-aware gate, fully independent of craftCov (different script,
 different catalog entries, its own dependency extra) — for the 4 catalog
-entries it covers (CG032-CG035), a touched function/literal's metric must
-not get worse from where the branch diverged, the same "grandfather what's
-already there, block what gets worse" rule Refactor First uses.
+entries it covers (CG032-CG035), a touched function/literal already over
+threshold must come out *lower* than it went in, stricter than Refactor
+First's "must not get worse": leaving it exactly as bad as before doesn't
+pass just because it didn't get worse.
 
 ```bash
 uv run python3 scripts/check_complexity_ratchet.py --base origin/main
@@ -214,13 +215,20 @@ Complexity ratchet: 2 violation(s):
   repeated 3+ times in one file (not per-function), excluding docstrings.
 
 **Grandfathered, not retroactive.** A function already over threshold that
-you don't touch isn't a violation; the same function made *more* complex
-is. The point is "don't make it worse," not "fix everything that already
-exists."
+the diff never reaches isn't a violation — touch detection is a real
+`git diff -U0` (see `_changed_lines`/`_touched_names`), matched against
+each function's line range, not just "did the complexity number change."
+A function the diff *does* reach, already over threshold, must decrease —
+unchanged is a violation, worse is a violation, only lower passes (it
+doesn't have to reach the threshold in one PR). The point is forward
+pressure on debt you're already touching, not a demand to go looking for
+complexity to fix in code nobody's touching.
 
 **Diff-aware via a throwaway `git worktree`**, same technique as
 `check_refactor_first.py`: one worktree checkout of the base ref computes
-all four metrics at once, compared against the current tree. A file move
+all four metrics at once, compared against the current tree. Touch
+detection is a second, separate `git diff` (unified-zero, against the same
+base ref) read for its changed-line ranges, not the worktree. A file move
 counts as a change to everything it carries — there's no rename-awareness.
 
 **Ported from a real, load-bearing script, not written from scratch for

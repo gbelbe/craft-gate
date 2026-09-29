@@ -353,14 +353,17 @@ this," and these don't). `scripts/check_complexity_ratchet.py`:
 - **Duplicated String Literal** (S1192) — the same literal (5+ characters)
   repeated 3+ times in one file, scoped per file rather than per function.
 
-**The ratchet rule**: a function/literal is a violation when its metric
-exceeds the threshold *and* increased versus the base ref (a brand-new
-function has base complexity 0) — blocking a new function over threshold,
-an already-complex function made worse, and a simple function pushed over,
-while allowing untouched complex functions and ones refactored *down*.
-Grandfathered, not retroactive: this is about not making things worse from
-here, the same spirit as Refactor First, not a demand to fix everything
-that already exists.
+**The ratchet rule**: a brand-new function over threshold is always a
+violation (base complexity 0). An *existing* function/literal already over
+threshold that this change's diff actually reaches (matched by line range
+against `git diff`) must come out **lower** than it went in — left
+unchanged is not enough, only a genuine decrease passes. One the diff
+never reaches at all is grandfathered regardless of its number. This is
+stricter than "never worse": touching a bad function obligates you to
+improve it, at least a little — it doesn't have to reach the threshold in
+one PR, just move the right direction. Not retroactive, though: nothing
+here forces anyone to go looking for complexity to fix in code nobody's
+touching.
 
 ```bash
 uv sync --extra complexity                                    # radon + cognitive-complexity
@@ -373,7 +376,7 @@ other two — one exemption mechanism for all three gates.
 
 ## Reporting — visible, not just enforced
 
-Two optional, non-blocking mechanisms make craftCov's findings visible
+Two default, non-blocking mechanisms make craftCov's findings visible
 without gating anything: a sticky PR comment showing what changed in this
 PR (`scripts/craftcov_pr_comment.py`), and a GitHub code-scanning SARIF
 export showing the repo's current state overall

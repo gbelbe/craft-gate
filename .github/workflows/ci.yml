@@ -98,9 +98,18 @@ jobs:
           assert 'a.py::f' in v[0] and '10' in v[0] and '20' in v[0]
           assert 'a.py::g' in v[1] and 'new function' in v[1]
 
-          # grandfathered: unchanged-and-already-bad, or refactored down, neither fires
+          # untouched (no touched= given): unchanged-and-already-bad, or refactored
+          # down, neither fires -- the only signal available without diff info
           assert find_violations({'a.py::f': 20}, {'a.py::f': 20}, threshold=15) == []
           assert find_violations({'a.py::f': 20}, {'a.py::f': 12}, threshold=15) == []
+
+          # touched + still >= base: violation even when unchanged, not just when worse
+          vt = find_violations({'a.py::f': 20}, {'a.py::f': 20}, threshold=15, touched={'a.py::f'})
+          assert len(vt) == 1 and 'unchanged' in vt[0], vt
+          # touched + genuinely decreased (even if still over threshold): allowed
+          assert find_violations({'a.py::f': 20}, {'a.py::f': 18}, threshold=15, touched={'a.py::f'}) == []
+          # not in touched set: falls back to the untouched rule regardless
+          assert find_violations({'a.py::f': 20}, {'a.py::f': 20}, threshold=15, touched=set()) == []
 
           # duplicated-string-literal needs no radon/cognitive-complexity (pure ast)
           with tempfile.TemporaryDirectory() as tmp:

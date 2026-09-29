@@ -67,9 +67,10 @@ enforces the outcome — a touched file's total must go down, or stay at 0 —
 A third, independent gate covers cyclomatic/cognitive complexity, invariant
 return, and duplicated string literal (CG032-CG035, no `detectors` field —
 craftcov.py has no awareness of it): `scripts/check_complexity_ratchet.py`
-(CI's `complexity` job) fails a touched function/literal whose metric got
-worse than where the branch diverged. Same `Tidy-Exempt:` bypass. See
-CRAFTSMANSHIP.md's "The complexity ratchet".
+(CI's `complexity` job) grandfathers a function/literal the diff never
+reaches, but one it *does* reach that's already over threshold must come
+out lower than it went in — unchanged doesn't pass. Same `Tidy-Exempt:`
+bypass. See CRAFTSMANSHIP.md's "The complexity ratchet".
 
 **Write within these limits from the start**: CRAFTSMANSHIP.md's "The
 mechanical floor" table has the exact numbers these two gates check (≤5
