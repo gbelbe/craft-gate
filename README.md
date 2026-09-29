@@ -170,7 +170,7 @@ CRAFTSMANSHIP.md          procedure, commit convention, legacy-code method
                            (generated — see catalog.yaml)
 catalog.yaml               the actual catalog data — edit this, not the
                            tables in CRAFTSMANSHIP.md directly
-pyproject.toml             PyYAML (base) + the craftcov / complexity extras
+pyproject.toml             PyYAML (base) + the craftcov / complexity / mutation extras
 scripts/
   check_tidy_ratchet.sh     the CI/pre-push ratchet
   report_tidy_history.sh    the periodic exemption-ratio / sources report
