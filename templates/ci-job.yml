@@ -18,7 +18,7 @@
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
 # A separate job, not a step in `tidy` above, because it's a real CI pass —
-# it needs craftCov's toolchain (`uv sync --extra craftcov`; see README's
+# it needs craftCov's toolchain (`uv sync --extra craftcov`; see DESIGN.md's
 # craftCov section and pyproject.toml's `craftcov` extra) where `tidy` above
 # needs nothing beyond bash. Fails a PR when a touched .py file's total
 # across the 8 mechanically-detectable heuristics didn't go down (or,
@@ -42,7 +42,7 @@
 
 # Independent of craftCov — its own script, its own catalog entries
 # (CG032-CG035), its own dependency extra (`uv sync --extra complexity`;
-# see README's "The complexity ratchet"). Fails a PR when a touched
+# see DESIGN.md's "The complexity ratchet"). Fails a PR when a touched
 # function/literal's cyclomatic/cognitive complexity, invariant-return, or
 # duplicated-string-literal metric got worse than where the branch
 # diverged — grandfathers what's already there, blocks what gets worse.
@@ -68,7 +68,7 @@
 
 # Posts (or updates in place) a sticky PR comment showing craftCov's
 # repo-wide total and its by-heuristic breakdown, diffed against where the
-# branch diverged — see README's craftCov section and
+# branch diverged — see DESIGN.md's Reporting section and
 # scripts/craftcov_pr_comment.py's own docstring. Needs `pull-requests:
 # write` (not just the default `read`) to post/edit the comment.
   craftcov-pr-comment:

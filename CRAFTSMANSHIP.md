@@ -2,7 +2,8 @@
 
 This is the source of truth for everything except the two catalog tables
 below, which are generated from `catalog.yaml` — edit that file, not the
-tables here directly (see the repo's README, "How to add a new heuristic").
+tables here directly (see the repo's CONTRIBUTING.md, "Adding a heuristic
+or rule").
 This file does not assume any particular AI tool or editor — a human
 contributor, a CI script, or an agent can all read it directly. Tool-specific
 wrappers (a Claude Code skill, a pre-commit hook, a CI job) point back here
@@ -241,7 +242,7 @@ that the discipline (or an explicit, reviewable exemption) was followed.
 
 ## Refactor First — a mechanically-enforced instance of the procedure above
 
-For any heuristic craftCov can detect (see the README's craftCov section, or
+For any heuristic craftCov can detect (see DESIGN.md's craftCov section, or
 `scripts/craftcov.py --list-detectors` — 8 of the 35 entries above as of
 this writing), the "which tidying, ask the developer" judgment call in step
 3 of the procedure becomes fully mechanical instead:
@@ -333,7 +334,7 @@ without gating anything: a sticky PR comment showing what changed in this
 PR (`scripts/craftcov_pr_comment.py`), and a GitHub code-scanning SARIF
 export showing the repo's current state overall
 (`craftcov.py --format sarif`). Neither is a ratchet — nothing here fails
-a build. See the README's **Reporting** section for the full detail and
+a build. See DESIGN.md's **Reporting** section for the full detail and
 the CI wiring.
 
 ## Don't let the exemption become the rule

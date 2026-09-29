@@ -777,7 +777,8 @@ def print_text_report(
     )
     if timing.get("dupes_elapsed", 0) > 0:
         print(
-            f"Duplicate-code pass: {timing['dupes_elapsed']:.2f}s (always full-corpus — see README)"
+            f"Duplicate-code pass: {timing['dupes_elapsed']:.2f}s "
+            "(always full-corpus — see DESIGN.md)"
         )
     if scope_label:
         print(
@@ -850,7 +851,7 @@ def format_sarif(by_file: dict[str, list[dict]], catalog: list[dict]) -> dict:
     """A SARIF 2.1.0 document for `by_file`'s findings, for `github/codeql-
     action/upload-sarif` — feeds GitHub's own code-scanning dashboard
     (history, per-finding tracking, a native alert count) rather than a
-    hand-rolled report needing its own hosting. See README's craftCov
+    hand-rolled report needing its own hosting. See DESIGN.md's Reporting
     section for the CI wiring.
 
     Rules cover every detectable catalog entry (`detectors` present),
