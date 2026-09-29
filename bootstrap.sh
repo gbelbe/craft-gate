@@ -12,7 +12,8 @@
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
 # scripts/craftcov.py, scripts/check_refactor_first.py,
-# scripts/check_complexity_ratchet.py, .claude/skills/tidy-first/SKILL.md, and
+# scripts/check_complexity_ratchet.py, scripts/craftcov_pr_comment.py,
+# .claude/skills/tidy-first/SKILL.md, and
 # .craft-gate-version (a plain-text marker of which release this checkout
 # came from — see templates/update-check.yml, which reads it to detect
 # drift). It never edits CLAUDE.md, .pre-commit-config.yaml, or your CI
@@ -52,9 +53,10 @@ copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy
 copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
 copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refactor_first.py"
 copy_file "$SRC_DIR/scripts/check_complexity_ratchet.py" "$TARGET/scripts/check_complexity_ratchet.py"
+copy_file "$SRC_DIR/scripts/craftcov_pr_comment.py" "$TARGET/scripts/craftcov_pr_comment.py"
 chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" \
   "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py" \
-  "$TARGET/scripts/check_complexity_ratchet.py"
+  "$TARGET/scripts/check_complexity_ratchet.py" "$TARGET/scripts/craftcov_pr_comment.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 # Record which release this came from, so a consumer's update-check workflow
@@ -80,9 +82,12 @@ echo "     (or use it as your starting file if you don't have one yet),"
 echo "     then: prek install --hook-type pre-push"
 echo
 echo "  2. Wire all three default CI gates — the ratchet, Refactor First,"
-echo "     and the complexity ratchet:"
+echo "     and the complexity ratchet — plus, optionally, two reporting jobs"
+echo "     (a sticky PR comment and a GitHub code-scanning SARIF upload —"
+echo "     neither is a gate, and the SARIF one needs a public repo or"
+echo "     GitHub Advanced Security):"
 echo "       cat '$SRC_DIR/templates/ci-job.yml'"
-echo "     Add all three jobs to .github/workflows/ci.yml, set your branch name."
+echo "     Add the job(s) you want to .github/workflows/ci.yml, set your branch name."
 echo "     Refactor First needs craftCov's own tools on top: add a 'craftcov'"
 echo "     extra (ruff/pylint/vulture — pyyaml too, unless already a dependency)"
 echo "     to your dependency file. The complexity ratchet needs its own"

@@ -61,6 +61,16 @@ It answers two separate questions, on purpose:
    catalog entries), diff-aware the same way Refactor First is: a touched
    function/literal must not get worse from where the branch diverged. See
    `CRAFTSMANSHIP.md`'s "The complexity ratchet".
+9. **A sticky PR comment**, optional and non-blocking
+   (`scripts/craftcov_pr_comment.py`) — the repo-wide craftCov total and
+   its by-heuristic breakdown, diffed against where the branch diverged,
+   posted on the PR and updated in place on every push. See **Reporting**
+   below.
+10. **A GitHub code-scanning SARIF export**, optional and non-blocking
+    (`craftcov.py --format sarif`) — feeds craftCov's findings into GitHub's
+    own dashboard (history, per-finding tracking, a native alert count)
+    instead of a hand-rolled report needing its own hosting. Needs a public
+    repo or GitHub Advanced Security — see **Reporting** below.
 
 ## Requirements
 
@@ -70,9 +80,10 @@ machine and every GitHub Actions `ubuntu-latest` runner already has all of
 this. Neither script parses `catalog.yaml` or `CRAFTSMANSHIP.md` at runtime,
 so those stay plain files to read, not a load-bearing dependency.
 
-**The full default install — both CI gates, message-pattern ratchet and
-Refactor First — additionally needs craftCov's toolchain**, since Refactor
-First is built on top of it:
+**The full default install — all three CI gates — additionally needs two
+toolchains**, since Refactor First and the complexity ratchet are each
+built on their own engines, not the message-pattern ratchet's zero
+dependencies:
 
 - `scripts/craftcov.py` and `scripts/check_refactor_first.py` need PyYAML
   importable, plus whichever of `ruff` / `pylint` / `vulture` the catalog's
@@ -81,13 +92,20 @@ First is built on top of it:
   craftcov` (this repo has a `pyproject.toml` for exactly this) installs all
   three; a repo that only wants a subset of the detectable heuristics can
   install fewer.
+- `scripts/check_complexity_ratchet.py` needs `radon` and
+  `cognitive-complexity` — add a `complexity` extra; see **The complexity
+  ratchet** below for the exact block. `uv sync --extra complexity`
+  installs both.
 
-One thing stays genuinely optional, since it's a convenience, not a gate:
+Two things stay genuinely optional:
 
 - The pre-push hook template needs [`prek`](https://prek.j178.dev) or
   [`pre-commit`](https://pre-commit.com) installed — craft-gate doesn't ship
   or install either. No pre-commit framework in your repo yet? Skip this and
   rely on the CI jobs alone; local and CI enforcement are independent.
+- The two reporting jobs (**Reporting** below) — neither is a gate, and
+  `craftcov-sarif` specifically needs a public repo or GitHub Advanced
+  Security, so it isn't even available to every repo that might want it.
 
 Don't want Refactor First at all — the message-pattern ratchet alone is
 enough for your repo? It stands on its own with zero dependencies; just
@@ -193,6 +211,7 @@ scripts/
                           down (or stay 0) vs. where the branch diverged
   check_complexity_ratchet.py  CI gate: cyclomatic/cognitive complexity,
                           invariant return, duplicated literal (CG032-CG035)
+  craftcov_pr_comment.py   optional: sticky PR comment (see "Reporting")
   next_version.py          Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                thin Claude Code wrapper around CRAFTSMANSHIP.md
@@ -616,6 +635,74 @@ locally, before a push, rather than after — the two smells beyond plain
 cyclomatic complexity are checked against the *reference implementation*
 (the `cognitive-complexity` package) rather than a re-derivation, because
 the point is to agree with SonarQube's own server, not approximate it.
+
+## Reporting: making craftCov visible, not just enforced
+
+The gates above (`refactor-first`, `complexity`) tell you whether a PR is
+allowed to merge; they don't tell anyone *what the debt actually looks
+like* — the running total, the trend, what's left. Two optional,
+non-blocking reporting mechanisms cover that, each suited to a different
+question:
+
+**"What changed in this PR?" — a sticky PR comment**
+(`scripts/craftcov_pr_comment.py`, the `craftcov-pr-comment` job). Posts a
+comment on the PR (via the GitHub API) showing the repo-wide craftCov total
+and its by-heuristic breakdown, diffed against where the branch
+diverged — then *updates that same comment in place* on every subsequent
+push, rather than posting a new one each time. Reuses `diff_by_heuristic`
+(the same function driving craftCov's own "changes since last run"
+section) computed the same way `check_refactor_first.py` computes its
+per-file diff: a full scan of the merge-base tree via a throwaway `git
+worktree`, compared against HEAD — no persisted state between CI runs to
+keep in sync, no cache to go stale.
+
+```
+<!-- craftcov-pr-report -->
+## craftCov report
+
+**Repo-wide total: 2579 → 2563 (-16)**
+
+| Code | Heuristic | Before | After | Δ |
+|---|---|---|---|---|
+| CG002 | `dead-code` | 1699 | 1685 | -14 |
+| CG012 | `extract-helper` | 1 | 0 | -1 ✅ |
+```
+
+Needs `pull-requests: write` (not the default `read`) to post/edit the
+comment — see `templates/ci-job.yml`'s permissions block.
+
+**"What's the current state, and where exactly?" — GitHub code scanning**
+(`craftcov.py --format sarif`, the `craftcov-sarif` job). Rather than
+building a custom badge-and-report page — real infrastructure to host and
+keep in sync — craftCov's findings map cleanly onto SARIF 2.1.0 (file,
+line, rule id, message is exactly what a finding already carries), and
+`github/codeql-action/upload-sarif` feeds them into GitHub's own
+code-scanning dashboard on push to your default branch: a persistent,
+browsable, filterable list of every current finding, a native alert count
+(the closest thing to a "badge" that needs zero infrastructure of your
+own), and history across runs — all things a hand-rolled report would
+have to reimplement.
+
+```bash
+uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
+```
+
+**The real catch**: GitHub code scanning needs either a **public repo** or
+**GitHub Advanced Security** on a private one — it isn't available
+otherwise, and the upload step will fail (or silently do nothing, on some
+GitHub configurations) if it isn't. Check this before wiring the job in,
+not after.
+
+Want an actual badge in your README on top of the dashboard? A shields.io
+[endpoint badge](https://shields.io/badges/endpoint-badge) reading a small
+JSON file (`{"schemaVersion":1,"label":"craftCov","message":"234
+findings","color":"orange"}`) that a scheduled or on-push-to-main step
+writes and commits works with zero hosting — shields.io reads it straight
+off `raw.githubusercontent.com`. Not built here (it's real upkeep — a
+badge SVG or its source JSON has to be regenerated and committed somewhere,
+which is exactly the kind of infrastructure the SARIF route avoids), but
+it's a small addition on top if the dashboard alone isn't visible enough
+for your team.
 
 ## Design choices worth knowing about
 

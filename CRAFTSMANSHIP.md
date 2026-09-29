@@ -326,6 +326,16 @@ Wired into CI as the `complexity` job, PR-only, alongside `tidy` and
 `refactor-first`. `Tidy-Exempt:` bypasses it the same way it bypasses the
 other two — one exemption mechanism for all three gates.
 
+## Reporting — visible, not just enforced
+
+Two optional, non-blocking mechanisms make craftCov's findings visible
+without gating anything: a sticky PR comment showing what changed in this
+PR (`scripts/craftcov_pr_comment.py`), and a GitHub code-scanning SARIF
+export showing the repo's current state overall
+(`craftcov.py --format sarif`). Neither is a ratchet — nothing here fails
+a build. See the README's **Reporting** section for the full detail and
+the CI wiring.
+
 ## Don't let the exemption become the rule
 
 `Tidy-Exempt:` trusts the author's judgment, which erodes under deadline

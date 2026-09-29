@@ -1,7 +1,9 @@
-# Add all three jobs to your .github/workflows/ci.yml — the default
-# enforcement points this tool ships (CRAFTSMANSHIP.md's "The ratchet",
-# "Refactor First", and "The complexity ratchet"). Set the branch name in
-# the places marked below.
+# Add the first three jobs (tidy, refactor-first, complexity) to your
+# .github/workflows/ci.yml — the default enforcement points this tool
+# ships (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", and "The
+# complexity ratchet"). The two after that (craftcov-pr-comment,
+# craftcov-sarif) are optional reporting, not gates — see their own
+# comments below. Set the branch name in the places marked below.
 
   tidy:
     name: Tidy First ratchet
@@ -60,3 +62,67 @@
 
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
+
+# ── Everything below is optional — reporting/visibility, not a gate ─────────
+# Neither job fails a build. Add either, both, or neither.
+
+# Posts (or updates in place) a sticky PR comment showing craftCov's
+# repo-wide total and its by-heuristic breakdown, diffed against where the
+# branch diverged — see README's craftCov section and
+# scripts/craftcov_pr_comment.py's own docstring. Needs `pull-requests:
+# write` (not just the default `read`) to post/edit the comment.
+  craftcov-pr-comment:
+    name: craftCov PR report
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Post/update the craftCov PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run python3 scripts/craftcov_pr_comment.py \
+            --base "origin/${{ github.base_ref }}" \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
+
+# Uploads craftCov's findings to GitHub's own code-scanning dashboard —
+# history, per-finding tracking, and a native alert count, instead of a
+# hand-rolled report needing its own hosting. Needs `security-events:
+# write`, and — the real catch — either a PUBLIC repo or GitHub Advanced
+# Security on a private one; code scanning silently isn't available
+# otherwise. Runs on push to your default branch, not every PR, since the
+# point is tracking the branch's actual current state over time.
+  craftcov-sarif:
+    name: Upload craftCov SARIF
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Generate craftCov SARIF
+        run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
+
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: craftcov.sarif
+          category: craftcov

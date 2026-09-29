@@ -48,6 +48,33 @@ jobs:
           python3 scripts/craftcov.py --list-detectors > /dev/null
           echo "OK"
 
+      - name: format_sarif produces a well-formed SARIF 2.1.0 document
+        run: |
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          from craftcov import format_sarif
+
+          catalog = [
+              {'id': 'dead-code', 'code': 'CG002', 'name': 'Dead Code', 'smell': 'unused', 'action': 'delete it', 'detectors': [{'tool': 'ruff', 'rules': ['F401']}]},
+              {'id': 'metzs-rules', 'code': 'CG030', 'name': 'Metz', 'kind': 'principle'},  # no detectors -> excluded from rules
+          ]
+          by_file = {'a.py': [{'line': 3, 'col': 0, 'heuristic_id': 'dead-code', 'heuristic_code': 'CG002'}]}
+          doc = format_sarif(by_file, catalog)
+
+          assert doc['version'] == '2.1.0'
+          run = doc['runs'][0]
+          rule_ids = {r['id'] for r in run['tool']['driver']['rules']}
+          assert rule_ids == {'dead-code'}, rule_ids  # only detectable entries become rules
+          [result] = run['results']
+          assert result['ruleId'] == 'dead-code'
+          assert result['level'] == 'warning'
+          assert result['locations'][0]['physicalLocation']['artifactLocation']['uri'] == 'a.py'
+          assert result['locations'][0]['physicalLocation']['region']['startLine'] == 3
+
+          print('format_sarif OK')
+          "
+
       - name: check_refactor_first.py compiles
         run: |
           python3 -m py_compile scripts/check_refactor_first.py
@@ -83,6 +110,37 @@ jobs:
               assert any('hello world' in k for k in dup), dup
 
           print('check_complexity_ratchet.py OK')
+          "
+
+      - name: craftcov_pr_comment.py compiles, render_markdown is correct
+        run: |
+          python3 -m py_compile scripts/craftcov_pr_comment.py
+          python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          from craftcov_pr_comment import render_markdown, MARKER
+
+          # a heuristic appearing for the first time is tagged NEW, one that
+          # disappeared entirely is tagged RESOLVED, an unchanged one is omitted
+          base = {'total': 10, 'by_heuristic': {'dead-code': 5, 'explaining-constant': 5}}
+          head = {'total': 8, 'by_heuristic': {'dead-code': 3, 'explaining-constant': 5}}
+          catalog_by_id = {'dead-code': {'code': 'CG002'}, 'explaining-constant': {'code': 'CG009'}}
+          body = render_markdown(base, head, catalog_by_id, None, 'abc123')
+          assert body.startswith(MARKER)
+          assert 'dead-code' in body and '5' in body and '3' in body
+          assert 'explaining-constant' not in body  # unchanged -> not in the diff at all
+
+          resolved = render_markdown({'total': 5, 'by_heuristic': {'dead-code': 5}}, {'total': 0, 'by_heuristic': {}}, catalog_by_id, None, 'abc123')
+          assert '✅' in resolved
+
+          new = render_markdown({'total': 0, 'by_heuristic': {}}, {'total': 3, 'by_heuristic': {'dead-code': 3}}, catalog_by_id, None, 'abc123')
+          assert '🆕' in new
+
+          # --repo pins the doc link to this exact commit, not a branch name
+          linked = render_markdown(base, head, catalog_by_id, 'gbelbe/craft-gate', 'abc123')
+          assert 'https://github.com/gbelbe/craft-gate/blob/abc123/CRAFTSMANSHIP.md' in linked
+
+          print('craftcov_pr_comment.py OK')
           "
 
       - name: dupes algorithm smoke test (no external tool needed)
@@ -260,3 +318,55 @@ jobs:
 
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
+
+  # Optional reporting, not a gate — see templates/ci-job.yml's own comment.
+  craftcov-pr-comment:
+    name: craftCov PR report (dogfood)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Post/update the craftCov PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run python3 scripts/craftcov_pr_comment.py \
+            --base "origin/${{ github.base_ref }}" \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
+
+  # Optional reporting, not a gate — see templates/ci-job.yml's own comment.
+  # Public repo, so code scanning is available with no extra licensing.
+  craftcov-sarif:
+    name: Upload craftCov SARIF (dogfood)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra craftcov
+        run: uv sync --extra craftcov
+
+      - name: Generate craftCov SARIF
+        run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
+
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: craftcov.sarif
+          category: craftcov
