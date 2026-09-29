@@ -52,3 +52,13 @@ invariant return, and duplicated string literal (if you've installed the
 worse than where the branch diverged, grandfathering what's already there.
 `Tidy-Exempt:` bypasses this one too — one exemption mechanism for all
 three gates. See `CRAFTSMANSHIP.md`'s "The complexity ratchet".
+
+**Write within these limits from the start, don't wait for a gate to catch
+it**: CRAFTSMANSHIP.md's "The mechanical floor" table has the *exact*
+numbers `refactor-first`/`complexity` check (≤5 params, ≤50 statements,
+≤12 branches, ≤7 instance attributes, ≤15 cyclomatic/cognitive complexity,
+no repeated 5+ char literal more than twice per file, etc.) — know them
+while writing new code, not only when craftCov or the complexity ratchet
+flags something after the fact. Before calling a change done, run both
+locally against what you touched: `scripts/craftcov.py --file <path>` and
+`scripts/check_complexity_ratchet.py --path <dir> --base origin/main`.

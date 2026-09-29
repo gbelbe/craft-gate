@@ -68,6 +68,15 @@ craftcov.py has no awareness of it): `scripts/check_complexity_ratchet.py`
 worse than where the branch diverged. Same `Tidy-Exempt:` bypass. See
 CRAFTSMANSHIP.md's "The complexity ratchet".
 
+**Write within these limits from the start**: CRAFTSMANSHIP.md's "The
+mechanical floor" table has the exact numbers these two gates check (≤5
+params, ≤50 statements, ≤12 branches, ≤7 instance attributes, ≤15
+cyclomatic/cognitive complexity, etc.) — know them while writing, not only
+when a gate flags something after the fact. Before calling a change done,
+run `scripts/craftcov.py --file <path>` and
+`scripts/check_complexity_ratchet.py --path <dir> --base origin/main`
+against what you touched.
+
 ## Editing this repo specifically
 
 - `CRAFTSMANSHIP.md` and `catalog.yaml` must stay in sync by hand — the
