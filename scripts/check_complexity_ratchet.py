@@ -500,8 +500,10 @@ def main(argv: list[str] | None = None) -> int:
     # A name this change's diff actually reaches — vs. numerically unchanged
     # because it merely happens to sit in a file with unrelated edits.
     # Touched-and-still-over-threshold must decrease, not just not increase.
-    touched_cc = _touched_names(root, args.base, {n: (v[1], v[2]) for n, v in head_funcs.items()})
-    touched_cog = _touched_names(root, args.base, {n: (v[1], v[2]) for n, v in head_cog_ranges.items()})
+    cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
+    cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
+    touched_cc = _touched_names(root, args.base, cc_ranges)
+    touched_cog = _touched_names(root, args.base, cog_ranges)
 
     violations = find_violations(base, head, metric="cyclomatic complexity", touched=touched_cc)
     violations += find_violations(
