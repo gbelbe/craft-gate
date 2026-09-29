@@ -102,19 +102,31 @@ def _functions(blocks: object) -> list[object]:
 
 
 def _discover_python_files(root: Path) -> list[Path]:
-    """Every git-tracked *.py file under root, sorted.
+    """Every *.py file under root git doesn't ignore, sorted — tracked or
+    not, since this is a "head" scan of the current working tree and a
+    brand-new function in a file you haven't `git add`ed yet is exactly
+    the case this ratchet needs to catch, not skip.
 
     Not `root.rglob("*.py")`: with `--path` defaulting to `.` (the whole
     repo, not a pre-scoped source subdirectory the way kai-ster's own
     `--path ster` happened to be), an unfiltered rglob walks straight into
     `.venv/`/`node_modules/`/caches and reports hundreds of violations in
-    vendored code that was never this repo's to fix. `git ls-files` already
-    knows what to ignore — same reasoning as craftcov.py's own
-    `discover_python_files`. Falls back to a plain rglob outside a git repo.
+    vendored code that was never this repo's to fix.
+
+    Not plain `git ls-files` either (tracked-only, unlike craftcov.py's own
+    `discover_python_files`, which scans a committed cache/snapshot flow
+    where that's the right call): `--others --exclude-standard` adds every
+    untracked file git *wouldn't* ignore, so a new file still fails the
+    ratchet before its first `git add`. Falls back to a plain rglob outside
+    a git repo.
     """
     try:
         out = subprocess.run(
-            ["git", "ls-files", "*.py"], cwd=root, capture_output=True, text=True, check=True
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
         ).stdout
         return sorted(root / line for line in out.splitlines() if line)
     except (subprocess.CalledProcessError, FileNotFoundError):
