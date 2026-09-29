@@ -1,9 +1,10 @@
-# Add the first three jobs (tidy, refactor-first, complexity) to your
-# .github/workflows/ci.yml — the default enforcement points this tool
-# ships (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", and "The
-# complexity ratchet"). The two after that (craftcov-pr-comment,
-# craftcov-sarif) are optional reporting, not gates — see their own
-# comments below. Set the branch name in the places marked below.
+# Add all five jobs below to your .github/workflows/ci.yml — the default
+# setup this tool ships. The first three are enforcement gates
+# (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", and "The complexity
+# ratchet"); the last two are reporting, not gates (neither fails a build)
+# but are part of the default setup too — see their own comments below for
+# the one real exception (craftcov-sarif needs a public repo or GitHub
+# Advanced Security). Set the branch name in the places marked below.
 #
 # All three gates skip bot-authored PRs (dependabot, renovate, etc. — any
 # actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
@@ -69,8 +70,9 @@
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
 
-# ── Everything below is optional — reporting/visibility, not a gate ─────────
-# Neither job fails a build. Add either, both, or neither.
+# ── Reporting, not enforcement — but still part of the default setup ────────
+# Neither job fails a build; both make what the gates above found visible
+# where you're already looking, instead of just a CI log.
 
 # Posts (or updates in place) a sticky PR comment showing craftCov's
 # repo-wide total and its by-heuristic breakdown, diffed against where the
@@ -106,10 +108,11 @@
 # Uploads craftCov's findings to GitHub's own code-scanning dashboard —
 # history, per-finding tracking, and a native alert count, instead of a
 # hand-rolled report needing its own hosting. Needs `security-events:
-# write`, and — the real catch — either a PUBLIC repo or GitHub Advanced
-# Security on a private one; code scanning silently isn't available
-# otherwise. Runs on push to your default branch, not every PR, since the
-# point is tracking the branch's actual current state over time.
+# write`, and — the one real exception to this being on by default —
+# either a PUBLIC repo or GitHub Advanced Security on a private one; code
+# scanning silently isn't available otherwise, so skip just this one job
+# if neither applies. Runs on push to your default branch, not every PR,
+# since the point is tracking the branch's actual current state over time.
   craftcov-sarif:
     name: Upload craftCov SARIF
     runs-on: ubuntu-latest

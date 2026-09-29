@@ -2,7 +2,7 @@
 # Run manually: bash scripts/check_tidy_ratchet.sh --base origin/main
 #
 # This is templates/pre-commit-hook.yaml applied to this repo itself — see
-# CLAUDE.md's "Editing this repo specifically."
+# AGENTS.md's "Editing this repo specifically."
 
 default_install_hook_types: [pre-push]
 

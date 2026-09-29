@@ -34,13 +34,19 @@ It answers two separate questions, on purpose:
   - **`complexity`** — cyclomatic/cognitive complexity, invariant return,
     duplicated string literal: a touched function/literal must not get
     worse.
-- **Two optional reporting jobs** — a sticky PR comment and a GitHub
-  code-scanning (SARIF) export. Visibility, not enforcement.
+  - All three skip bot-authored PRs (dependabot, renovate, etc.) — a
+    dependency bump can't write a `tidy(<type>)` commit or a
+    `Tidy-Exempt:` trailer, and usually has no heuristic to apply anyway.
+- **Two reporting jobs, on by default** — a sticky PR comment and a GitHub
+  code-scanning (SARIF) export, surfacing what the gates found where
+  you're already looking. Neither blocks a merge; the SARIF one needs a
+  public repo or GitHub Advanced Security, the only reason to skip it.
 - **A bootstrap script**, not a package dependency — copies the files it
   owns into your repo and prints exactly what to wire up by hand. Never
   silently merges into files that vary per project.
-- **A Claude Code skill** — a thin wrapper; the catalog and procedure are
-  plain markdown any tool or human can read.
+- **Agent-agnostic guidance** (`AGENTS.md`) — the catalog and procedure are
+  plain markdown any tool or human can read; an optional thin skill
+  wrapper is included for teams using Claude Code specifically.
 
 See [DESIGN.md](DESIGN.md) for the full rationale behind each of
 these — calibration numbers, engine choices, what's grandfathered and why.
@@ -51,7 +57,10 @@ None of it is required reading to use the tool.
 `tidy` needs only `bash` and `git` — every dev machine and CI runner
 already has both. `refactor-first` and `complexity` each need their own
 Python toolchain (below); skip either gate and you skip its dependency too.
-The pre-push hook and the two reporting jobs are genuinely optional.
+The pre-push hook is optional (CI catches everything it does, just later).
+The two reporting jobs are part of the default setup; skip `craftcov-sarif`
+only if your repo has neither a public visibility nor GitHub Advanced
+Security to run code scanning with.
 
 ## Install
 
@@ -69,9 +78,14 @@ auto-merge safely:
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook (optional) | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates + reporting | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
-| 3 | Agent guidance | `templates/CLAUDE.md.snippet.md` | `CLAUDE.md` |
+| 2 | CI gates + reporting (all five jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
+
+Row 3 targets `AGENTS.md`, the cross-tool convention a growing set of
+coding agents read directly. Check what your own agent looks for; if it's
+a different filename, point it at `AGENTS.md` or symlink
+(`ln -s AGENTS.md CLAUDE.md`).
 
 `refactor-first` and `complexity` need their own toolchains added to your
 dependency file (exact versions — see this repo's own `pyproject.toml`):
@@ -81,8 +95,9 @@ craftcov = ["pyyaml>=6.0", "ruff>=0.13", "pylint>=3.3", "vulture>=2.14"]
 complexity = ["radon>=6.0", "cognitive-complexity>=1.3"]
 ```
 
-`craftcov-sarif` (optional) needs a **public repo or GitHub Advanced
-Security** — code scanning isn't available otherwise.
+`craftcov-sarif` needs a **public repo or GitHub Advanced Security** — the
+only one of the five default jobs with a real precondition; code scanning
+isn't available otherwise.
 
 Confirm the install works:
 
@@ -91,7 +106,7 @@ bash scripts/check_tidy_ratchet.sh --base origin/main   # your default branch
 ```
 
 **Optional, not printed by `bootstrap.sh`:** `templates/tdd-bdd-yagni.snippet.md`
-is a companion `CLAUDE.md` section mandating a Gherkin spec and a test list
+is a companion `AGENTS.md` section mandating a Gherkin spec and a test list
 *before* implementation, with an explicit YAGNI challenge first. A
 methodology choice, not a craftsmanship gate — skip it if your project
 doesn't use BDD.
@@ -142,9 +157,9 @@ scripts/
   craftcov_pr_comment.py    optional: sticky PR comment
   next_version.py           Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
-  SKILL.md                 thin Claude Code wrapper around CRAFTSMANSHIP.md
+  SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md
 templates/
-  CLAUDE.md.snippet.md       section to paste into your CLAUDE.md
+  AGENTS.md.snippet.md       section to paste into your AGENTS.md
   tdd-bdd-yagni.snippet.md   optional companion section
   pre-commit-hook.yaml       hook entry for .pre-commit-config.yaml
   ci-job.yml                 job fragments for .github/workflows/ci.yml
@@ -155,7 +170,7 @@ tests/
   test_fixtures.py          checks each detector fired where it should
 ```
 
-This repo applies its own tooling to itself (`CLAUDE.md`,
+This repo applies its own tooling to itself (`AGENTS.md`,
 `.pre-commit-config.yaml`, `.claude/skills/tidy-first/SKILL.md` — produced
 by `bash bootstrap.sh .`, not hand-written).
 
@@ -173,6 +188,25 @@ against the latest release and opens a PR with whatever changed. Nothing
 auto-merges — review it like any other dependency bump. No new credentials:
 it uses the repo's own default `GITHUB_TOKEN`, and craft-gate is only ever
 read from, never written to.
+
+## Badge
+
+A static claim that the gates are wired in, the same pattern
+[pre-commit](https://github.com/pre-commit/pre-commit) uses for its own
+badge:
+
+```md
+[![craft-gate](https://img.shields.io/badge/craft--gate-enabled-blue)](https://github.com/gbelbe/craft-gate)
+```
+
+[![craft-gate](https://img.shields.io/badge/craft--gate-enabled-blue)](https://github.com/gbelbe/craft-gate)
+
+Or point at your own CI run instead of a static claim — live pass/fail,
+same technique this README's own `CI` badge at the top uses:
+
+```md
+[![CI](https://github.com/<you>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<you>/<repo>/actions/workflows/ci.yml)
+```
 
 ## Contributing
 

@@ -319,7 +319,8 @@ jobs:
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
 
-  # Optional reporting, not a gate — see templates/ci-job.yml's own comment.
+  # Reporting, not a gate, but part of the default setup — see
+  # templates/ci-job.yml's own comment.
   craftcov-pr-comment:
     name: craftCov PR report (dogfood)
     runs-on: ubuntu-latest
@@ -346,8 +347,9 @@ jobs:
             --repo "${{ github.repository }}" \
             --pr "${{ github.event.pull_request.number }}"
 
-  # Optional reporting, not a gate — see templates/ci-job.yml's own comment.
-  # Public repo, so code scanning is available with no extra licensing.
+  # Reporting, not a gate, but part of the default setup — see
+  # templates/ci-job.yml's own comment. Public repo here, so code scanning
+  # is available with no extra licensing.
   craftcov-sarif:
     name: Upload craftCov SARIF (dogfood)
     runs-on: ubuntu-latest

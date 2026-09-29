@@ -1,8 +1,11 @@
-# craft-gate — Claude Code guidelines
+# craft-gate — agent guidelines
 
 This repo is the source of the practice it ships, so it follows its own
-rules — installed on itself via `bash bootstrap.sh .` (see `.claude/skills/`
-and `.pre-commit-config.yaml`, both produced that way, not hand-written).
+rules — installed on itself via `bash bootstrap.sh .` (see
+`.pre-commit-config.yaml`, produced that way, not hand-written). This file
+is coding-agent-agnostic; `.claude/skills/tidy-first/SKILL.md` is an
+optional thin wrapper for teams using Claude Code specifically — the actual
+procedure lives in `CRAFTSMANSHIP.md`, which both point back to.
 
 ## Code quality gate (mandatory before every commit)
 

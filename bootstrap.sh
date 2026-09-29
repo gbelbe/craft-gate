@@ -16,7 +16,7 @@
 # .claude/skills/tidy-first/SKILL.md, and
 # .craft-gate-version (a plain-text marker of which release this checkout
 # came from — see templates/update-check.yml, which reads it to detect
-# drift). It never edits CLAUDE.md, .pre-commit-config.yaml, or your CI
+# drift). It never edits AGENTS.md, .pre-commit-config.yaml, or your CI
 # workflow — those vary too much per project to auto-merge safely; it prints
 # what to add and where instead. Safe to re-run any time to pull an update.
 set -euo pipefail
@@ -81,28 +81,32 @@ echo "     Merge its 'local' repo block into .pre-commit-config.yaml"
 echo "     (or use it as your starting file if you don't have one yet),"
 echo "     then: prek install --hook-type pre-push"
 echo
-echo "  2. Wire all three default CI gates — the ratchet, Refactor First,"
-echo "     and the complexity ratchet — plus, optionally, two reporting jobs"
-echo "     (a sticky PR comment and a GitHub code-scanning SARIF upload —"
-echo "     neither is a gate, and the SARIF one needs a public repo or"
-echo "     GitHub Advanced Security):"
+echo "  2. Wire all five default CI jobs — three gates (the ratchet, Refactor"
+echo "     First, the complexity ratchet) plus two reporting jobs (a sticky PR"
+echo "     comment and a GitHub code-scanning SARIF upload) that surface what"
+echo "     the gates found without blocking a merge themselves:"
 echo "       cat '$SRC_DIR/templates/ci-job.yml'"
-echo "     Add the job(s) you want to .github/workflows/ci.yml, set your branch name."
+echo "     Add the jobs to .github/workflows/ci.yml, set your branch name."
 echo "     Refactor First needs craftCov's own tools on top: add a 'craftcov'"
 echo "     extra (ruff/pylint/vulture — pyyaml too, unless already a dependency)"
 echo "     to your dependency file. The complexity ratchet needs its own"
-echo "     'complexity' extra (radon, cognitive-complexity). See README's"
-echo "     Install section (exact version pins) and DESIGN.md's craftCov /"
-echo "     'The complexity ratchet' sections (the full rationale)."
+echo "     'complexity' extra (radon, cognitive-complexity). The SARIF job"
+echo "     needs a public repo or GitHub Advanced Security — skip just that"
+echo "     one job if neither applies. See README's Install section (exact"
+echo "     version pins) and DESIGN.md's craftCov / 'The complexity ratchet' /"
+echo "     'Reporting' sections (the full rationale)."
 echo
-echo "  3. Add the Tidy First section to CLAUDE.md:"
-echo "       cat '$SRC_DIR/templates/CLAUDE.md.snippet.md'"
-echo "     Append it to your project's CLAUDE.md (or create one)."
+echo "  3. Add the Tidy First section to AGENTS.md — the cross-tool convention"
+echo "     a growing set of coding agents read directly. Check what yours"
+echo "     looks for; if it's a different filename (e.g. CLAUDE.md), point"
+echo "     it at AGENTS.md or symlink: ln -s AGENTS.md CLAUDE.md"
+echo "       cat '$SRC_DIR/templates/AGENTS.md.snippet.md'"
+echo "     Append it to your project's AGENTS.md (or create one)."
 echo
 echo "     Optional, not a craftsmanship gate (skip if you don't want"
 echo "     test-first/BDD mandated for every feature):"
 echo "       cat '$SRC_DIR/templates/tdd-bdd-yagni.snippet.md'"
-echo "     A TDD+BDD+YAGNI workflow section for CLAUDE.md."
+echo "     A TDD+BDD+YAGNI workflow section for AGENTS.md."
 echo
 echo "  4. Stop needing to remember to re-run this:"
 echo "       cp '$SRC_DIR/templates/update-check.yml' .github/workflows/craft-gate-update.yml"

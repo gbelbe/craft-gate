@@ -6,8 +6,8 @@ tables here directly (see the repo's CONTRIBUTING.md, "Adding a heuristic
 or rule").
 This file does not assume any particular AI tool or editor — a human
 contributor, a CI script, or an agent can all read it directly. Tool-specific
-wrappers (a Claude Code skill, a pre-commit hook, a CI job) point back here
-rather than re-stating it.
+wrappers (an agent guidance file, a pre-commit hook, a CI job) point back
+here rather than re-stating it.
 
 Two separate concerns, on purpose:
 

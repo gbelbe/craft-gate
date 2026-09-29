@@ -235,8 +235,11 @@ point is to agree with SonarQube's own server, not approximate it.
 
 The gates above (`refactor-first`, `complexity`) tell you whether a PR is
 allowed to merge; they don't tell anyone *what the debt actually looks
-like* — the running total, the trend, what's left. Two optional,
-non-blocking mechanisms cover that.
+like* — the running total, the trend, what's left. Two default,
+non-blocking mechanisms cover that — on by default because visibility
+without enforcement is still worth having even where a gate would be too
+strict; `craftcov-sarif` is the one exception, skipped when the repo can't
+run code scanning at all (see below).
 
 **"What changed in this PR?" — a sticky PR comment**
 (`scripts/craftcov_pr_comment.py`, the `craftcov-pr-comment` job). Posts a
