@@ -199,6 +199,8 @@ def compute_cognitive(root: Path) -> dict[str, int]:
 
 # ── Invariant return (SonarQube S3516) ───────────────────────────────────────
 
+MIN_RETURNS_TO_COMPARE = 2  # a single return can't be "invariant" against itself
+
 
 def _returns_one_never_rebound_name(node: ast.AST) -> str | None:
     """The name every return hands back, when it is bound exactly once.
@@ -212,7 +214,9 @@ def _returns_one_never_rebound_name(node: ast.AST) -> str | None:
         for child in ast.walk(node)
         if isinstance(child, ast.Return) and _encloses(node, child)
     ]
-    if len(returns) < 2 or not all(isinstance(r.value, ast.Name) for r in returns):
+    if len(returns) < MIN_RETURNS_TO_COMPARE or not all(
+        isinstance(r.value, ast.Name) for r in returns
+    ):
         return None
     names = {r.value.id for r in returns}  # type: ignore[union-attr]
     if len(names) != 1:
@@ -259,6 +263,7 @@ def compute_invariant_returns(root: Path) -> dict[str, str]:
 
 DUPLICATE_LITERAL_THRESHOLD = 3
 DUPLICATE_LITERAL_MIN_LENGTH = 5
+MIN_OCCURRENCES_TO_REPORT = 2  # a literal seen once isn't "duplicated" yet
 
 
 def _docstring_node_ids(tree: ast.AST) -> set[int]:
@@ -316,7 +321,7 @@ def compute_duplicate_literals(
             counts[literal] = counts.get(literal, 0) + 1
         rel = path.relative_to(root).as_posix()
         for literal, count in counts.items():
-            if count >= 2:
+            if count >= MIN_OCCURRENCES_TO_REPORT:
                 result[f"{rel}::{literal}"] = count
     return result
 
@@ -362,11 +367,6 @@ def _measure_at_ref(
                 ["git", "worktree", "remove", "--force", str(worktree)],
                 capture_output=True,
             )
-
-
-def _complexity_at_ref(ref: str, path: str) -> dict[str, int]:
-    """Cyclomatic complexity for *path* at git *ref*."""
-    return _measure_at_ref(ref, path)[0]
 
 
 def has_tidy_exempt(base_ref: str) -> bool:
