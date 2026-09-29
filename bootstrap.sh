@@ -54,9 +54,11 @@ copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
 copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refactor_first.py"
 copy_file "$SRC_DIR/scripts/check_complexity_ratchet.py" "$TARGET/scripts/check_complexity_ratchet.py"
 copy_file "$SRC_DIR/scripts/craftcov_pr_comment.py" "$TARGET/scripts/craftcov_pr_comment.py"
+copy_file "$SRC_DIR/scripts/check_mutation_ratchet.py" "$TARGET/scripts/check_mutation_ratchet.py"
 chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" \
   "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py" \
-  "$TARGET/scripts/check_complexity_ratchet.py" "$TARGET/scripts/craftcov_pr_comment.py"
+  "$TARGET/scripts/check_complexity_ratchet.py" "$TARGET/scripts/craftcov_pr_comment.py" \
+  "$TARGET/scripts/check_mutation_ratchet.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
 
 # Record which release this came from, so a consumer's update-check workflow
@@ -110,6 +112,15 @@ echo "     Optional, not a craftsmanship gate (skip if you don't want"
 echo "     test-first/BDD mandated for every feature):"
 echo "       cat '$SRC_DIR/templates/tdd-bdd-yagni.snippet.md'"
 echo "     A TDD+BDD+YAGNI workflow section for AGENTS.md."
+echo
+echo "     Optional, and not one of the six default jobs (mutation testing"
+echo "     reruns your test suite once per mutant -- too expensive to"
+echo "     default to): a diff-scoped mutation-testing ratchet on top of"
+echo "     mutmut, failing when a function this PR's diff touches has a"
+echo "     mutation score below a floor (80% starting point):"
+echo "       cat '$SRC_DIR/templates/mutation-ratchet-job.yml'"
+echo "     Needs the 'mutation' extra (mutmut) plus your own test-running"
+echo "     deps. See DESIGN.md's 'Mutation ratchet' section."
 echo
 echo "  4. Stop needing to remember to re-run this:"
 echo "       cp '$SRC_DIR/templates/update-check.yml' .github/workflows/craft-gate-update.yml"

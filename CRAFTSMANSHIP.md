@@ -402,6 +402,38 @@ this gate.
 **90% is kai-ster's own number, not a mandated one** — CRAFTSMANSHIP.md
 ships the pattern; the threshold is yours to set per repo.
 
+## Mutation ratchet — coverage measures execution, not assertion
+
+Patch coverage answers "did a test run this line?" A test with no
+assertion, or one asserting the wrong thing, still counts as covering the
+line — coverage can't tell tested from merely-executed apart. Mutation
+testing can: [`mutmut`](https://github.com/boxed/mutmut) changes one small
+thing about your code (a `>` to a `>=`, a `+` to a `-`) and reruns your
+tests — if they all still pass, that mutant *survived*, meaning nothing
+actually checks the behavior that changed. `scripts/check_mutation_ratchet.py`
+fails when a function **this change's diff touches** has a mutation score
+(killed / (killed + survived), mutmut's own metric) below `--threshold`.
+
+```bash
+uv sync --extra mutation                                      # mutmut
+uv run mutmut run                                              # generates + runs mutants
+uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
+```
+
+**Optional, not one of the four default gates** — mutation testing reruns
+your whole test suite once per mutant, which is a different cost order
+than everything above; see `templates/mutation-ratchet-job.yml` (not
+`templates/ci-job.yml`) and DESIGN.md's "Mutation ratchet" for the full
+rationale, including why this checks a flat floor on the current tree
+rather than a base-vs-head comparison like the complexity ratchet.
+
+**A genuinely equivalent mutant** (code where no test *could* tell the
+difference because the behavior really is identical) gets mutmut's own
+`# pragma: no mutate` — the same idea as coverage.py's `# pragma: no
+cover`. This fixes the false positive at its source; don't reach for
+`Tidy-Exempt:` for a single surviving mutant, save it for skipping the
+gate entirely on a PR where that's the right call.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible

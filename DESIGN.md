@@ -288,6 +288,65 @@ would mean building test infrastructure this repo has specifically chosen
 not to carry, just to dogfood a gate meant for consumers' own Python
 packages.
 
+## Mutation ratchet
+
+Coverage's blind spot: a line can be *executed* by a test that asserts
+nothing meaningful about it, and still counts as "covered." Mutation
+testing closes that gap by checking whether tests actually *notice* when
+behavior changes — [`mutmut`](https://github.com/boxed/mutmut) mutates one
+operator/constant/comparison at a time and reruns the suite; a mutant that
+doesn't make any test fail *survived*, meaning nothing was really checking
+that code. `scripts/check_mutation_ratchet.py` reads a prior `mutmut run`'s
+results and fails when a function the diff touches scores below a flat
+floor.
+
+```bash
+uv sync --extra mutation
+uv run mutmut run
+uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
+```
+
+**Why a flat floor, not base-vs-head like the complexity ratchet.** That
+gate reruns fast, cheap checks (radon, an AST walk) against both refs — a
+second run costs nothing meaningful. Mutation testing reruns your entire
+test suite once per mutant; doing that against *two* refs on every PR
+would make this the slowest thing in CI by a wide margin, for a comparison
+whose main value (catching a function that got worse) coverage and
+complexity already provide more cheaply. So this checks the current tree
+only, against a threshold you set — closer in spirit to patch coverage
+than to the complexity ratchet.
+
+**Why touched-functions-only, not the whole diff's total.** Same reasoning
+as everywhere else in this document: a repo adopting this gate on day one
+likely has plenty of pre-existing code with a mediocre mutation score, and
+demanding the whole repo clear a bar immediately would be exactly the kind
+of unfunded mandate that gets a gate disabled within a week instead of
+respected.
+
+**A real internal-API coupling, disclosed rather than hidden.**
+`check_mutation_ratchet.py` maps a mutant key (`pkg.mod.x_foo__mutmut_3`)
+back to the function it mutated via
+`mutmut.utils.format_utils.orig_function_and_class_names_from_key` — not
+mutmut's own per-mutant line-span index (`mutants/<file>.spans`), which a
+real end-to-end run against a toy repo confirmed holds lines in the
+*generated* mutants file, not the original source, so it can't be
+intersected with a `git diff` on the original file. `format_utils` isn't
+marked as mutmut's public API (no `__all__`, no mention in its README) —
+this is a real coupling to an internal module, verified against an actual
+installed 3.8.0 rather than assumed from documentation, and worth
+re-verifying on any future mutmut major-version bump. The function's
+behavior is simple and unlikely to change silently (it undoes mutmut's own
+one-line naming convention), which is why this was judged worth the risk
+rather than re-deriving the same parsing from scratch.
+
+**Equivalent mutants get mutmut's own escape hatch**
+(`# pragma: no mutate`, the same idea as `# pragma: no cover`), not a
+craft-gate mechanism — there was nothing to build here, the tool already
+solved it.
+
+**Not dogfooded on craft-gate's own CI**, for the same reason as patch
+coverage — no pytest suite here to mutate against.
+
 ## Reporting
 
 The gates above (`refactor-first`, `complexity`) tell you whether a PR is

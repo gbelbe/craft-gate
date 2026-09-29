@@ -125,6 +125,16 @@ is a companion `AGENTS.md` section mandating a Gherkin spec and a test list
 methodology choice, not a craftsmanship gate — skip it if your project
 doesn't use BDD.
 
+**Optional, and not one of the six default jobs:** `templates/mutation-ratchet-job.yml`
+wires [`mutmut`](https://github.com/boxed/mutmut) + `scripts/check_mutation_ratchet.py`
+in — a function this PR's diff touches must clear a mutation-score floor
+(80% starting point), catching tests that execute a line without actually
+asserting anything about it. Left out of the default set on purpose:
+mutation testing reruns your whole suite once per mutant, a different cost
+order than every other gate here. Needs the `mutation` extra (`mutmut`)
+plus your own test-running dependencies. See DESIGN.md's "Mutation
+ratchet" for the full rationale.
+
 Step 4 matters most in practice — without it, staying current means
 remembering to re-run `bootstrap.sh` by hand. See **Staying current**
 below.
@@ -169,6 +179,7 @@ scripts/
   check_refactor_first.py   CI gate: a touched file's craftCov total must go down
   check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
   craftcov_pr_comment.py    optional: sticky PR comment
+  check_mutation_ratchet.py optional: touched functions' mutation score (needs mutmut)
   next_version.py           Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md
@@ -177,6 +188,7 @@ templates/
   tdd-bdd-yagni.snippet.md   optional companion section
   pre-commit-hook.yaml       hook entry for .pre-commit-config.yaml
   ci-job.yml                 job fragments for .github/workflows/ci.yml
+  mutation-ratchet-job.yml   optional job fragment, not part of ci-job.yml's default six
   update-check.yml           weekly drift-check + auto-PR
 bootstrap.sh               installer/updater
 tests/
