@@ -81,6 +81,13 @@ run `scripts/craftcov.py --file <path>` and
 `scripts/check_complexity_ratchet.py --path <dir> --base origin/main`
 against what you touched.
 
+A fourth gate covers whether new code is tested at all, not just
+well-structured: CI's `patch-coverage` job runs `diff-cover` against a
+coverage report, failing when the lines *this diff changed* are
+under-covered — a whole-repo average can't hide behind old tests carrying
+new, untested code. No `Tidy-Exempt:` bypass here — write the test with
+the code, not after a gate asks for it.
+
 ## Editing this repo specifically
 
 - `CRAFTSMANSHIP.md` and `catalog.yaml` must stay in sync by hand — the

@@ -374,6 +374,34 @@ Wired into CI as the `complexity` job, PR-only, alongside `tidy` and
 `refactor-first`. `Tidy-Exempt:` bypasses it the same way it bypasses the
 other two — one exemption mechanism for all three gates.
 
+## Patch coverage — new code must be tested, not just committed
+
+A fourth gate, orthogonal to everything above: none of the other three
+check whether a change has *tests* at all, only whether its structure is
+sound. [`diff-cover`](https://github.com/Bachmann1234/diff_cover)
+(third-party, not a craft-gate script) reads a coverage report and a git
+diff together, and fails when the lines the diff actually *changed* are
+under-covered — untouched parts of the repo don't count, so this isn't a
+whole-repo coverage floor (which a well-tested old codebase can clear while
+a brand-new untested file quietly drags the average down only slightly).
+
+```bash
+uv run pytest --cov=<your_package> --cov-report=xml
+uv run diff-cover coverage.xml --compare-branch origin/main --fail-under 90
+```
+
+Wired into CI as the `patch-coverage` job, PR-only. **No `Tidy-Exempt:`
+bypass** — deliberately, unlike the three gates above: this ports the exact
+mechanism an existing, well-tested project (kai-ster) already runs
+unconditionally, and diff-cover itself has no concept of a commit-trailer
+exemption to hook into. If a real exception is needed (a generated file,
+a vendored import), exclude it from coverage measurement itself
+(`--cov=<your_package>` / a `[tool.coverage.run] omit` entry), not from
+this gate.
+
+**90% is kai-ster's own number, not a mandated one** — CRAFTSMANSHIP.md
+ships the pattern; the threshold is yours to set per repo.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible

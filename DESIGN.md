@@ -239,6 +239,55 @@ are checked against the *reference implementation* (the
 `cognitive-complexity` package) rather than a re-derivation, because the
 point is to agree with SonarQube's own server, not approximate it.
 
+## Patch coverage
+
+A fourth gate, and the only one not built on craftCov, radon, or a
+craft-gate script at all: [`diff-cover`](https://github.com/Bachmann1234/diff_cover)
+against a `pytest --cov` XML report. Everything above checks that code is
+*structured* well; nothing above checks that it's *tested* at all — a
+brand-new 200-line untested file is invisible to `tidy`, `refactor-first`,
+and `complexity` alike, as long as no individual function happens to cross
+a threshold.
+
+**Why patch coverage, not a whole-repo floor.** A whole-repo percentage
+(`coverage report --fail-under 80`) is the weaker of the two shapes: it
+measures the *average*, so a well-tested old codebase has enough slack to
+absorb an entirely untested new module and still clear the bar. Patch
+coverage measures only the lines the diff actually changed — there's no
+slack to hide behind, and no way for a genuinely untested addition to pass
+just because the rest of the repo carries it.
+
+```bash
+uv run pytest --cov=<your_package> --cov-report=xml
+uv run diff-cover coverage.xml --compare-branch origin/main --fail-under 90
+```
+
+**Ported from kai-ster as-is, not redesigned.** Unlike the complexity
+ratchet, this wasn't rewritten into a craft-gate-owned script — `diff-cover`
+already does exactly this job, well, as a maintained third-party tool.
+craft-gate's contribution is the wiring (`templates/ci-job.yml`'s
+`patch-coverage` job) and the threshold-as-starting-point framing, not new
+code.
+
+**No `Tidy-Exempt:` bypass, deliberately.** Every other gate this repo
+ships shares one exemption mechanism; this one doesn't, because it's
+porting kai-ster's actual, currently-running behavior faithfully — that
+gate has never had a bypass there either, and `diff-cover` itself has no
+hook to add one to short of wrapping it in a craft-gate-owned script, which
+would reintroduce the "why does this gate need its own script" question
+this section just answered. A genuine exception (generated code, a
+vendored file) belongs in coverage configuration itself — an `omit` entry
+— not a commit trailer.
+
+**Not dogfooded on craft-gate's own CI.** This repo's own tests
+(`tests/test_fixtures.py`) are a deliberate non-pytest script, not a suite
+with coverage tracking (see this repo's own README's Requirements — no
+test-framework dependency is a stated design choice), so there's no
+coverage.xml here to gate on. Wiring this into craft-gate's own `ci.yml`
+would mean building test infrastructure this repo has specifically chosen
+not to carry, just to dogfood a gate meant for consumers' own Python
+packages.
+
 ## Reporting
 
 The gates above (`refactor-first`, `complexity`) tell you whether a PR is

@@ -1,16 +1,19 @@
-# Add all five jobs below to your .github/workflows/ci.yml — the default
-# setup this tool ships. The first three are enforcement gates
-# (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", and "The complexity
-# ratchet"); the last two are reporting, not gates (neither fails a build)
-# but are part of the default setup too — see their own comments below for
-# the one real exception (craftcov-sarif needs a public repo or GitHub
-# Advanced Security). Set the branch name in the places marked below.
+# Add all six jobs below to your .github/workflows/ci.yml — the default
+# setup this tool ships. The first four are enforcement gates
+# (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", "The complexity
+# ratchet", and "Patch coverage"); the last two are reporting, not gates
+# (neither fails a build) but are part of the default setup too — see their
+# own comments below for the one real exception (craftcov-sarif needs a
+# public repo or GitHub Advanced Security). Set the branch name in the
+# places marked below — and, for patch-coverage specifically, your own
+# package name (see its own comment).
 #
-# All three gates skip bot-authored PRs (dependabot, renovate, etc. — any
+# All four gates skip bot-authored PRs (dependabot, renovate, etc. — any
 # actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
 # or a `Tidy-Exempt:` trailer, and a dependency bump has no craftsmanship
-# heuristic to apply anyway. A skipped job still reports a passing check,
-# so this doesn't loosen branch protection for anyone else.
+# heuristic — or new untested code — to apply/introduce anyway. A skipped
+# job still reports a passing check, so this doesn't loosen branch
+# protection for anyone else.
 
   tidy:
     name: Tidy First ratchet
@@ -69,6 +72,40 @@
 
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
+
+# Unlike the three gates above, this one doesn't call a script craft-gate
+# ships — it wires up `pytest --cov` + diff-cover (github.com/Bachmann1234/
+# diff_cover), both third-party, against *your own* test suite. There is no
+# generic default here: fill in `--cov=<your_package>` below, and add
+# `diff-cover` (plus your coverage runner, if you don't already have one) to
+# your dev dependencies. `--fail-under 90` is the starting point CRAFTSMANSHIP.md
+# documents, not a mandated number — change it to match your own repo's bar.
+# Fails when the diff's *changed* lines are under-covered; a repo that's
+# 40% covered overall still passes here as long as every line this PR
+# touches is well-tested — the point is not letting new debt accumulate,
+# not retroactively demanding full coverage of everything that exists.
+  patch-coverage:
+    name: Patch coverage (diff-cover)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need the base branch for diff-cover's --compare-branch
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: uv sync --extra dev
+        run: uv sync --extra dev
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov=<your_package> --cov-report=xml   # ← set your package
+
+      - name: "Patch coverage: changed lines must be ≥ 90% covered"
+        run: |
+          uv run diff-cover coverage.xml \
+            --compare-branch "origin/${{ github.base_ref }}" \
+            --fail-under 90
 
 # ── Reporting, not enforcement — but still part of the default setup ────────
 # Neither job fails a build; both make what the gates above found visible

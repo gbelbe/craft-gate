@@ -25,18 +25,25 @@ It answers two separate questions, on purpose:
 - **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:`
   trailer naming the book, `test(characterize): ...` for legacy code,
   `Tidy-Exempt: <reason>` when nothing applies.
-- **Three CI gates**, cheapest first:
+- **Four CI gates**, cheapest first:
   - **`tidy`** — a commit-message check, zero dependencies: did a tidying
     (or a recorded exemption) happen at all?
   - **`refactor-first`** — built on **craftCov**, a coverage-style scan for
     8 mechanically-detectable heuristics: a touched file's total across
     them must go down (or stay at 0).
   - **`complexity`** — cyclomatic/cognitive complexity, invariant return,
-    duplicated string literal: a touched function/literal must not get
-    worse.
-  - All three skip bot-authored PRs (dependabot, renovate, etc.) — a
-    dependency bump can't write a `tidy(<type>)` commit or a
-    `Tidy-Exempt:` trailer, and usually has no heuristic to apply anyway.
+    duplicated string literal: a function/literal the diff actually
+    touches, already over threshold, must come out *lower* than it went
+    in — unchanged doesn't pass, only a genuine decrease does.
+  - **`patch-coverage`** — [`diff-cover`](https://github.com/Bachmann1234/diff_cover)
+    against a `pytest --cov` report: the lines this diff *changed* must be
+    ≥90% covered (your own threshold to set). Not a whole-repo floor — a
+    well-tested old codebase can't carry an untested new file past it.
+  - All four skip bot-authored PRs (dependabot, renovate, etc.) — a
+    dependency bump usually has no heuristic to apply and no new code to
+    test. But only the first three understand `Tidy-Exempt:` — a human's
+    `patch-coverage` failure has no trailer bypass, by design; see
+    DESIGN.md's "Patch coverage".
 - **Two reporting jobs, on by default** — a sticky PR comment and a GitHub
   code-scanning (SARIF) export, surfacing what the gates found where
   you're already looking. Neither blocks a merge; the SARIF one needs a
@@ -57,10 +64,12 @@ None of it is required reading to use the tool.
 `tidy` needs only `bash` and `git` — every dev machine and CI runner
 already has both. `refactor-first` and `complexity` each need their own
 Python toolchain (below); skip either gate and you skip its dependency too.
-The pre-push hook is optional (CI catches everything it does, just later).
-The two reporting jobs are part of the default setup; skip `craftcov-sarif`
-only if your repo has neither a public visibility nor GitHub Advanced
-Security to run code scanning with.
+`patch-coverage` needs your own `pytest --cov` setup plus `diff-cover` —
+skip it if your repo isn't Python/pytest-shaped, or doesn't have a test
+suite worth gating on yet. The pre-push hook is optional (CI catches
+everything it does, just later). The two reporting jobs are part of the
+default setup; skip `craftcov-sarif` only if your repo has neither a public
+visibility nor GitHub Advanced Security to run code scanning with.
 
 ## Install
 
@@ -78,7 +87,7 @@ auto-merge safely:
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook (optional) | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates + reporting (all five jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates + reporting (all six jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 
@@ -95,8 +104,13 @@ craftcov = ["pyyaml>=6.0", "ruff>=0.13", "pylint>=3.3", "vulture>=2.14"]
 complexity = ["radon>=6.0", "cognitive-complexity>=1.3"]
 ```
 
+`patch-coverage` needs `diff-cover` (and a coverage runner — `pytest-cov`
+or plain `coverage`) in your own `dev`-style dependency group, not a new
+craft-gate-owned extra: this gate runs *your* test suite, which craft-gate
+has no involvement in beyond wiring the job.
+
 `craftcov-sarif` needs a **public repo or GitHub Advanced Security** — the
-only one of the five default jobs with a real precondition; code scanning
+only one of the six default jobs with a real precondition; code scanning
 isn't available otherwise.
 
 Confirm the install works:

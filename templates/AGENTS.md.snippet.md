@@ -64,3 +64,8 @@ while writing new code, not only when craftCov or the complexity ratchet
 flags something after the fact. Before calling a change done, run both
 locally against what you touched: `scripts/craftcov.py --file <path>` and
 `scripts/check_complexity_ratchet.py --path <dir> --base origin/main`.
+
+If this repo has the `patch-coverage` job (see README — it needs your own
+`pytest --cov` setup, not every repo has it wired in): new code must be
+covered by a test *in the same change*, not added after a gate flags a
+gap. That job has no `Tidy-Exempt:` bypass.
