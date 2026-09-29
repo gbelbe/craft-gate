@@ -4,11 +4,17 @@
 # complexity ratchet"). The two after that (craftcov-pr-comment,
 # craftcov-sarif) are optional reporting, not gates — see their own
 # comments below. Set the branch name in the places marked below.
+#
+# All three gates skip bot-authored PRs (dependabot, renovate, etc. — any
+# actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
+# or a `Tidy-Exempt:` trailer, and a dependency bump has no craftsmanship
+# heuristic to apply anyway. A skipped job still reports a passing check,
+# so this doesn't loosen branch protection for anyone else.
 
   tidy:
     name: Tidy First ratchet
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,7 +32,7 @@
   refactor-first:
     name: Refactor First gate
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +55,7 @@
   complexity:
     name: Complexity ratchet
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
       - uses: actions/checkout@v4
         with:

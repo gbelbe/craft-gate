@@ -311,6 +311,15 @@ enough for your team.
   schedule as backstop.** A heuristic that quietly gets more permissive
   over time is the same failure mode as a rubber-stamped exemption — just
   automated.
+- **The three gates skip bot-authored PRs** (`if: ... &&
+  !endsWith(github.actor, '[bot]')` — see `templates/ci-job.yml`). This is
+  a narrower exemption than it looks: it only fires for an *automated PR
+  author* like dependabot or renovate, which can't write a `tidy(<type>)`
+  commit or a `Tidy-Exempt:` trailer and whose diffs (dependency-file
+  bumps) rarely have a craftsmanship heuristic to apply anyway. It does
+  not exempt a human pushing to their own branch, and a skipped job still
+  reports a passing check, so it doesn't create a required-check gap for
+  anyone else's PR.
 
 ## Further reading (the actual sources)
 
