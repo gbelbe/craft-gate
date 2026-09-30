@@ -25,7 +25,7 @@ It answers two separate questions, on purpose:
 - **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:`
   trailer naming the book, `test(characterize): ...` for legacy code,
   `Tidy-Exempt: <reason>` when nothing applies.
-- **Four CI gates**, cheapest first:
+- **Five CI gates**, cheapest first:
   - **`tidy`** — a commit-message check, zero dependencies: did a tidying
     (or a recorded exemption) happen at all?
   - **`refactor-first`** — built on **craftCov**, a coverage-style scan for
@@ -39,11 +39,17 @@ It answers two separate questions, on purpose:
     against a `pytest --cov` report: the lines this diff *changed* must be
     ≥90% covered (your own threshold to set). Not a whole-repo floor — a
     well-tested old codebase can't carry an untested new file past it.
-  - All four skip bot-authored PRs (dependabot, renovate, etc.) — a
+  - **`mutation-ratchet`** — [`mutmut`](https://github.com/boxed/mutmut):
+    a function this diff touches must clear a mutation-score floor (80%
+    starting point). Coverage proves a line *ran*; this proves a test
+    would actually *notice* if its behavior changed. On by default but a
+    safe no-op until your repo adds a `[tool.mutmut]` config — verified
+    against a real run, not assumed; see DESIGN.md's "Mutation ratchet".
+  - All five skip bot-authored PRs (dependabot, renovate, etc.) — a
     dependency bump usually has no heuristic to apply and no new code to
     test. But only the first three understand `Tidy-Exempt:` — a human's
-    `patch-coverage` failure has no trailer bypass, by design; see
-    DESIGN.md's "Patch coverage".
+    `patch-coverage` or `mutation-ratchet` failure has no trailer bypass,
+    by design; see DESIGN.md's "Patch coverage" and "Mutation ratchet".
 - **Two reporting jobs, on by default** — a sticky PR comment and a GitHub
   code-scanning (SARIF) export, surfacing what the gates found where
   you're already looking. Neither blocks a merge; the SARIF one needs a
@@ -66,7 +72,10 @@ already has both. `refactor-first` and `complexity` each need their own
 Python toolchain (below); skip either gate and you skip its dependency too.
 `patch-coverage` needs your own `pytest --cov` setup plus `diff-cover` —
 skip it if your repo isn't Python/pytest-shaped, or doesn't have a test
-suite worth gating on yet. The pre-push hook is optional (CI catches
+suite worth gating on yet. `mutation-ratchet` needs `mutmut` and the same
+kind of test suite, but doesn't need you to skip it explicitly: it's a
+verified-safe no-op until your repo has a `[tool.mutmut]` config, so it's
+fine left wired in as-is. The pre-push hook is optional (CI catches
 everything it does, just later). The two reporting jobs are part of the
 default setup; skip `craftcov-sarif` only if your repo has neither a public
 visibility nor GitHub Advanced Security to run code scanning with.
@@ -87,7 +96,7 @@ auto-merge safely:
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook (optional) | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates + reporting (all six jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates + reporting (all seven jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 
@@ -109,9 +118,13 @@ or plain `coverage`) in your own `dev`-style dependency group, not a new
 craft-gate-owned extra: this gate runs *your* test suite, which craft-gate
 has no involvement in beyond wiring the job.
 
-`craftcov-sarif` needs a **public repo or GitHub Advanced Security** — the
-only one of the six default jobs with a real precondition; code scanning
-isn't available otherwise.
+`craftcov-sarif` needs a **public repo or GitHub Advanced Security** — code
+scanning isn't available otherwise, so skip just that one job if neither
+applies. `mutation-ratchet` needs the `mutation` extra (`mutmut`) plus your
+own test-running dependencies to actually do anything — without a
+`[tool.mutmut]` section in your `pyproject.toml` it's a verified-safe
+no-op (see DESIGN.md's "Mutation ratchet"), so it's fine to leave wired in
+even before you've decided to adopt it.
 
 Confirm the install works:
 
@@ -124,16 +137,6 @@ is a companion `AGENTS.md` section mandating a Gherkin spec and a test list
 *before* implementation, with an explicit YAGNI challenge first. A
 methodology choice, not a craftsmanship gate — skip it if your project
 doesn't use BDD.
-
-**Optional, and not one of the six default jobs:** `templates/mutation-ratchet-job.yml`
-wires [`mutmut`](https://github.com/boxed/mutmut) + `scripts/check_mutation_ratchet.py`
-in — a function this PR's diff touches must clear a mutation-score floor
-(80% starting point), catching tests that execute a line without actually
-asserting anything about it. Left out of the default set on purpose:
-mutation testing reruns your whole suite once per mutant, a different cost
-order than every other gate here. Needs the `mutation` extra (`mutmut`)
-plus your own test-running dependencies. See DESIGN.md's "Mutation
-ratchet" for the full rationale.
 
 Step 4 matters most in practice — without it, staying current means
 remembering to re-run `bootstrap.sh` by hand. See **Staying current**
@@ -179,7 +182,7 @@ scripts/
   check_refactor_first.py   CI gate: a touched file's craftCov total must go down
   check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
   craftcov_pr_comment.py    optional: sticky PR comment
-  check_mutation_ratchet.py optional: touched functions' mutation score (needs mutmut)
+  check_mutation_ratchet.py CI gate: touched functions' mutation score (no-op without config)
   next_version.py           Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md
@@ -187,8 +190,7 @@ templates/
   AGENTS.md.snippet.md       section to paste into your AGENTS.md
   tdd-bdd-yagni.snippet.md   optional companion section
   pre-commit-hook.yaml       hook entry for .pre-commit-config.yaml
-  ci-job.yml                 job fragments for .github/workflows/ci.yml
-  mutation-ratchet-job.yml   optional job fragment, not part of ci-job.yml's default six
+  ci-job.yml                 job fragments for .github/workflows/ci.yml (all seven default jobs)
   update-check.yml           weekly drift-check + auto-PR
 bootstrap.sh               installer/updater
 tests/

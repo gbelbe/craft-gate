@@ -88,6 +88,18 @@ under-covered — a whole-repo average can't hide behind old tests carrying
 new, untested code. No `Tidy-Exempt:` bypass here — write the test with
 the code, not after a gate asks for it.
 
+A fifth gate goes one step further: coverage only proves a line *ran*, not
+that a test would notice if its behavior changed. CI's `mutation-ratchet`
+job (`mutmut`) mutates a small piece of a touched function's logic and
+reruns the tests — a function whose mutants all survive has tests that
+execute it without actually checking anything. Write toward killing
+mutants (exact-value assertions, both sides of every boundary, every
+branch tested on its own — see `templates/tdd-bdd-yagni.snippet.md`'s
+"Writing tests mutants can't survive" if this repo has that section) as a
+matter of course, not just when this gate flags something. No
+`Tidy-Exempt:` bypass here either — a genuinely equivalent mutant gets
+mutmut's own `# pragma: no mutate`.
+
 ## Editing this repo specifically
 
 - `CRAFTSMANSHIP.md` and `catalog.yaml` must stay in sync by hand — the

@@ -69,3 +69,13 @@ If this repo has the `patch-coverage` job (see README — it needs your own
 `pytest --cov` setup, not every repo has it wired in): new code must be
 covered by a test *in the same change*, not added after a gate flags a
 gap. That job has no `Tidy-Exempt:` bypass.
+
+If this repo also has the `mutation-ratchet` job (default alongside
+`patch-coverage`, but a no-op until `[tool.mutmut]` is configured — see
+README): coverage proving a line ran isn't the same as a test proving it
+matters. Write toward killing mutants — exact-value assertions, both sides
+of every boundary, every branch tested on its own — see
+`templates/tdd-bdd-yagni.snippet.md`'s "Writing tests mutants can't
+survive" if this repo uses that companion section. Same no-`Tidy-Exempt:`
+rule; a genuinely equivalent mutant gets mutmut's own `# pragma: no
+mutate` instead.
