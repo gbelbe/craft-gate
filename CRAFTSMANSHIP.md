@@ -402,7 +402,16 @@ this gate.
 **90% is kai-ster's own number, not a mandated one** — CRAFTSMANSHIP.md
 ships the pattern; the threshold is yours to set per repo.
 
-## Mutation ratchet — coverage measures execution, not assertion
+**Embed it in an existing coverage-producing job when you have one — don't
+duplicate the test run.** `templates/ci-job.yml`'s `patch-coverage` job is
+a full standalone job because it has to assume nothing else exists; but if
+your repo already has a job running `pytest --cov ... --cov-report=xml`
+(a lint-and-test job, a version-matrix job), add the diff-cover step to
+*that* job instead. A separate job means a second full test run just to
+get a second `coverage.xml` — real CI time for no new information. Every
+consumer this gate has actually been wired into so far needed this: two
+had an existing coverage-producing job (the step went there, no second
+job), one had none (the standalone job was the right shape as-is).
 
 Patch coverage answers "did a test run this line?" A test with no
 assertion, or one asserting the wrong thing, still counts as covering the

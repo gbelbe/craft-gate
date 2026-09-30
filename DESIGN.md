@@ -288,6 +288,27 @@ would mean building test infrastructure this repo has specifically chosen
 not to carry, just to dogfood a gate meant for consumers' own Python
 packages.
 
+**The standalone job is a default, not a mandate — embed the step when a
+coverage-producing job already exists.** Discovered by actually wiring
+this into three real repos, not assumed: kai-ster's own `diff-cover`
+predates craft-gate and has always run this way — a single step appended
+to the same job that already runs `pytest --cov`, once per CI pass, never
+a second standalone test run. semanticlint had its own coverage-producing
+`quality` job already; the diff-cover step went there, no new job added.
+semanticdiff's local `scripts/ci.sh` had a matrix loop with no existing
+`--cov-report=xml` at all, so the standalone-shaped addition (one
+`diff-cover` call after the loop, reusing whichever Python version's
+`coverage.xml` ran last, not per-version) was actually correct there —
+the *job* per se still isn't duplicated, since `ci.sh` itself is already
+looped by the workflow. The pattern held three-for-three: never assume a
+second job is necessary, check for an existing coverage-producing step
+first. A real portability bug surfaced doing this by hand, worth noting
+since it's the kind of thing that only shows up by actually running the
+script: `${arr[-1]}` for "last item" needs bash 4.3+, and macOS ships 3.2
+as `/usr/bin/bash` — silently breaks any contributor testing the local
+gate on a Mac who hasn't installed a newer bash. Fixed by tracking the
+last value in a plain variable instead of relying on negative indexing.
+
 ## Mutation ratchet
 
 Coverage's blind spot: a line can be *executed* by a test that asserts

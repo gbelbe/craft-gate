@@ -93,6 +93,15 @@
 # 40% covered overall still passes here as long as every line this PR
 # touches is well-tested — the point is not letting new debt accumulate,
 # not retroactively demanding full coverage of everything that exists.
+#
+# If you already have a job that runs `pytest --cov ... --cov-report=xml`
+# (a lint-and-test job, a matrix job, whatever) — add the "Patch coverage"
+# step below to THAT job instead of using this standalone one. This job
+# reruns your whole suite a second time just to get a second coverage.xml;
+# that's the right shape only when nothing else already produces one.
+# Verified against three real adoptions: two repos had an existing
+# coverage-producing job and got the step embedded there for free; one had
+# none and got this job as-is. See CRAFTSMANSHIP.md's "Patch coverage".
   patch-coverage:
     name: Patch coverage (diff-cover)
     runs-on: ubuntu-latest
