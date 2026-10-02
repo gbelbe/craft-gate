@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .craftcov_cache.json
 .craftcov_last_report.json
+craftcov-report.md
+craftcov.sarif
+mutants/

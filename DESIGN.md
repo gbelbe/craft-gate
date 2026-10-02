@@ -327,25 +327,14 @@ uv run mutmut run
 uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
 ```
 
-**On by default (`templates/ci-job.yml`'s fifth gate), not a separate
-opt-in template — but only ever a no-op until you configure it.** Earlier
-drafts of this gate shipped as a standalone, un-adopted-by-default
-template, on the reasoning that the runtime cost was too high to force on
-every repo. That's still true, but "opt-in template nobody copies in" and
-"opt-out job everyone has to notice and delete" turned out to be the wrong
-choice compared to a third option: ship it in the default set, but make it
-provably inert without configuration. The job's first step checks for a
-`[tool.mutmut]` (or `setup.cfg`'s `[mutmut]`) section and skips every
-later step if it's missing — verified against a real mutmut run that this
-was necessary, not a convenience: `mutmut run` with no config doesn't fail
-closed on its own. It either guesses a source directory from common
-layouts (`src/`, `lib/`, a directory matching the repo name) and actually
-mutates it without asking, or crashes with an unhandled `FileNotFoundError`
-if it can't guess — both unacceptable to run unannounced the moment a repo
-adopts craft-gate's default templates. The explicit config check turns
-"activate this gate" into "add one TOML section," which is what "on by
-default, deactivable by choice" needs to actually mean in a CI job that
-can't be toggled at runtime the way a flag can.
+**On by default (`templates/ci-job.yml`'s fifth gate).** Configure
+`[tool.mutmut]` with `source_paths`; the default local runner and CI job then
+run mutation testing on every full/PR run. The mutation cache is incremental:
+mutmut regenerates and retests changed functions, while
+`cache_invalidation_files` plus `on_dependency_change = "rerun"` force a full
+rerun when tests or test configuration change. Scheduled and manually
+dispatched CI runs delete `mutants/` before running, providing a periodic
+fresh campaign. Use the local runner's `--fresh` option for the same behavior.
 
 **Why a flat floor, not base-vs-head like the complexity ratchet.** That
 gate reruns fast, cheap checks (radon, an AST walk) against both refs — a

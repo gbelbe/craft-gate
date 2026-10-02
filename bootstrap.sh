@@ -60,6 +60,7 @@ chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_hi
   "$TARGET/scripts/check_complexity_ratchet.py" "$TARGET/scripts/craftcov_pr_comment.py" \
   "$TARGET/scripts/check_mutation_ratchet.py"
 copy_file "$SRC_DIR/skills/tidy-first/SKILL.md" "$TARGET/.claude/skills/tidy-first/SKILL.md"
+copy_file "$SRC_DIR/templates/local-craft-gate.sh" "$TARGET/scripts/local-craft-gate.sh"
 
 # Record which release this came from, so a consumer's update-check workflow
 # (templates/update-check.yml) has something to compare against without
@@ -71,6 +72,7 @@ if [[ ! -f "$TARGET/.craft-gate-version" ]] || [[ "$(cat "$TARGET/.craft-gate-ve
   echo "$VERSION" > "$TARGET/.craft-gate-version"
 fi
 
+chmod +x "$TARGET/scripts/local-craft-gate.sh"
 echo "✓ copied CRAFTSMANSHIP.md, catalog.yaml, scripts/, .claude/skills/tidy-first/"
 echo "  now on craft-gate $VERSION"
 echo
@@ -98,10 +100,10 @@ echo "     needs 'diff-cover' plus a coverage runner in your own dev deps, and"
 echo "     '--cov=<your_package>' set in the job -- skip it if this repo has no"
 echo "     pytest suite worth gating on yet. The mutation ratchet needs the"
 echo "     'mutation' extra (mutmut) plus your own test-running deps, and a"
-echo "     [tool.mutmut] section in your pyproject.toml to activate at all --"
-echo "     it's a safe no-op without one, verified against a real mutmut run,"
-echo "     not assumed (see the job's own comment in ci-job.yml for exactly"
-echo "     what happens without config). The SARIF job needs a public repo"
+echo "     [tool.mutmut] section in your pyproject.toml. The local runner"
+echo "     is now at scripts/local-craft-gate.sh; call it after your test"
+echo "     command has produced coverage.xml. It writes craftcov-report.md"
+echo "     and craftcov.sarif, and reuses mutmut's mutants/ cache. The SARIF job needs a public repo"
 echo "     or GitHub Advanced Security -- skip just that one job if neither"
 echo "     applies. See README's Install section (exact version pins) and"
 echo "     DESIGN.md's craftCov / 'The complexity ratchet' / 'Patch coverage' /"

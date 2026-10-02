@@ -43,8 +43,8 @@ It answers two separate questions, on purpose:
     a function this diff touches must clear a mutation-score floor (80%
     starting point). Coverage proves a line *ran*; this proves a test
     would actually *notice* if its behavior changed. On by default but a
-    safe no-op until your repo adds a `[tool.mutmut]` config — verified
-    against a real run, not assumed; see DESIGN.md's "Mutation ratchet".
+    requires the consuming repo's `[tool.mutmut]` source paths and runs by
+    default alongside the other gates; see DESIGN.md's "Mutation ratchet".
   - All five skip bot-authored PRs (dependabot, renovate, etc.) — a
     dependency bump usually has no heuristic to apply and no new code to
     test. But only the first three understand `Tidy-Exempt:` — a human's
@@ -72,10 +72,9 @@ already has both. `refactor-first` and `complexity` each need their own
 Python toolchain (below); skip either gate and you skip its dependency too.
 `patch-coverage` needs your own `pytest --cov` setup plus `diff-cover` —
 skip it if your repo isn't Python/pytest-shaped, or doesn't have a test
-suite worth gating on yet. `mutation-ratchet` needs `mutmut` and the same
-kind of test suite, but doesn't need you to skip it explicitly: it's a
-verified-safe no-op until your repo has a `[tool.mutmut]` config, so it's
-fine left wired in as-is. The pre-push hook is optional (CI catches
+suite worth gating on yet. `mutation-ratchet` needs `mutmut`, source paths in
+`[tool.mutmut]`, and the same kind of test suite. It is enabled by default.
+The pre-push hook is optional (CI catches
 everything it does, just later). The two reporting jobs are part of the
 default setup; skip `craftcov-sarif` only if your repo has neither a public
 visibility nor GitHub Advanced Security to run code scanning with.
@@ -111,6 +110,9 @@ dependency file (exact versions — see this repo's own `pyproject.toml`):
 ```toml
 craftcov = ["pyyaml>=6.0", "ruff>=0.13", "pylint>=3.3", "vulture>=2.14"]
 complexity = ["radon>=6.0", "cognitive-complexity>=1.3"]
+mutation = ["mutmut>=3.8"]
+# The default local developer environment installs all gate toolchains:
+dev = ["pytest>=9.0", "pytest-cov>=5.0", "diff-cover>=9.0", "mutmut>=3.8"]
 ```
 
 `patch-coverage` needs `diff-cover` (and a coverage runner — `pytest-cov`
@@ -182,7 +184,7 @@ scripts/
   check_refactor_first.py   CI gate: a touched file's craftCov total must go down
   check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
   craftcov_pr_comment.py    optional: sticky PR comment
-  check_mutation_ratchet.py CI gate: touched functions' mutation score (no-op without config)
+  check_mutation_ratchet.py CI gate: touched functions' mutation score
   next_version.py           Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md

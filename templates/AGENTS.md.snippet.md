@@ -71,7 +71,7 @@ covered by a test *in the same change*, not added after a gate flags a
 gap. That job has no `Tidy-Exempt:` bypass.
 
 If this repo also has the `mutation-ratchet` job (default alongside
-`patch-coverage`, but a no-op until `[tool.mutmut]` is configured — see
+`patch-coverage`; mutation testing requires `[tool.mutmut]` source paths — see
 README): coverage proving a line ran isn't the same as a test proving it
 matters. Write toward killing mutants — exact-value assertions, both sides
 of every boundary, every branch tested on its own — see

@@ -4,12 +4,10 @@
 # ratchet", "Patch coverage", and "Mutation ratchet"); the last two are
 # reporting, not gates (neither fails a build) but are part of the default
 # setup too — see their own comments below for the two real exceptions
-# (craftcov-sarif needs a public repo or GitHub Advanced Security;
-# mutation-ratchet needs `mutmut` configured, or it's a harmless no-op).
+# (craftcov-sarif needs a public repo or GitHub Advanced Security).
 # Set the branch name in the places marked below — and, for patch-coverage
 # specifically, your own package name (see its own comment). Mutation-ratchet
-# needs no inline edit here; it activates when you add `[tool.mutmut]` to
-# your own pyproject.toml (see its own comment).
+# needs `[tool.mutmut]` source paths in your own pyproject.toml.
 #
 # All five gates skip bot-authored PRs (dependabot, renovate, etc. — any
 # actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
@@ -136,16 +134,13 @@
 # patch-coverage; a genuinely equivalent mutant gets mutmut's own
 # `# pragma: no mutate` instead.
 #
-# Opting out: verified against a real mutmut run that it does NOT no-op
-# gracefully without config — `mutmut run` with no `[tool.mutmut]` /
-# `[mutmut]` section either guesses a source dir from common layouts
-# (src/, lib/, a dir matching the repo name) and actually mutates it
-# without asking, or crashes outright (FileNotFoundError, exit 1) if it
-# can't guess. Neither is an acceptable default, so the first step below
-# checks for real config and skips everything else when it's absent —
-# that's what makes this job safe to ship on by default: it does nothing
-# until a repo deliberately adds `[tool.mutmut]`. Delete the job entirely
-# instead if you never want it attempted even as a no-op.
+# Configure `[tool.mutmut]` in the consuming project's pyproject.toml before
+# installing the default gate. The dependency is part of the default dev
+# toolchain and the local runner uses the same cached `mutants/` directory.
+# Recommended config:
+#   source_paths = ["your_package"]
+#   cache_invalidation_files = ["tests/**/*.py", "conftest.py"]
+#   on_dependency_change = "rerun"
   mutation-ratchet:
     name: Mutation ratchet
     runs-on: ubuntu-latest
@@ -155,41 +150,25 @@
         with:
           fetch-depth: 0   # need the base branch for the diff
 
-      - name: Check for a [tool.mutmut] / [mutmut] config (this repo's opt-in)
-        id: configured
-        run: |
-          if grep -qE '^\[tool\.mutmut\]' pyproject.toml 2>/dev/null \
-             || grep -qE '^\[mutmut\]' setup.cfg 2>/dev/null; then
-            echo "yes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "yes=false" >> "$GITHUB_OUTPUT"
-            echo "No [tool.mutmut] config found — skipping (see DESIGN.md's 'Mutation ratchet' to opt in)."
-          fi
-
       - uses: astral-sh/setup-uv@v5
-        if: steps.configured.outputs.yes == 'true'
 
       - name: uv sync --extra mutation --extra dev   # ← plus whatever installs your own test deps
-        if: steps.configured.outputs.yes == 'true'
         run: uv sync --extra mutation --extra dev
 
       - name: Cache mutmut results
-        if: steps.configured.outputs.yes == 'true'
         uses: actions/cache@v4
         with:
           path: mutants
-          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py') }}
+          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock') }}
           restore-keys: mutmut-${{ runner.os }}-
 
       - name: mutmut run
-        if: steps.configured.outputs.yes == 'true'
         run: uv run mutmut run
 
       - name: "Mutation ratchet: touched functions' mutation score"
-        if: steps.configured.outputs.yes == 'true'
         run: |
           uv run python3 scripts/check_mutation_ratchet.py \
-            --base "origin/${{ github.base_ref }}" \
+            --base "origin/${{ github.base_ref || 'main' }}" \
             --threshold 80
 
 # ── Reporting, not enforcement — but still part of the default setup ────────
