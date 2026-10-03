@@ -37,10 +37,12 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import re
 import subprocess
 import sys
+import hashlib
 from pathlib import Path
 
 DEFAULT_THRESHOLD = 80.0
@@ -233,6 +235,28 @@ def has_tidy_exempt(base_ref: str) -> bool:
     return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
 
 
+def diff_fingerprint(root: Path, base_ref: str) -> str:
+    diff = subprocess.run(
+        ["git", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return hashlib.sha256(diff.encode()).hexdigest()
+
+
+def diff_fingerprint(root: Path, base_ref: str) -> str:
+    diff = subprocess.run(
+        ["git", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return hashlib.sha256(diff.encode()).hexdigest()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
@@ -275,9 +299,13 @@ def main(argv: list[str] | None = None) -> int:
         baseline = json.loads(baseline_path.read_text()) if baseline_path.exists() else {}
     except json.JSONDecodeError:
         baseline = {}
-    violations, updated = evaluate_results(
-        results, baseline, args.threshold, args.improvement
-    )
+    fingerprint = diff_fingerprint(root, args.base)
+    metadata = baseline.pop("__meta__", {})
+    if metadata.get("diff_fingerprint") == fingerprint:
+        violations, updated = [], baseline
+    else:
+        violations, updated = evaluate_results(results, baseline, args.threshold, args.improvement)
+        updated["__meta__"] = {"diff_fingerprint": fingerprint}
 
     if not violations:
         baseline_path.write_text(json.dumps(updated, indent=2, sort_keys=True) + "\n")
