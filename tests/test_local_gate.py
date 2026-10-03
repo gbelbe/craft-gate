@@ -33,6 +33,12 @@ def test_local_runner_fast_mode_skips_expensive_gates() -> None:
     assert "--fast" in runner
 
 
+def test_local_runner_documents_focused_mutation_selection() -> None:
+    runner = (ROOT / "templates" / "local-craft-gate.sh").read_text()
+
+    assert "pytest_add_cli_args_test_selection" in runner
+
+
 def test_ci_template_keeps_all_five_gates_and_two_reports() -> None:
     template = (ROOT / "templates" / "ci-job.yml").read_text()
 
