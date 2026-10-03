@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Local craft-gate runner. The consuming repo owns its test command and should
-# produce coverage.xml before calling this script. Pass --fresh periodically
+# produce coverage.xml before calling this script. Configure mutmut's
+# pytest_add_cli_args_test_selection for a focused mutation test suite; the
+# normal CI test job still runs the complete suite. Pass --fresh periodically
 # to discard all cached mutation verdicts and run a complete campaign.
 set -euo pipefail
 

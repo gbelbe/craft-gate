@@ -73,7 +73,10 @@ Python toolchain (below); skip either gate and you skip its dependency too.
 `patch-coverage` needs your own `pytest --cov` setup plus `diff-cover` —
 skip it if your repo isn't Python/pytest-shaped, or doesn't have a test
 suite worth gating on yet. `mutation-ratchet` needs `mutmut`, source paths in
-`[tool.mutmut]`, and the same kind of test suite. It is enabled by default.
+`[tool.mutmut]`, and a focused mutation test selection via
+`pytest_add_cli_args_test_selection`. Mark those behavioral unit tests with
+`@pytest.mark.mutation`; the normal CI test job still runs the full suite. It
+is enabled by default.
 The pre-push hook is optional (CI catches
 everything it does, just later). The two reporting jobs are part of the
 default setup; skip `craftcov-sarif` only if your repo has neither a public

@@ -54,6 +54,7 @@ def test_ci_template_uses_freshness_aware_mutation_cache() -> None:
     assert "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock')" in template
     assert 'cache_invalidation_files = ["tests/**/*.py", "conftest.py"]' in template
     assert 'on_dependency_change = "rerun"' in template
+    assert "pytest_add_cli_args_test_selection" in template
 
 
 def test_bootstrap_installs_local_runner() -> None:

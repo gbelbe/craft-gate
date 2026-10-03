@@ -139,6 +139,8 @@
 # toolchain and the local runner uses the same cached `mutants/` directory.
 # Recommended config:
 #   source_paths = ["your_package"]
+#   # Keep mutation runs focused; the normal CI test job still runs the full suite.
+#   pytest_add_cli_args_test_selection = ["tests/unit/test_feature.py", "-m", "mutation"]
 #   cache_invalidation_files = ["tests/**/*.py", "conftest.py"]
 #   on_dependency_change = "rerun"
   mutation-ratchet:

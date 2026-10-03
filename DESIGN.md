@@ -328,8 +328,13 @@ uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 
 ```
 
 **On by default (`templates/ci-job.yml`'s fifth gate).** Configure
-`[tool.mutmut]` with `source_paths`; the default local runner and CI job then
-run mutation testing on every full/PR run. The mutation cache is incremental:
+`[tool.mutmut]` with `source_paths` and
+`pytest_add_cli_args_test_selection` pointing at focused behavioral tests; the
+default local runner and CI job then run mutation testing on every full/PR run.
+Mark those tests with `@pytest.mark.mutation`. Name the test files explicitly,
+not only `-m mutation`, because mutmut must not collect unrelated test modules
+before applying the marker. The normal test job still runs the full suite. The
+mutation cache is incremental:
 mutmut regenerates and retests changed functions, while
 `cache_invalidation_files` plus `on_dependency_change = "rerun"` force a full
 rerun when tests or test configuration change. Scheduled and manually

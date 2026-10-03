@@ -429,11 +429,15 @@ uv run mutmut run                                              # generates + run
 uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
 ```
 
-**One of the five default gates (`templates/ci-job.yml`).** Mutation testing reruns your whole test suite
-once per mutant — a different cost order than everything above. Configure
-`[tool.mutmut]` with `source_paths`; the local runner and CI execute it by
-default and reuse the `mutants/` cache. See DESIGN.md's "Mutation ratchet"
-for the full rationale, including why this
+**One of the five default gates (`templates/ci-job.yml`).** Mutation testing
+reruns a focused behavioral test suite once per mutant. Configure
+`[tool.mutmut]` with `source_paths` and
+`pytest_add_cli_args_test_selection` listing the unit-test files marked
+`@pytest.mark.mutation`; the normal test job still runs the complete suite.
+The focused selection prevents mutmut from collecting unrelated integration,
+TUI, and helper modules that make mutation runs needlessly slow or fragile.
+The local runner and CI reuse the `mutants/` cache. See DESIGN.md's
+"Mutation ratchet" for the full rationale, including why this
 checks a flat floor on the current tree rather than a base-vs-head
 comparison like the complexity ratchet.
 
