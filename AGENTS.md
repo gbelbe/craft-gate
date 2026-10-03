@@ -100,6 +100,17 @@ matter of course, not just when this gate flags something. No
 `Tidy-Exempt:` bypass here either — a genuinely equivalent mutant gets
 mutmut's own `# pragma: no mutate`.
 
+Mutation-quality rule for new tests:
+
+- Every changed production function needs a focused behavioral test or an
+  explicit explanation that an existing test covers it.
+- New tests should assert exact observable behavior, not just execution or
+  truthiness.
+- Add boundary, empty, and error cases for changed branches.
+- Use focused mutmut and inspect survivors before declaring the change complete.
+- The default ratchet passes at 80% mutation score, or after a 20% improvement
+  from the function's first stored baseline.
+
 ## Editing this repo specifically
 
 - `CRAFTSMANSHIP.md` and `catalog.yaml` must stay in sync by hand — the

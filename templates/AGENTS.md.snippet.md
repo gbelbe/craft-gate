@@ -79,3 +79,19 @@ of every boundary, every branch tested on its own — see
 survive" if this repo uses that companion section. Same no-`Tidy-Exempt:`
 rule; a genuinely equivalent mutant gets mutmut's own `# pragma: no
 mutate` instead.
+
+Before declaring a Python behavior change complete, apply the mutation-quality
+checklist:
+
+1. Identify changed production functions from the diff, not only the files.
+2. Select or add focused unit tests and mark them `@pytest.mark.mutation` when
+   the repository uses focused mutmut selection.
+3. Assert exact outputs, side effects, calls, and errors, not just execution.
+4. Cover both sides of changed boundaries and each changed error/empty branch.
+5. Run focused mutmut and inspect survivors for the changed functions.
+6. Strengthen a survivor with a behavior-specific test, or use `# pragma: no
+   mutate` only when the mutation is genuinely equivalent.
+
+The default ratchet passes per changed function at 80% mutation score, or at
+20% improvement over that function's first recorded score in
+`.mutation-baseline.json`. The first run records the baseline.

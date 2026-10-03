@@ -57,3 +57,20 @@ between a suite that catches bugs and one that only runs:
 This isn't "write more tests" for its own sake — it's the same YAGNI
 discipline step 1 already applies, aimed at what each test actually needs
 to prove.
+
+## Mutation-quality delivery loop
+
+When the mutation-ratchet gate is present, finish each production change with
+this loop:
+
+1. Map changed lines to changed functions.
+2. Map each function to the smallest focused behavioral test files.
+3. Mark those tests with `@pytest.mark.mutation` when the repository uses it.
+4. Run mutmut on the configured source/test scope.
+5. Read survivors for changed functions and add the missing boundary/error
+   assertion.
+6. Repeat until the function reaches 80%, or improves by 20% over its first
+   recorded baseline.
+
+Do not add duplicate assertions only to increase a number. Prefer one test
+that kills a specific survivor and names the business rule it protects.
