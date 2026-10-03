@@ -341,6 +341,12 @@ rerun when tests or test configuration change. Scheduled and manually
 dispatched CI runs delete `mutants/` before running, providing a periodic
 fresh campaign. Use the local runner's `--fresh` option for the same behavior.
 
+The ratchet is per changed function, not aggregate: a function at or above
+80% passes; a function below 80% must improve by at least 20% over its first
+recorded score in `.mutation-baseline.json`. The first observed score records
+the baseline and passes. This makes legacy code improvable without allowing a
+new test change to leave its changed function untested.
+
 **Why a flat floor, not base-vs-head like the complexity ratchet.** That
 gate reruns fast, cheap checks (radon, an AST walk) against both refs — a
 second run costs nothing meaningful. Mutation testing reruns your entire

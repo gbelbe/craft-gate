@@ -448,6 +448,13 @@ cover`. This fixes the false positive at its source; don't reach for
 `Tidy-Exempt:` for a single surviving mutant, save it for skipping the
 gate entirely on a PR where that's the right call.
 
+**Test-quality rule.** A new or changed behavioral test should be designed to
+kill a meaningful mutation: assert the observable result, cover the relevant
+boundary/error branch, and avoid merely executing the line. Mutation selection
+is diff-scoped and per function. A changed function passes at 80% mutation
+score, or, below 80%, only when it improves at least 20% over its first recorded
+per-function score in `.mutation-baseline.json`.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible

@@ -77,6 +77,21 @@ suite worth gating on yet. `mutation-ratchet` needs `mutmut`, source paths in
 `pytest_add_cli_args_test_selection`. Mark those behavioral unit tests with
 `@pytest.mark.mutation`; the normal CI test job still runs the full suite. It
 is enabled by default.
+
+The local runner starts mutation testing automatically when Python files change;
+use `--mutation` to force it for an otherwise non-Python change. Keep
+`source_paths` or `only_mutate` limited to production contracts covered by the
+focused tests. This keeps mutation results actionable instead of reporting
+large numbers of untested legacy mutants.
+
+The default ratchet uses two acceptance paths for each changed function:
+
+- mutation score `>=80%` passes immediately;
+- below `80%`, the score must improve by at least `20%` over the first recorded
+  score in `.mutation-baseline.json`.
+
+The first run records the baseline and passes. Later changes must improve or
+reach the absolute floor; there is no repository-wide aggregate baseline.
 The pre-push hook is optional (CI catches
 everything it does, just later). The two reporting jobs are part of the
 default setup; skip `craftcov-sarif` only if your repo has neither a public

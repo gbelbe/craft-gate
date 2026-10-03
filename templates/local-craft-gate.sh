@@ -9,11 +9,13 @@ set -euo pipefail
 BASE="origin/main"
 FAST=0
 FRESH=0
+MUTATION=auto
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) BASE="$2"; shift 2 ;;
     --fast) FAST=1; shift ;;
     --fresh) FRESH=1; shift ;;
+    --mutation) MUTATION=on; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -27,8 +29,14 @@ if [[ $FAST -eq 0 ]]; then
     rm -rf mutants
   fi
   uv run diff-cover coverage.xml --compare-branch "$BASE" --fail-under 90
-  uv run mutmut run
-  uv run python scripts/check_mutation_ratchet.py --base "$BASE" --threshold 80
+  changed_python=$(git diff --name-only "$BASE"...HEAD -- \
+    'ster/**/*.py' 'src/**/*.py' 'lib/**/*.py' 'tests/**/*.py' '*.py' || true)
+  if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
+    uv run mutmut run
+    uv run python scripts/check_mutation_ratchet.py --base "$BASE" --threshold 80 --improvement 20
+  else
+    echo "mutation ratchet: skipped (no Python production or test changes)"
+  fi
 fi
 
 uv run python scripts/craftcov_pr_comment.py --base "$BASE" --dry-run > craftcov-report.md

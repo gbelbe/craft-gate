@@ -141,6 +141,7 @@
 #   source_paths = ["your_package"]
 #   # Keep mutation runs focused; the normal CI test job still runs the full suite.
 #   pytest_add_cli_args_test_selection = ["tests/unit/test_feature.py", "-m", "mutation"]
+#   # Keep source_paths/only_mutate limited to the production contracts those tests cover.
 #   cache_invalidation_files = ["tests/**/*.py", "conftest.py"]
 #   on_dependency_change = "rerun"
   mutation-ratchet:
@@ -171,7 +172,8 @@
         run: |
           uv run python3 scripts/check_mutation_ratchet.py \
             --base "origin/${{ github.base_ref || 'main' }}" \
-            --threshold 80
+            --threshold 80 \
+            --improvement 20
 
 # ── Reporting, not enforcement — but still part of the default setup ────────
 # Neither job fails a build; both make what the gates above found visible
