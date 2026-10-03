@@ -302,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     fingerprint = diff_fingerprint(root, args.base)
     metadata = baseline.pop("__meta__", {})
     if metadata.get("diff_fingerprint") == fingerprint:
-        violations, updated = [], baseline
+        violations, updated = [], {**baseline, "__meta__": metadata}
     else:
         violations, updated = evaluate_results(results, baseline, args.threshold, args.improvement)
         updated["__meta__"] = {"diff_fingerprint": fingerprint}
