@@ -117,6 +117,8 @@ auto-merge safely:
 | 2 | CI gates + reporting (all seven jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
+| 5 | PR labels for review (optional) | `templates/label-tidy-prs.yml` | `.github/workflows/craft-gate-label.yml` |
+| 6 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
 
 Row 3 targets `AGENTS.md`, the cross-tool convention a growing set of
 coding agents read directly. Check what your own agent looks for; if it's
@@ -213,6 +215,8 @@ templates/
   pre-commit-hook.yaml       hook entry for .pre-commit-config.yaml
   ci-job.yml                 job fragments for .github/workflows/ci.yml (all seven default jobs)
   update-check.yml           weekly drift-check + auto-PR
+  label-tidy-prs.yml         labels PRs with tidy / tidy-exempt commits
+  CODEOWNERS.snippet         review requirement for the gate files
 bootstrap.sh               installer/updater
 tests/
   fixtures/                 ground truth for craftCov's detectors
@@ -237,6 +241,35 @@ against the latest release and opens a PR with whatever changed. Nothing
 auto-merges — review it like any other dependency bump. No new credentials:
 it uses the repo's own default `GITHUB_TOKEN`, and craft-gate is only ever
 read from, never written to.
+
+## Reviewing what craft-gate changed
+
+Everything craft-gate does reaches a repo through a PR, so review starts from
+labels, the way Dependabot's `dependencies` label works:
+
+```sh
+gh pr list --label craft-gate  --state all   # automated version syncs
+gh pr list --label tidy-first  --state all   # PRs with tidy(...) / test(characterize) commits
+gh pr list --label tidy-exempt --state all   # every use of a Tidy-Exempt bypass
+```
+
+`craft-gate` is applied by `update-check.yml`; the other two by
+`templates/label-tidy-prs.yml`, which follows the PR's commits and lists the
+`Tidy-Exempt:` reasons in its run summary. `tidy-exempt` is the one worth
+auditing, since it skips the Tidy First and Refactor First gates.
+
+Squash merging collapses a PR's commits into one, so the base branch only keeps
+the `tidy(...)` subjects and `Tidy-Exempt:` trailers if the squash message lists
+them. Set it once (needs admin) and `git log --grep='^tidy('` works on `main`:
+
+```sh
+gh api -X PATCH repos/<owner>/<repo> \
+  -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES
+```
+
+`templates/CODEOWNERS.snippet` adds the last piece: review on changes to the
+gate files themselves, since loosening a threshold or an ignore fails no check.
+It only blocks merges when branch protection requires Code Owner review.
 
 ## Badge
 

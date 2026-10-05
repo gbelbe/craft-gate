@@ -126,4 +126,16 @@ echo "       cp '$SRC_DIR/templates/update-check.yml' .github/workflows/craft-ga
 echo "     Weekly workflow that checks for a new craft-gate release and opens"
 echo "     a PR with the diff if there is one. No new credentials needed."
 echo
+echo "  5. Make the work reviewable (optional, recommended): label PRs that carry"
+echo "     tidy(...) commits or a Tidy-Exempt trailer, so they can be listed with"
+echo "     'gh pr list --label tidy-first' / '--label tidy-exempt':"
+echo "       cp '$SRC_DIR/templates/label-tidy-prs.yml' .github/workflows/craft-gate-label.yml"
+echo "     The workflow warns if squash merges would drop the commit list; its"
+echo "     header comment has the one-line repo setting that fixes it."
+echo
+echo "  6. Require your review on changes to the gates themselves (optional):"
+echo "       cat '$SRC_DIR/templates/CODEOWNERS.snippet'"
+echo "     Add it to .github/CODEOWNERS with your handle, and turn on 'Require"
+echo "     review from Code Owners' in branch protection."
+echo
 echo "Re-run this script any time to pull the latest catalog/scripts."

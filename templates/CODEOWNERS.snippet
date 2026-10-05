@@ -1,0 +1,27 @@
+# Add to .github/CODEOWNERS (or CODEOWNERS) in the consuming repo, replacing
+# @your-handle with the person or team that should review changes to the gates.
+#
+# Why: these files decide what the craftsmanship gates enforce. A change to
+# them can loosen a threshold, add an ignore or switch a detector off without
+# any check failing — and the automated craft-gate sync PR overwrites several
+# of them. A green CI run there shows the new gates pass, not that they are
+# still as strict as before.
+#
+# It only blocks a merge if branch protection has "Require review from Code
+# Owners" on. Without that it just requests the review.
+
+/CRAFTSMANSHIP.md                    @your-handle
+/catalog.yaml                        @your-handle
+/.craft-gate-version                 @your-handle
+/scripts/check_tidy_ratchet.sh       @your-handle
+/scripts/check_refactor_first.py     @your-handle
+/scripts/check_complexity_ratchet.py @your-handle
+/scripts/check_mutation_ratchet.py   @your-handle
+/scripts/craftcov.py                 @your-handle
+/scripts/craftcov_pr_comment.py      @your-handle
+/scripts/report_tidy_history.sh      @your-handle
+/scripts/local-craft-gate.sh         @your-handle
+/.claude/skills/tidy-first/          @your-handle
+/.github/workflows/ci.yml            @your-handle
+/.github/workflows/craft-gate-*.yml  @your-handle
+/.pre-commit-config.yaml             @your-handle

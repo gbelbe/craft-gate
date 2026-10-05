@@ -70,12 +70,18 @@ jobs:
           git commit -m "$(printf 'chore(craft-gate): update to %s\n\nTidy-Exempt: automated dependency sync, see craft-gate'"'"'s CHANGELOG\n' "$LATEST")"
           git push -u origin "$BRANCH" --force
 
+          # The `craft-gate` label is the review queue, the way Dependabot's
+          # `dependencies` label is: `gh pr list --label craft-gate --state all`.
+          gh label create craft-gate --color 5319e7 --force \
+            --description "Automated craft-gate sync or craftsmanship change"
+
           EXISTING="$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty')"
           if [ -z "$EXISTING" ]; then
             gh pr create --title "chore: update craft-gate to $LATEST" \
               --body "Automated craft-gate sync. See https://github.com/gbelbe/craft-gate/blob/main/CHANGELOG.md for what changed. Review like any other dependency bump — nothing here auto-merges." \
-              --head "$BRANCH"
+              --head "$BRANCH" --label craft-gate
             echo "Opened a PR for $LATEST." >> "$GITHUB_STEP_SUMMARY"
           else
+            gh pr edit "$EXISTING" --add-label craft-gate
             echo "Updated existing PR #$EXISTING for $LATEST." >> "$GITHUB_STEP_SUMMARY"
           fi
