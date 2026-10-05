@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/gbelbe/craft-gate/actions/workflows/ci.yml/badge.svg)](https://github.com/gbelbe/craft-gate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![craft-gate](https://img.shields.io/badge/craft--gate-enabled-blue)](https://github.com/gbelbe/craft-gate)
 [![Catalog entries](https://img.shields.io/badge/catalog-35_entries-blue)](CRAFTSMANSHIP.md)
 [![Sources](https://img.shields.io/badge/sources-Beck·Fowler·Martin·Feathers·Metz·McCabe·SonarSource-lightgrey)](CRAFTSMANSHIP.md)
 
