@@ -27,7 +27,7 @@
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # need the base branch and full commit history
 
@@ -45,11 +45,11 @@
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -68,11 +68,11 @@
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra complexity
         run: uv sync --extra complexity
@@ -105,11 +105,11 @@
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # need the base branch for diff-cover's --compare-branch
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra dev
         run: uv sync --extra dev
@@ -149,17 +149,17 @@
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # need the base branch for the diff
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra mutation --extra dev   # ← plus whatever installs your own test deps
         run: uv sync --extra mutation --extra dev
 
       - name: Cache mutmut results
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: mutants
           key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock') }}
@@ -192,11 +192,11 @@
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -226,9 +226,9 @@
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -236,7 +236,7 @@
       - name: Generate craftCov SARIF
         run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
 
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: craftcov.sarif
           category: craftcov

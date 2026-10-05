@@ -18,7 +18,7 @@ jobs:
     name: Validate catalog + scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: catalog.yaml parses, ids are unique
         run: |
@@ -242,9 +242,9 @@ jobs:
     name: craftCov full scan (dogfood)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -281,7 +281,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -297,11 +297,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -316,11 +316,11 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra complexity
         run: uv sync --extra complexity
@@ -338,11 +338,11 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -367,9 +367,9 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
 
       - name: uv sync --extra craftcov
         run: uv sync --extra craftcov
@@ -377,7 +377,7 @@ jobs:
       - name: Generate craftCov SARIF
         run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
 
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: craftcov.sarif
           category: craftcov

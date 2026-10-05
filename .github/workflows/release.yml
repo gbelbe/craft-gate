@@ -22,7 +22,7 @@ jobs:
     name: Tag + release if the commits earned one
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # the whole history, and every tag, or nothing resolves
 
