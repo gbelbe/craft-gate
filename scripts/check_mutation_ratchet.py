@@ -42,7 +42,6 @@ import json
 import re
 import subprocess
 import sys
-import hashlib
 from pathlib import Path
 
 DEFAULT_THRESHOLD = 80.0
@@ -217,9 +216,7 @@ def evaluate_results(
         if score < threshold and previous is not None:
             required = previous * (1.0 + improvement / 100.0)
             if score < required:
-                violations.append(
-                    f"{name}: mutation score {score:.0f}%, needs >= {required:.0f}%"
-                )
+                violations.append(f"{name}: mutation score {score:.0f}%, needs >= {required:.0f}%")
         updated[name] = round(score, 4)
     return violations, updated
 
@@ -233,17 +230,6 @@ def has_tidy_exempt(base_ref: str) -> bool:
         check=False,
     ).stdout
     return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
-
-
-def diff_fingerprint(root: Path, base_ref: str) -> str:
-    diff = subprocess.run(
-        ["git", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return hashlib.sha256(diff.encode()).hexdigest()
 
 
 def diff_fingerprint(root: Path, base_ref: str) -> str:
