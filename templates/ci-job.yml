@@ -142,8 +142,10 @@
 #   # Keep mutation runs focused; the normal CI test job still runs the full suite.
 #   pytest_add_cli_args_test_selection = ["tests/unit/test_feature.py", "-m", "mutation"]
 #   # Keep source_paths/only_mutate limited to the production contracts those tests cover.
-#   cache_invalidation_files = ["tests/**/*.py", "conftest.py"]
-#   on_dependency_change = "rerun"
+#   # scripts/mutation_plan.py decides what a change invalidates (an edited test re-tests the
+#   # functions it covers, not the whole campaign); mutmut's own blunt invalidation is turned
+#   # down so it does not reset everything first. No tests/**/*.py in cache_invalidation_files.
+#   on_dependency_change = "warn"
   mutation-ratchet:
     name: Mutation ratchet
     runs-on: ubuntu-latest
@@ -165,8 +167,11 @@
           key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock') }}
           restore-keys: mutmut-${{ runner.os }}-
 
-      - name: mutmut run
-        run: uv run mutmut run
+      # Full campaign on first initialisation and on the few cache-wide causes (a lock file, the
+      # dependency list, pytest's own arguments, the root conftest); otherwise only what the diff
+      # can have changed. See DESIGN.md, "Diff-scoped mutation runs".
+      - name: mutmut run (diff-scoped)
+        run: uv run python3 scripts/mutation_plan.py run --base "origin/${{ github.base_ref || 'main' }}"
 
       - name: "Mutation ratchet: touched functions' mutation score"
         run: |
