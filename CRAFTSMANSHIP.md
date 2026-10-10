@@ -452,8 +452,12 @@ gate entirely on a PR where that's the right call.
 kill a meaningful mutation: assert the observable result, cover the relevant
 boundary/error branch, and avoid merely executing the line. Mutation selection
 is diff-scoped and per function. A changed function passes at 80% mutation
-score, or, below 80%, only when it improves at least 20% over its first recorded
-per-function score in `.mutation-baseline.json`.
+score, or, below 80%, only when it already has a recorded score in
+`.mutation-baseline.json` and improves on it by at least 20%. A function with no
+recorded score — new, or never measured — must reach 80% outright; there is no
+"first run records the baseline" grace. Design its tests for 80% before the
+first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
+the code").
 
 ## What to expect before you push — a checklist from real PRs
 

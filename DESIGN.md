@@ -342,10 +342,12 @@ dispatched CI runs delete `mutants/` before running, providing a periodic
 fresh campaign. Use the local runner's `--fresh` option for the same behavior.
 
 The ratchet is per changed function, not aggregate: a function at or above
-80% passes; a function below 80% must improve by at least 20% over its first
-recorded score in `.mutation-baseline.json`. The first observed score records
-the baseline and passes. This makes legacy code improvable without allowing a
-new test change to leave its changed function untested.
+80% passes; a function below 80% must improve by at least 20% over its
+recorded score in `.mutation-baseline.json`. A function with no recorded score
+has nothing to improve on, so it must reach 80% outright and is refused
+otherwise; a refused run writes no baseline, so the low score cannot become its
+own starting point on the next push. This keeps legacy code improvable (it has
+a baseline) without letting new or never-measured code in at a low score.
 
 **Why a flat floor, not base-vs-head like the complexity ratchet.** That
 gate reruns fast, cheap checks (radon, an AST walk) against both refs — a

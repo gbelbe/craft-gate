@@ -12,8 +12,11 @@ score (killed / (killed + survived), mutmut's own definition — see
 `mutmut badge`) below --threshold. Not base-vs-head like the complexity
 ratchet: mutation testing is too expensive to run twice per PR (it reruns
 the whole test suite once per mutant), so this checks touched functions
-against a flat floor on the current tree only, not a "must have improved"
-comparison. A genuinely equivalent mutant belongs behind mutmut's own
+against a floor on the current tree only. The floor is --threshold; a
+function that already has a score in the baseline file may instead improve on
+that score by --improvement percent. A function with *no* recorded baseline
+has no score to improve on, so it must reach --threshold outright: a first
+sighting is not a free pass. A genuinely equivalent mutant belongs behind mutmut's own
 `# pragma: no mutate` (mutmut's answer to this, same idea as coverage.py's
 `# pragma: no cover`) — fix the false positive at its source, not by
 lowering this gate's bar.
@@ -196,13 +199,24 @@ def find_violations(results: dict[str, dict[str, int]], threshold: float) -> lis
     return violations
 
 
+def _score_violation(name: str, score: float, needs: str) -> str:
+    return f"{name}: mutation score {score:.0f}%, {needs}"
+
+
 def evaluate_results(
     results: dict[str, dict[str, int]],
     baseline: dict[str, float],
     threshold: float = DEFAULT_THRESHOLD,
     improvement: float = 20.0,
 ) -> tuple[list[str], dict[str, float]]:
-    """Apply the absolute floor or first-baseline improvement rule."""
+    """Apply the absolute floor, or the improvement rule for a function with a recorded baseline.
+
+    Three outcomes for a function scoring below *threshold*:
+    - it has a recorded baseline: it must improve on it by *improvement* percent;
+    - it has none (new, or never recorded): refused — the improvement path needs a score to improve on,
+      and a first sighting must not be a free pass.
+    At or above *threshold* a function always passes.
+    """
     violations: list[str] = []
     updated = dict(baseline)
     for name, counts in sorted(results.items()):
@@ -213,10 +227,12 @@ def evaluate_results(
             continue
         score = 100.0 * counts["killed"] / tested
         previous = baseline.get(name)
-        if score < threshold and previous is not None:
-            required = previous * (1.0 + improvement / 100.0)
-            if score < required:
-                violations.append(f"{name}: mutation score {score:.0f}%, needs >= {required:.0f}%")
+        if score < threshold:
+            if previous is None:
+                needs = f"a function with no recorded baseline needs >= {threshold:.0f}%"
+                violations.append(_score_violation(name, score, needs))
+            elif score < (required := previous * (1.0 + improvement / 100.0)):
+                violations.append(_score_violation(name, score, f"needs >= {required:.0f}%"))
         updated[name] = round(score, 4)
     return violations, updated
 
