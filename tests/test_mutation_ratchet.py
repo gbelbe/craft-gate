@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The mutation ratchet's acceptance rule, behaviourally (no pytest dependency).
 
-A touched function is accepted when it scores at least the threshold (80%), or — only when it already has
-a recorded baseline score — when it improves on that score by at least the improvement margin (20%).
-A function with no recorded baseline gets no second path: it must reach the threshold.
+A touched function is accepted when it scores at least the threshold (80%), or, only when it
+already has a recorded baseline score, when it improves on that score by at least the improvement
+margin (20%). A function with no recorded baseline gets no second path: it must reach the threshold.
 """
 
 from __future__ import annotations
