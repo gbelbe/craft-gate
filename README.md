@@ -79,6 +79,13 @@ suite worth gating on yet. `mutation-ratchet` needs `mutmut`, source paths in
 `@pytest.mark.mutation`; the normal CI test job still runs the full suite. It
 is enabled by default.
 
+Mutation runs are diff-scoped: `scripts/mutation_plan.py` re-tests only what the change can have
+affected (a production function mutmut already tracks, plus the functions a changed test, fixture,
+data file or unmutated helper reaches) and runs in full only on first initialisation or a cache-wide
+cause (lock file, dependency list, pytest arguments, root `conftest.py`); see DESIGN.md's
+"Diff-scoped mutation runs". Set `on_dependency_change = "warn"` and keep `tests/**/*.py` out of
+`cache_invalidation_files`, or mutmut's own invalidation resets everything first.
+
 The local runner starts mutation testing automatically when Python files change;
 use `--mutation` to force it for an otherwise non-Python change. Keep
 `source_paths` or `only_mutate` limited to production contracts covered by the
