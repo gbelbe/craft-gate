@@ -20,6 +20,7 @@ ratchet = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(ratchet)
 
 evaluate = ratchet.evaluate_results
+evaluate_domain = ratchet.evaluate_domain
 
 
 def counts(killed: int, survived: int, no_tests: int = 0) -> dict[str, int]:
@@ -115,6 +116,55 @@ def test_each_function_is_judged_on_its_own() -> None:
     )
 
     assert [v.split(":")[0] for v in violations] == ["bad"]
+
+
+# -- functions re-tested because their tests changed (not touched themselves) -----
+
+
+def test_a_test_change_that_weakens_a_function_is_refused() -> None:
+    violations, _ = evaluate_domain({"f": counts(6, 4)}, {"f": 90.0})
+
+    assert len(violations) == 1
+    assert violations[0].startswith("f:")
+    assert "60%" in violations[0]
+    assert "90%" in violations[0]
+
+
+def test_a_test_change_that_strengthens_a_function_raises_its_baseline() -> None:
+    violations, updated = evaluate_domain({"f": counts(9, 1)}, {"f": 60.0})
+
+    assert violations == []
+    assert updated == {"f": 90.0}
+
+
+def test_a_test_change_that_keeps_a_function_where_it_was_passes() -> None:
+    violations, updated = evaluate_domain({"f": counts(9, 1)}, {"f": 90.0})
+
+    assert violations == []
+    assert updated == {"f": 90.0}
+
+
+def test_a_re_tested_function_with_no_baseline_is_recorded_not_judged() -> None:
+    # only a function the diff touches must reach the threshold; this one is seeded
+    violations, updated = evaluate_domain({"f": counts(1, 9)}, {})
+
+    assert violations == []
+    assert updated == {"f": 10.0}
+
+
+def test_a_drop_inside_the_tolerance_passes_and_keeps_the_better_baseline() -> None:
+    violations, updated = evaluate_domain({"f": counts(88, 12)}, {"f": 90.0}, tolerance=2.0)
+
+    assert violations == []
+    assert updated == {"f": 90.0}
+
+
+def test_a_function_whose_mutants_were_not_all_re_tested_is_flagged() -> None:
+    results = {"f": {"killed": 5, "survived": 0, "no_tests": 0, "other": 0, "pending": 3}}
+
+    violations, _ = evaluate_domain(results, {"f": 50.0})
+
+    assert violations == ["f: 3 mutant(s) were not re-tested after the plan reset them"]
 
 
 if __name__ == "__main__":

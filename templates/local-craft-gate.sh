@@ -32,7 +32,7 @@ if [[ $FAST -eq 0 ]]; then
   changed_python=$(git diff --name-only "$BASE"...HEAD -- \
     'ster/**/*.py' 'src/**/*.py' 'lib/**/*.py' 'tests/**/*.py' '*.py' || true)
   if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
-    uv run mutmut run
+    uv run python scripts/mutation_plan.py run --base "$BASE"
     uv run python scripts/check_mutation_ratchet.py --base "$BASE" --threshold 80 --improvement 20
   else
     echo "mutation ratchet: skipped (no Python production or test changes)"

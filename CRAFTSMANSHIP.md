@@ -441,6 +441,14 @@ The local runner and CI reuse the `mutants/` cache. See DESIGN.md's
 checks a flat floor on the current tree rather than a base-vs-head
 comparison like the complexity ratchet.
 
+**Runs are diff-scoped, not whole-campaign.** `scripts/mutation_plan.py run` drops only the cached
+verdicts the diff can have staled — the functions a changed test, fixture, data file or unmutated
+helper reaches — then runs `mutmut run`, which re-tests exactly those and any function whose source
+changed. A full campaign happens on the first initialisation of a repo and on cache-wide causes
+only. Test files you add are measured on a first pass and their functions re-tested on a second.
+A test change that *lowers* the score of a function it covers fails the ratchet, even though the
+function itself was not touched. DESIGN.md's "Diff-scoped mutation runs" has the details and limits.
+
 **A genuinely equivalent mutant** (code where no test *could* tell the
 difference because the behavior really is identical) gets mutmut's own
 `# pragma: no mutate` — the same idea as coverage.py's `# pragma: no
