@@ -211,10 +211,10 @@ def evaluate_results(
 ) -> tuple[list[str], dict[str, float]]:
     """Apply the absolute floor, or the improvement rule for a function with a recorded baseline.
 
-    Three outcomes for a function scoring below *threshold*:
-    - it has a recorded baseline: it must improve on it by *improvement* percent;
-    - it has none (new, or never recorded): refused — the improvement path needs a score to improve on,
-      and a first sighting must not be a free pass.
+    A function scoring below *threshold* is judged by whether it has a baseline:
+    - recorded: it must improve on it by *improvement* percent;
+    - none (new, or never recorded): refused. The improvement path needs a score
+      to improve on, and a first sighting must not be a free pass.
     At or above *threshold* a function always passes.
     """
     violations: list[str] = []
