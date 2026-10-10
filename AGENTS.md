@@ -109,7 +109,9 @@ Mutation-quality rule for new tests:
 - Add boundary, empty, and error cases for changed branches.
 - Use focused mutmut and inspect survivors before declaring the change complete.
 - The default ratchet passes at 80% mutation score, or after a 20% improvement
-  from the function's first stored baseline.
+  over the function's recorded baseline. A function with no recorded baseline
+  (new, or never measured) has no second chance: it must reach 80% on the
+  first push. Design the tests for that before writing them.
 
 ## Editing this repo specifically
 

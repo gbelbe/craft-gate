@@ -93,5 +93,9 @@ checklist:
    mutate` only when the mutation is genuinely equivalent.
 
 The default ratchet passes per changed function at 80% mutation score, or at
-20% improvement over that function's first recorded score in
-`.mutation-baseline.json`. The first run records the baseline.
+20% improvement over that function's recorded score in
+`.mutation-baseline.json`. A function with no recorded score — new, or never
+measured, including a legacy function you merely edit — must reach 80%
+outright on the first push: there is no grace run. Plan for that while writing
+the tests (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
+the code"), not after the gate refuses the push.
