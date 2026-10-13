@@ -29,6 +29,15 @@ CI's `validate`, `craftcov`, `tidy`, `refactor-first` and `complexity` jobs
 (`.github/workflows/ci.yml`) are required to merge; see below for what each
 checks. `docs/architecture.md` has the map of how they fit together.
 
+Before you push, read your own design prompts and get an independent review. Run
+`python3 scripts/design_review.py --base origin/main` (it also runs in
+`scripts/local-craft-gate.sh`) and either fix each prompt or write one line on why it does not
+apply. Then run the `craft-review` skill: it hands the diff to the `craft-reviewer` subagent, a
+lead-developer reviewer with no knowledge of how the code was written. Give it nothing but the
+base ref; your reasons are exactly what it must not inherit. Present its findings as they come,
+fix them or say why not. Both are advisory: they cover the judgement calls no gate can make (see
+`docs/design/reviewer.md`).
+
 ## Tidy First & craftsmanship (mandatory before every feature/fix commit)
 
 Before writing a feature or fix, check the file(s)/function(s)/class(es) it

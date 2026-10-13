@@ -65,5 +65,7 @@ if [[ $FAST -eq 0 ]]; then
   fi
 fi
 
+echo "--- design review (advisory; nothing here fails the run) ---"
+uv run python scripts/design_review.py --base "$BASE"
 uv run python scripts/craftcov_pr_comment.py --base "$BASE" --dry-run > craftcov-report.md
 uv run python scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif

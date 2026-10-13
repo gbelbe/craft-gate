@@ -1,6 +1,12 @@
 ---
 name: tidy-first
-description: Before writing a feature or fix, check the code you're about to touch against the craftsmanship catalog (Beck's Tidy First, Fowler's Refactoring smells, Clean Code, Feathers' legacy-code method) and tidy it first as its own commit, separate from the behavioral one. Use before starting any change to an existing file, class, or function, before writing new code (as a design checklist), and when the tidy-ratchet (pre-push hook / CI) blocks a push for missing a tidy(<type>): or test(characterize): commit.
+description: >-
+  Before writing a feature or fix, check the code you're about to touch against the
+  craftsmanship catalog (Beck's Tidy First, Fowler's Refactoring smells, Clean Code, Feathers'
+  legacy-code method) and tidy it first as its own commit, separate from the behavioral one.
+  Use before starting any change to an existing file, class, or function, before writing new
+  code (as a design checklist), and when the tidy-ratchet (pre-push hook / CI) blocks a push
+  for missing a tidy(<type>): or test(characterize): commit.
 ---
 
 # Tidy First

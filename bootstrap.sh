@@ -41,6 +41,8 @@ SHIPPED=(
 # ...except these, which live elsewhere in the source: "source:target".
 RELOCATED=(
   skills/tidy-first/SKILL.md:.claude/skills/tidy-first/SKILL.md
+  skills/craft-review/SKILL.md:.claude/skills/craft-review/SKILL.md
+  agents/craft-reviewer.md:.claude/agents/craft-reviewer.md
   templates/local-craft-gate.sh:scripts/local-craft-gate.sh
 )
 # craftcov.py is a facade over this package; it ships as a unit.
