@@ -42,8 +42,9 @@ present, bundle it all into one `tidy(multi):` commit (see
 `CRAFTSMANSHIP.md`'s "Refactor First" for the exact convention). CI's
 `refactor-first` job (`scripts/check_refactor_first.py`,
 `templates/ci-job.yml`) enforces the *outcome* — a touched file's total
-across those heuristics must go down, or stay at 0 — the same
-`Tidy-Exempt:` trailer bypasses it too.
+across those heuristics must go down, or stay at 0 — and no finding may sit
+on a line you added or rewrote. `Tidy-Exempt:` waives the first, never the
+second: new code is never exempt.
 
 A third, independent gate covers cyclomatic/cognitive complexity,
 invariant return, and duplicated string literal (if you've installed the
@@ -51,8 +52,9 @@ invariant return, and duplicated string literal (if you've installed the
 (CI's `complexity` job) grandfathers a function/literal the diff never
 reaches, but one it *does* reach that's already over threshold must come
 out lower than it went in — unchanged doesn't pass, only a genuine
-decrease does (needn't reach the threshold in one PR). `Tidy-Exempt:`
-bypasses this one too — one exemption mechanism for all three gates. See
+decrease does (needn't reach the threshold in one PR). `Tidy-Exempt:` waives
+that debt rule, but a new function over the threshold, a new invariant return
+or a new duplicated literal fails regardless. See
 `CRAFTSMANSHIP.md`'s "The complexity ratchet".
 
 **Write within these limits from the start, don't wait for a gate to catch

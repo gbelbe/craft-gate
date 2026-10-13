@@ -57,6 +57,26 @@ def changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
     return lines
 
 
+def added_lines(base_ref: str, head_ref: str, root: Path, rel_paths: tuple[str, ...]) -> set[int]:
+    """Line numbers, in the content at *head_ref*, of lines added or rewritten since *base_ref*.
+
+    Unlike `changed_lines` this reads two commits, not the working tree, and leaves out a
+    pure deletion's anchor line: nothing was written there. *rel_paths* is the file's path
+    (both of them for a rename, so git can follow it).
+    """
+    out = git(
+        ["diff", "--no-color", "-U0", "-M", base_ref, head_ref, "--", *rel_paths],
+        cwd=root,
+        check=False,
+    )
+    lines: set[int] = set()
+    for m in _HUNK_HEADER.finditer(out):
+        start = int(m.group(1))
+        count = int(m.group(2)) if m.group(2) is not None else 1
+        lines.update(range(start, start + count))
+    return lines
+
+
 def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
     """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
     whose line range overlaps a line this change touched in that file.

@@ -10,7 +10,13 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
-Nothing yet.
+- **Breaking:** a `Tidy-Exempt:` trailer no longer skips Refactor First and the
+  complexity ratchet outright. It waives only what is about legacy debt (a touched
+  file's total must go down; a touched over-threshold function must come out lower).
+  New code is always checked: Refactor First fails any finding on a line the change
+  added or rewrote (a new file must scan clean), and the complexity ratchet fails a new
+  function over the threshold, a new invariant return and a new duplicated literal.
+  Before, an exempt PR could add all of those and pass.
 
 ## v0.23.0 — 2026-10-13
 

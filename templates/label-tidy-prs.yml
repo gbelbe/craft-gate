@@ -6,7 +6,8 @@
 #   gh pr list --label tidy-exempt --state all     # every bypass of the gates
 #   gh pr list --label craft-gate --state all      # automated version syncs
 # is the whole review queue. `tidy-exempt` is the one worth auditing: a
-# `Tidy-Exempt:` trailer skips the Tidy First and Refactor First gates.
+# `Tidy-Exempt:` trailer satisfies the Tidy First gate and waives the legacy-debt
+# rules of Refactor First and the complexity ratchet (new code is still checked).
 #
 # Labels follow the PR's commits, so they are added and removed as it changes.
 # The reasons given in `Tidy-Exempt:` trailers go to the run summary.

@@ -100,3 +100,22 @@ def test_base_ref_parser_requires_a_base_and_keeps_the_scripts_own_description()
     assert parser.description == "what this gate does"
     with pytest.raises(SystemExit):
         parser.parse_args([])
+
+
+def test_added_lines_are_the_new_side_of_every_hunk_and_skip_pure_deletions(tmp_path) -> None:
+    repo = tmp_path / "r"
+    repo.mkdir()
+    git = lambda *a: subprocess.run(["git", *a], cwd=repo, check=True, capture_output=True)  # noqa: E731
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "T")
+    (repo / "f.py").write_text("a\nb\nc\nd\ne\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True
+    ).stdout.strip()
+    (repo / "f.py").write_text("a\nB\nc\ne\nf\ng\n")  # b rewritten, d deleted, f and g added
+    git("commit", "-qam", "change")
+
+    assert gitdiff.added_lines(base, "HEAD", repo, ("f.py",)) == {2, 5, 6}

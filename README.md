@@ -28,11 +28,11 @@ It answers two separate questions, on purpose:
   `Tidy-Exempt: <reason>` when nothing applies.
 - **Six CI gates**, cheapest first:
 
-  | Gate | Fails a PR when | Needs | `Tidy-Exempt:` skips it |
+  | Gate | Fails a PR when | Needs | `Tidy-Exempt:` waives it |
   |---|---|---|---|
   | `tidy` | no tidying, characterization test or recorded exemption is in the commit range | `bash`, `git` | yes |
-  | `refactor-first` | a touched file's total across the 8 detectable heuristics did not go down (or stay at 0) | the `craftcov` extra | yes |
-  | `complexity` | a function the diff touches is over threshold and did not come out lower; or a new invariant return or triplicated literal | the `complexity` extra | yes |
+  | `refactor-first` | a touched file's total across the 8 detectable heuristics did not go down (or stay at 0), or any finding sits on a line the change added | the `craftcov` extra | the per-file ratchet only; a finding on an added line always fails |
+  | `complexity` | a function the diff touches is over threshold and did not come out lower; or a new function over the threshold, invariant return or triplicated literal | the `complexity` extra | the debt rule only; new code always fails |
   | `patch-coverage` | the lines this diff changed are under-covered | `diff-cover` and your own `pytest --cov` | no |
   | `mutation-ratchet` | a touched function's mutants survive: its tests run it but would not notice a change | `mutmut` and a `[tool.mutmut]` section | no |
   | `behaviour-coverage` | the lines this diff changed are not covered by Gherkin scenarios | `pytest-bdd` scenarios under `tests/features` | no |

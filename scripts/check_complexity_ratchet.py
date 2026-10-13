@@ -47,6 +47,11 @@ is evaluated exactly like new code and must meet the threshold on its own,
 not compared against an identically-named entry that happened to live
 somewhere else in the base ref.
 
+A `Tidy-Exempt:` trailer in the commit range waives the debt rules above (a touched
+function must come out lower; a literal count must not grow), since an exempt change
+has no reason to be paying debt down. It does not waive the new-code rules: a function,
+invariant return or duplicated literal that did not exist at the base still fails.
+
 Needs the `complexity` extra (`radon`, `cognitive-complexity`) — see the
 README's Install section for the exact versions this release expects.
 
@@ -62,11 +67,35 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 from astfuncs import walk_functions
 from gitdiff import has_tidy_exempt, touched_names
 
 THRESHOLD = 15
+
+
+def _new_function_message(name: str, cc: int, threshold: int, metric: str) -> str:
+    return (
+        f"{name}: new function with {metric} {cc} (> {threshold}) — "
+        f"keep new functions at or below {threshold}"
+    )
+
+
+def find_new_violations(
+    base_cc: dict[str, int],
+    head_cc: dict[str, int],
+    threshold: int = THRESHOLD,
+    metric: str = "complexity",
+) -> list[str]:
+    """Only the violations in code that did not exist at the base: a name over *threshold*
+    that *base_cc* has no entry for. New code has no legacy to grandfather, so a
+    `Tidy-Exempt:` trailer does not waive these."""
+    return [
+        _new_function_message(name, cc, threshold, metric)
+        for name, cc in sorted(head_cc.items())
+        if cc > threshold and name not in base_cc
+    ]
 
 
 def find_violations(
@@ -100,10 +129,7 @@ def find_violations(
             continue
         base = base_cc.get(name, 0)
         if name not in base_cc:
-            violations.append(
-                f"{name}: new function with {metric} {cc} (> {threshold}) — "
-                f"keep new functions at or below {threshold}"
-            )
+            violations.append(_new_function_message(name, cc, threshold, metric))
         elif touched is not None and name in touched:
             if cc < base:
                 continue  # touched and genuinely improved — allowed
@@ -394,25 +420,73 @@ def _measure_at_ref(
             )
 
 
+class Measures(NamedTuple):
+    """Every metric the ratchet compares, for one tree."""
+
+    cc: dict[str, int]
+    cog: dict[str, int]
+    inv: dict[str, str]
+    dup: dict[str, int]
+
+
+def collect_violations(
+    base: Measures, head: Measures, touched: tuple[set[str], set[str]], exempt: bool
+) -> list[str]:
+    """Every violation of the ratchet. With *exempt* (a `Tidy-Exempt:` trailer), only those in
+    new code: the debt rules, a touched function coming out lower and a grown literal count,
+    are waived, but a new function over the threshold, a new invariant return and a new
+    duplicated literal still fail."""
+
+    def judge(old: dict[str, int], new: dict[str, int], **kwargs) -> list[str]:
+        if exempt:
+            kwargs.pop("touched", None)
+            return find_new_violations(old, new, **kwargs)
+        return find_violations(old, new, **kwargs)
+
+    touched_cc, touched_cog = touched
+    violations = judge(base.cc, head.cc, metric="cyclomatic complexity", touched=touched_cc)
+    violations += judge(base.cog, head.cog, metric="cognitive complexity", touched=touched_cog)
+    # Grandfathered like the ratchet: an invariant return that was already there
+    # is not this change's problem, but a new one is.
+    violations += [
+        f"{name}: every return hands back the same never-rebound {returned!r} "
+        f"(SonarQube S3516) — use one exit, reached by break"
+        for name, returned in sorted(head.inv.items())
+        if name not in base.inv
+    ]
+    violations += judge(
+        base.dup,
+        head.dup,
+        threshold=DUPLICATE_LITERAL_THRESHOLD - 1,
+        metric="duplicated string literal",
+    )
+    return violations
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
     parser.add_argument("--path", default=".", help="source directory to scan")
     args = parser.parse_args(argv)
 
-    if has_tidy_exempt(args.base):
-        print(f"Complexity ratchet: Tidy-Exempt: trailer found in {args.base}..HEAD — skipping.")
-        return 0
+    exempt = has_tidy_exempt(args.base)
+    if exempt:
+        print(
+            f"Complexity ratchet: Tidy-Exempt: trailer found in {args.base}..HEAD — "
+            "the debt rules are waived; new code is still checked."
+        )
 
     root = Path(args.path)
     head_funcs = compute_functions(root)
-    head = {name: cc for name, (cc, _l, _e) in head_funcs.items()}
     head_cog_ranges = compute_cognitive_ranges(root)
-    head_cog = {name: cc for name, (cc, _l, _e) in head_cog_ranges.items()}
-    head_inv = compute_invariant_returns(root)
-    head_dup = compute_duplicate_literals(root)
+    head = Measures(
+        {name: cc for name, (cc, _l, _e) in head_funcs.items()},
+        {name: cc for name, (cc, _l, _e) in head_cog_ranges.items()},
+        compute_invariant_returns(root),
+        compute_duplicate_literals(root),
+    )
     try:
-        base, base_cog, base_inv, base_dup = _measure_at_ref(args.base, args.path)
+        base = Measures(*_measure_at_ref(args.base, args.path))
     except subprocess.CalledProcessError as exc:
         print(f"error: could not read base ref {args.base!r}: {exc.stderr or exc}", file=sys.stderr)
         return 2
@@ -422,28 +496,12 @@ def main(argv: list[str] | None = None) -> int:
     # Touched-and-still-over-threshold must decrease, not just not increase.
     cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
     cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
-    touched_cc = touched_names(root, args.base, cc_ranges)
-    touched_cog = touched_names(root, args.base, cog_ranges)
-
-    violations = find_violations(base, head, metric="cyclomatic complexity", touched=touched_cc)
-    violations += find_violations(
-        base_cog, head_cog, metric="cognitive complexity", touched=touched_cog
-    )
-    # Grandfathered like the ratchet: an invariant return that was already there
-    # is not this change's problem, but a new one is.
-    violations += [
-        f"{name}: every return hands back the same never-rebound {returned!r} "
-        f"(SonarQube S3516) — use one exit, reached by break"
-        for name, returned in sorted(head_inv.items())
-        if name not in base_inv
-    ]
-    violations += find_violations(
-        base_dup,
-        head_dup,
-        threshold=DUPLICATE_LITERAL_THRESHOLD - 1,
-        metric="duplicated string literal",
+    touched = (
+        touched_names(root, args.base, cc_ranges),
+        touched_names(root, args.base, cog_ranges),
     )
 
+    violations = collect_violations(base, head, touched, exempt)
     if violations:
         print(f"Complexity ratchet: {len(violations)} violation(s):", file=sys.stderr)
         for v in violations:

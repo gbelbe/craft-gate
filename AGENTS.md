@@ -70,16 +70,18 @@ For the heuristics craftCov detects (`scripts/craftcov.py
 <path>` before touching a file, fix one instance of every heuristic present,
 bundle it into one `tidy(multi):` commit (see CRAFTSMANSHIP.md's "Refactor
 First"). CI's `refactor-first` job (`scripts/check_refactor_first.py`)
-enforces the outcome — a touched file's total must go down, or stay at 0 —
-`Tidy-Exempt:` bypasses it too.
+enforces the outcome — a touched file's total must go down, or stay at 0 — and,
+separately, that no finding sits on a line you added or rewrote. `Tidy-Exempt:`
+waives the first (legacy debt) but never the second: new code is never exempt.
 
 A third, independent gate covers cyclomatic/cognitive complexity, invariant
 return, and duplicated string literal (CG032-CG035, no `detectors` field —
 craftcov.py has no awareness of it): `scripts/check_complexity_ratchet.py`
 (CI's `complexity` job) grandfathers a function/literal the diff never
 reaches, but one it *does* reach that's already over threshold must come
-out lower than it went in — unchanged doesn't pass. Same `Tidy-Exempt:`
-bypass. See CRAFTSMANSHIP.md's "The complexity ratchet".
+out lower than it went in — unchanged doesn't pass. `Tidy-Exempt:` waives that
+debt rule, but a new function over the threshold, a new invariant return or a new
+duplicated literal fails regardless. See CRAFTSMANSHIP.md's "The complexity ratchet".
 
 **Write within these limits from the start**: CRAFTSMANSHIP.md's "The
 mechanical floor" table has the exact numbers these two gates check (≤5
