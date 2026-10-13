@@ -87,7 +87,7 @@ def strip_lines_for_dupes(source: str) -> list[tuple[int, str]]:
         for tok in tokenize.generate_tokens(io.StringIO(source).readline):
             if tok.type == tokenize.COMMENT:
                 comment_cols[tok.start[0]] = tok.start[1]
-    except (tokenize.TokenizeError, IndentationError, SyntaxError, ValueError):
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
         pass  # fall back to no comment-stripping for a file tokenize can't handle
 
     skip = _import_lines(source)

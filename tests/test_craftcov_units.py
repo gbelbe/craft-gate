@@ -54,6 +54,11 @@ def test_strip_lines_drops_comments_blanks_and_imports_keeping_line_numbers() ->
     ]
 
 
+def test_strip_lines_survives_a_file_the_tokenizer_cannot_read() -> None:
+    # an unterminated bracket makes tokenize raise TokenError; the scan must carry on
+    assert craftcov.strip_lines_for_dupes("x = (1,\n  2\n") == [(1, "x = (1,"), (2, "2")]
+
+
 # -- dupes: block matching ---------------------------------------------------------
 
 
