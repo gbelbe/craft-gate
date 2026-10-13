@@ -9,7 +9,7 @@ from pathlib import Path
 from .cache import empty_cache, load_cache, save_cache
 from .catalog import DetectorIndex
 from .discovery import discover_python_files, file_hash, normalize_path
-from .models import Timing
+from .models import Finding, Timing
 from .scan import merge_corpus_findings, scan_files
 
 
@@ -31,7 +31,7 @@ def _load_state(settings: ScanSettings) -> dict:
 
 def scan_repository(
     settings: ScanSettings, index: DetectorIndex
-) -> tuple[list[str], dict[str, list[dict]], Timing]:
+) -> tuple[list[str], dict[str, list[Finding]], Timing]:
     """(files, findings by file, timing) for the whole repository.
 
     Per-file engines only re-run on files whose content hash changed since the
@@ -55,7 +55,7 @@ def scan_repository(
         else {}
     )
 
-    by_file: dict[str, list[dict]] = {rel: cached_files[rel]["findings"] for rel in unchanged}
+    by_file: dict[str, list[Finding]] = {rel: cached_files[rel]["findings"] for rel in unchanged}
     for rel in changed:
         by_file[rel] = new_findings.get(rel, [])
         cached_files[rel] = {"hash": hashes[rel], "findings": by_file[rel]}
@@ -83,10 +83,10 @@ def scan_repository(
 def restrict_to_file(
     root: Path,
     files: list[str],
-    by_file: dict[str, list[dict]],
+    by_file: dict[str, list[Finding]],
     file_arg: str,
     class_name: str | None,
-) -> tuple[dict[str, list[dict]], str]:
+) -> tuple[dict[str, list[Finding]], str]:
     """Narrow a finished scan to one file (and optionally one class) — a REPORT
     filter, so what was scanned is untouched. Returns (by_file, scope label)."""
     target = normalize_path(root, file_arg)

@@ -10,9 +10,11 @@ from .models import (
     BY_HEURISTIC,
     HEURISTIC_ID,
     TOTAL,
+    Finding,
     ReportOptions,
     RunContext,
     ScanResults,
+    Summary,
     Timing,
 )
 from .summary import diff_by_heuristic
@@ -33,14 +35,14 @@ def _diff_tag(old_count: int, new_count: int) -> str:
 
 
 def print_diff_section(
-    prev_snapshot: dict | None, agg: dict, catalog_by_id: dict[str, dict]
+    prev_snapshot: dict | None, agg: Summary, catalog_by_id: dict[str, dict]
 ) -> None:
     if prev_snapshot is None:
         print("Changes since last run: none — this is the first run (no previous snapshot).")
         print()
         return
 
-    changed = diff_by_heuristic(prev_snapshot[BY_HEURISTIC], agg[BY_HEURISTIC])
+    changed = diff_by_heuristic(prev_snapshot[BY_HEURISTIC], agg.by_heuristic)
     when = prev_snapshot.get("generated_at", "an earlier run")
     if not changed:
         print(f"Changes since last run ({when}): none — identical totals.")
@@ -55,8 +57,8 @@ def print_diff_section(
         print(f"  {code:7s} {hid:38s} {old_count:5d} -> {new_count:<5d} ({delta}){tag}")
     old_total = prev_snapshot.get(TOTAL, 0)
     print(
-        f"  {'':7s} {'TOTAL':38s} {old_total:5d} -> {agg[TOTAL]:<5d} "
-        f"({_signed(agg[TOTAL] - old_total)})"
+        f"  {'':7s} {'TOTAL':38s} {old_total:5d} -> {agg.total:<5d} "
+        f"({_signed(agg.total - old_total)})"
     )
     print()
 
@@ -81,28 +83,28 @@ def _print_header(scan_timing: Timing, scope_label: str | None) -> None:
     print()
 
 
-def _print_tables(agg: dict, catalog_by_id: dict[str, dict]) -> None:
+def _print_tables(agg: Summary, catalog_by_id: dict[str, dict]) -> None:
     print("By heuristic")
     print(f"{'CODE':7s} {'ID':38s} {'COUNT':>6s}  SOURCE")
-    for hid, count in sorted(agg[BY_HEURISTIC].items(), key=lambda kv: -kv[1]):
+    for hid, count in sorted(agg.by_heuristic.items(), key=lambda kv: -kv[1]):
         entry = catalog_by_id[hid]
         print(f"{entry.get('code', ''):7s} {hid:38s} {count:6d}  {entry['source']}")
-    print(f"{'':7s} {'TOTAL':38s} {agg[TOTAL]:6d}")
+    print(f"{'':7s} {'TOTAL':38s} {agg.total:6d}")
     print()
 
     print("By file (top 15)")
-    for rel, count in sorted(agg["by_file"].items(), key=lambda kv: -kv[1])[:15]:
+    for rel, count in sorted(agg.by_file.items(), key=lambda kv: -kv[1])[:15]:
         print(f"  {count:5d}  {rel}")
     print()
 
     print("By class (top 15, module-level findings excluded)")
-    class_only = {k: v for k, v in agg["by_class"].items() if "::" in k}
+    class_only = {k: v for k, v in agg.by_class.items() if "::" in k}
     for key, count in sorted(class_only.items(), key=lambda kv: -kv[1])[:15]:
         print(f"  {count:5d}  {key}")
     print()
 
     print("By library (top-level directory)")
-    for lib, count in sorted(agg["by_library"].items(), key=lambda kv: -kv[1]):
+    for lib, count in sorted(agg.by_library.items(), key=lambda kv: -kv[1]):
         print(f"  {count:5d}  {lib}")
 
 
@@ -115,7 +117,7 @@ def _finding_line(rel: str, f: dict) -> str:
     return f"  {rel}:{f['line']}  {f['heuristic_code']} {f['heuristic_id']} ({rule}){scope}{dup}"
 
 
-def _print_every_finding(by_file: dict[str, list[dict]]) -> None:
+def _print_every_finding(by_file: dict[str, list[Finding]]) -> None:
     print()
     print("Every finding")
     for rel, findings in sorted(by_file.items()):
@@ -140,7 +142,7 @@ def print_text_report(scan: ScanResults, ctx: RunContext, verbose: bool) -> None
     if ctx.diff_active:
         print_diff_section(ctx.prev_snapshot, scan.agg, scan.catalog_by_id)
 
-    if scan.agg[TOTAL] == 0:
+    if scan.agg.total == 0:
         print("No findings for the detectable heuristics. ✓")
     else:
         _print_tables(scan.agg, scan.catalog_by_id)
@@ -150,7 +152,7 @@ def print_text_report(scan: ScanResults, ctx: RunContext, verbose: bool) -> None
     _print_detector_coverage(scan.catalog_by_id)
 
 
-def format_sarif(by_file: dict[str, list[dict]], catalog: list[dict]) -> dict:
+def format_sarif(by_file: dict[str, list[Finding]], catalog: list[dict]) -> dict:
     """A SARIF 2.1.0 document for `by_file`'s findings, for `github/codeql-
     action/upload-sarif` — feeds GitHub's own code-scanning dashboard
     (history, per-finding tracking, a native alert count) rather than a
@@ -231,7 +233,7 @@ def print_detector_list(catalog: list[dict]) -> None:
 
 def json_payload(scan: ScanResults, ctx: RunContext) -> dict:
     payload = {
-        "summary": scan.agg,
+        "summary": scan.agg.to_dict(),
         "findings": scan.by_file,
         "timing": asdict(ctx.timing),
         "scope": ctx.scope_label,
@@ -242,7 +244,7 @@ def json_payload(scan: ScanResults, ctx: RunContext) -> dict:
             BY_HEURISTIC: [
                 {HEURISTIC_ID: hid, "old": old_count, "new": new_count}
                 for hid, old_count, new_count in diff_by_heuristic(
-                    (ctx.prev_snapshot or {}).get(BY_HEURISTIC), scan.agg[BY_HEURISTIC]
+                    (ctx.prev_snapshot or {}).get(BY_HEURISTIC), scan.agg.by_heuristic
                 )
             ],
         }

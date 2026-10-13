@@ -14,7 +14,7 @@ import json
 import time
 from pathlib import Path
 
-from .models import BY_HEURISTIC, TOTAL
+from .models import BY_HEURISTIC, TOTAL, Summary
 
 CACHE_VERSION = 5  # 5: nested class names lost their doubled dot ("A..B" -> "A.B")
 
@@ -51,13 +51,13 @@ def load_report_snapshot(path: Path) -> dict | None:
     return data
 
 
-def save_report_snapshot(path: Path, agg: dict) -> None:
+def save_report_snapshot(path: Path, agg: Summary) -> None:
     path.write_text(
         json.dumps(
             {
                 "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                BY_HEURISTIC: agg[BY_HEURISTIC],
-                TOTAL: agg[TOTAL],
+                BY_HEURISTIC: agg.by_heuristic,
+                TOTAL: agg.total,
             },
             indent=2,
         )

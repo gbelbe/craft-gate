@@ -251,23 +251,33 @@ def test_aggregate_groups_by_heuristic_file_class_and_top_directory() -> None:
         "pkg/clean.py": [],
     }
 
-    assert craftcov.aggregate(by_file) == {
+    assert craftcov.aggregate(by_file).to_dict() == {
         TOTAL: 4,
         BY_HEURISTIC: {"x": 3, "y": 1},
         BY_FILE: {PKG_A_PY: 3, TOP_PY: 1},
-        "by_class": {"pkg/a.py::A": 2, PKG_A_PY: 1, TOP_PY: 1},
-        "by_library": {"pkg": 3, "(root)": 1},
+        LAST_TWO[0]: {"pkg/a.py::A": 2, PKG_A_PY: 1, TOP_PY: 1},
+        LAST_TWO[1]: {"pkg": 3, "(root)": 1},
     }
 
 
 def test_aggregate_of_nothing_is_all_zero() -> None:
-    assert craftcov.aggregate({}) == {
+    assert craftcov.aggregate({}).to_dict() == {
         TOTAL: 0,
         BY_HEURISTIC: {},
         BY_FILE: {},
-        "by_class": {},
-        "by_library": {},
+        LAST_TWO[0]: {},
+        LAST_TWO[1]: {},
     }
+
+
+FIRST_THREE = (TOTAL, BY_HEURISTIC, BY_FILE)
+LAST_TWO = ("by_class", "by_library")
+
+
+def test_the_summary_serializes_its_keys_in_the_order_the_json_report_has_always_used() -> None:
+    summary = craftcov.aggregate({})
+
+    assert list(summary.to_dict()) == [*FIRST_THREE, *LAST_TWO]
 
 
 def test_diff_by_heuristic_reports_changes_largest_first() -> None:
@@ -318,7 +328,7 @@ def test_snapshot_round_trips_only_the_totals_and_rejects_bad_files() -> None:
         path.write_text(json.dumps({TOTAL: 3}))
         assert craftcov.load_report_snapshot(path) is None  # no by_heuristic
 
-        agg = {TOTAL: 3, BY_HEURISTIC: {"x": 3}, BY_FILE: {"a.py": 3}}
+        agg = craftcov.Summary(3, {"x": 3}, {"a.py": 3}, {}, {})
         craftcov.save_report_snapshot(path, agg)
         snap = craftcov.load_report_snapshot(path)
         assert snap is not None

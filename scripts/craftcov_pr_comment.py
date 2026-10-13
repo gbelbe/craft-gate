@@ -34,6 +34,7 @@ import tempfile
 from pathlib import Path
 
 from craftcov import (
+    Summary,
     aggregate,
     build_detector_index,
     diff_by_heuristic,
@@ -47,7 +48,7 @@ from gitdiff import base_ref_parser, git
 MARKER = "<!-- craftcov-pr-report -->"
 
 
-def full_scan(root: Path) -> dict:
+def full_scan(root: Path) -> Summary:
     """The full craftCov aggregate for `root`. `root` must be fully
     resolved — see check_refactor_first.py's per_file_totals for why."""
     catalog = load_catalog()
@@ -58,7 +59,7 @@ def full_scan(root: Path) -> dict:
     return aggregate(by_file)
 
 
-def scan_ref(repo: Path, ref: str, scratch_parent: Path) -> dict:
+def scan_ref(repo: Path, ref: str, scratch_parent: Path) -> Summary:
     """full_scan's aggregate for `ref`, via a throwaway worktree — unless
     `ref` is "HEAD", scanned in place to skip a redundant checkout."""
     if ref == "HEAD":
@@ -89,14 +90,14 @@ def _doc_link(repo_slug: str | None, head_sha: str) -> str:
 
 
 def render_markdown(
-    base_agg: dict,
-    head_agg: dict,
+    base_agg: Summary,
+    head_agg: Summary,
     catalog_by_id: dict[str, dict],
     repo_slug: str | None,
     head_sha: str,
 ) -> str:
-    base_total, head_total = base_agg["total"], head_agg["total"]
-    changed = diff_by_heuristic(base_agg["by_heuristic"], head_agg["by_heuristic"])
+    base_total, head_total = base_agg.total, head_agg.total
+    changed = diff_by_heuristic(base_agg.by_heuristic, head_agg.by_heuristic)
     total_delta = head_total - base_total
     sign = "+" if total_delta > 0 else ""
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from .adapters import run_pylint, run_ruff, run_vulture
 from .catalog import RULE_BASED_TOOLS
 from .dupes import run_dupes
-from .models import CONFIDENCE
+from .models import CONFIDENCE, DuplicateFinding, Finding
 from .scopes import Scope, build_scope_index, enclosing_class
 
 ScopeCache = dict[str, list[Scope]]
@@ -44,7 +44,7 @@ def _entry_for(
     return whole_tool.get(item["tool"])
 
 
-def _finding(item: dict, entry: dict, cls: str | None) -> dict:
+def _finding(item: dict, entry: dict, cls: str | None) -> Finding:
     return {
         "line": item["line"],
         "col": item["col"],
@@ -63,11 +63,11 @@ def scan_files(
     rule_maps: dict[str, dict[str, dict]],
     whole_tool: dict[str, dict],
     vulture_min_confidence: int = 0,
-) -> dict[str, list[dict]]:
+) -> dict[str, list[Finding]]:
     """relative path -> list of finding dicts, for exactly these files."""
     raw_items = _raw_items(root, rel_files, rule_maps, whole_tool, vulture_min_confidence)
 
-    by_file: dict[str, list[dict]] = {rel: [] for rel in rel_files}
+    by_file: dict[str, list[Finding]] = {rel: [] for rel in rel_files}
     scopes_cache: ScopeCache = {}
     seen: set[tuple[str, int, str]] = set()  # (rel, line, heuristic_id) — dedup across tools
 
@@ -90,7 +90,10 @@ def scan_files(
 
 
 def merge_corpus_findings(
-    root: Path, all_files: list[str], by_file: dict[str, list[dict]], corpus_tool: dict[str, dict]
+    root: Path,
+    all_files: list[str],
+    by_file: dict[str, list[Finding]],
+    corpus_tool: dict[str, dict],
 ) -> None:
     """Runs corpus-wide tools (currently just `dupes`) over every file,
     every run — never through the per-file cache (see dupes.py's header
@@ -107,7 +110,9 @@ def merge_corpus_findings(
     scopes_cache: ScopeCache = {}
     for item in items:
         cls = _class_of(scopes_cache, root, item["rel"], item["line"])
-        finding = _finding({**item, CONFIDENCE: None}, entry, cls)
-        finding["duplicate_of"] = item["duplicate_of"]
-        finding["dup_lines"] = item["dup_lines"]
+        finding = DuplicateFinding(
+            **_finding({**item, CONFIDENCE: None}, entry, cls),
+            duplicate_of=item["duplicate_of"],
+            dup_lines=item["dup_lines"],
+        )
         by_file.setdefault(item["rel"], []).append(finding)

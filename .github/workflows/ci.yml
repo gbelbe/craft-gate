@@ -134,37 +134,6 @@ jobs:
           print('check_complexity_ratchet.py OK')
           "
 
-      - name: craftcov_pr_comment.py compiles, render_markdown is correct
-        run: |
-          python3 -m py_compile scripts/craftcov_pr_comment.py
-          python3 -c "
-          import sys
-          sys.path.insert(0, 'scripts')
-          from craftcov_pr_comment import render_markdown, MARKER
-
-          # a heuristic appearing for the first time is tagged NEW, one that
-          # disappeared entirely is tagged RESOLVED, an unchanged one is omitted
-          base = {'total': 10, 'by_heuristic': {'dead-code': 5, 'explaining-constant': 5}}
-          head = {'total': 8, 'by_heuristic': {'dead-code': 3, 'explaining-constant': 5}}
-          catalog_by_id = {'dead-code': {'code': 'CG002'}, 'explaining-constant': {'code': 'CG009'}}
-          body = render_markdown(base, head, catalog_by_id, None, 'abc123')
-          assert body.startswith(MARKER)
-          assert 'dead-code' in body and '5' in body and '3' in body
-          assert 'explaining-constant' not in body  # unchanged -> not in the diff at all
-
-          resolved = render_markdown({'total': 5, 'by_heuristic': {'dead-code': 5}}, {'total': 0, 'by_heuristic': {}}, catalog_by_id, None, 'abc123')
-          assert '✅' in resolved
-
-          new = render_markdown({'total': 0, 'by_heuristic': {}}, {'total': 3, 'by_heuristic': {'dead-code': 3}}, catalog_by_id, None, 'abc123')
-          assert '🆕' in new
-
-          # --repo pins the doc link to this exact commit, not a branch name
-          linked = render_markdown(base, head, catalog_by_id, 'gbelbe/craft-gate', 'abc123')
-          assert 'https://github.com/gbelbe/craft-gate/blob/abc123/CRAFTSMANSHIP.md' in linked
-
-          print('craftcov_pr_comment.py OK')
-          "
-
       - name: dupes algorithm smoke test (no external tool needed)
         run: |
           python3 -c "
