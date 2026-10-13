@@ -1,11 +1,14 @@
 [project]
 name = "craft-gate"
-version = "0.1.0"
+# Not maintained: releases are git tags (tools/next_version.py reads Conventional Commits).
+version = "0.0.0"
 description = "Craftsmanship catalog + Tidy First ratchet + craftCov scanner"
 requires-python = ">=3.10"
 dependencies = [
     # render_catalog.py and craftcov.py both parse catalog.yaml.
     "pyyaml>=6.0",
+    # gate_config.py reads pyproject.toml; tomllib is in the standard library from 3.11.
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]

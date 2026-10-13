@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Diff-aware mutation-testing ratchet — kill rate for touched functions only.
 
-Covers catalog.yaml's [TODO: catalog entry] — the mechanical enforcement
-CRAFTSMANSHIP.md's "Mutation ratchet" section documents. Independent of every
+The mechanical enforcement CRAFTSMANSHIP.md's "Mutation ratchet" section documents.
+It has no catalog entry: this is a test-quality gate, not a design heuristic. Independent of every
 other gate: doesn't run mutmut itself (a prior `mutmut run` step must have
 already populated `mutants/`, normally cached between CI runs the way
 `node_modules` or `.venv` are), just reads its results and a git diff.

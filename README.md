@@ -80,6 +80,11 @@ to re-run `bootstrap.sh`. Each gate's toolchain, with exact version pins, is
 listed in this repo's [`pyproject.toml`](pyproject.toml) extras (`craftcov`,
 `complexity`, `mutation`). Skip a gate and you skip its dependency too.
 
+Python 3.10 or later. `scripts/gate_config.py` reads `pyproject.toml` with `tomllib`
+(standard library from 3.11); on 3.10 your environment needs `tomli` installed, which
+this repo's `pyproject.toml` declares for itself. The scripts are bash and Python, tested on
+Linux and macOS; Windows is untested.
+
 Confirm the install works:
 
 ```bash
