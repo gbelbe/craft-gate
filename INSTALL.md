@@ -88,7 +88,20 @@ Labels PRs that carry `tidy(...)` commits or a `Tidy-Exempt` trailer, so
 workflow warns if squash merges would drop the commit list; its header comment
 has the one-line repo setting that fixes that.
 
-## 6. Review requirement on the gates themselves (optional)
+## 6. PR checklist for the judgement calls (optional, recommended)
+
+```bash
+cp $CRAFT_GATE/templates/PULL_REQUEST_TEMPLATE.md .github/PULL_REQUEST_TEMPLATE.md
+```
+
+The gates check what can be measured. This template is the reviewer's list for what
+cannot: whether a function does one thing, whether names say what they mean, command-query
+separation, responsibility, whether tests state the behaviour, and YAGNI. It pairs with the
+"Design review (advisory)" section the PR comment adds, which flags functions worth a second
+look (flag arguments, more than two parameters, "and" in a name, a query that changes state,
+long functions). Neither blocks a merge; a person decides.
+
+## 7. Review requirement on the gates themselves (optional)
 
 ```bash
 cat $CRAFT_GATE/templates/CODEOWNERS.snippet

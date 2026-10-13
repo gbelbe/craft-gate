@@ -77,6 +77,26 @@ def added_lines(base_ref: str, head_ref: str, root: Path, rel_paths: tuple[str, 
     return lines
 
 
+def touched_python_files(repo: Path, base_sha: str, head_ref: str) -> list[tuple[str, str]]:
+    """(old_rel, new_rel) for every added/copied/modified/renamed .py file
+    between base_sha and head_ref — old == new except for a real rename."""
+    out = git(
+        ["diff", "--name-status", "-M", "--diff-filter=ACMR", base_sha, head_ref, "--", "*.py"],
+        cwd=repo,
+    )
+    pairs: list[tuple[str, str]] = []
+    for line in out.splitlines():
+        if not line:
+            continue
+        parts = line.split("\t")
+        status = parts[0]
+        if status.startswith("R"):
+            pairs.append((parts[1], parts[2]))
+        else:
+            pairs.append((parts[1], parts[1]))
+    return pairs
+
+
 def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
     """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
     whose line range overlaps a line this change touched in that file.

@@ -10,6 +10,13 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** an advisory "Design review" section in the PR comment
+  (`scripts/design_review.py`). For the Python functions a change touched it flags
+  flag arguments, more than two parameters, "and" in a name, a query that changes
+  state, and long functions, as prompts for the reviewer. Nothing blocks. Also a
+  PR checklist template (`templates/PULL_REQUEST_TEMPLATE.md`) for the judgement calls
+  with no smell to flag.
+
 - **Breaking:** a `Tidy-Exempt:` trailer no longer skips Refactor First and the
   complexity ratchet outright. It waives only what is about legacy debt (a touched
   file's total must go down; a touched over-threshold function must come out lower).

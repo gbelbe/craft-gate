@@ -56,3 +56,27 @@ JSON file that a scheduled or on-push-to-main step writes and commits
 works with zero hosting. Not built here (it's real upkeep of its own),
 but it's a small addition on top if the dashboard alone isn't visible
 enough for your team.
+
+## Advisory design review
+
+The gates check what can be measured. Some Clean Code rules are about intent and cannot
+be decided from a diff, but they can be *smelled*, and the PR comment is where a reviewer
+is already looking. `scripts/design_review.py` adds a "Design review (advisory)" table to
+the comment for the Python functions the change touched (a function with any line the
+change added or rewrote, reviewed whole):
+
+| Prompt | Rule it points at |
+|---|---|
+| a `bool`-annotated or `True`/`False`-defaulted parameter | no flag arguments |
+| more than 2 parameters (the gate's hard limit is 5) | prefer 0 to 2 arguments |
+| `_and_` in the name | a function does one thing |
+| `get_`, `is_`, `has_`, `find_`, `count_`, `compute_`, `calculate_` that assigns to an attribute or calls a mutator on `self` or a parameter | command-query separation |
+| more than 20 lines (the gate's limit is 50 statements) | stays small |
+
+Deliberately: deterministic and offline (no model, no credentials, same input, same output);
+advisory only (nothing fails); test files are skipped, because fixtures make test functions
+look parameter-heavy. The table is capped at 15 rows. A smell is a question, not a verdict:
+a flag argument is sometimes right, and the reviewer decides. The rules with no smell to flag
+(naming, responsibility, whether a test states the behaviour, YAGNI) are on the PR checklist,
+`templates/PULL_REQUEST_TEMPLATE.md`.
+

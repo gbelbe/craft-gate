@@ -49,29 +49,9 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
-from gitdiff import added_lines, base_ref_parser, git, has_tidy_exempt
+from gitdiff import added_lines, base_ref_parser, git, has_tidy_exempt, touched_python_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def touched_python_files(repo: Path, base_sha: str, head_ref: str) -> list[tuple[str, str]]:
-    """(old_rel, new_rel) for every added/copied/modified/renamed .py file
-    between base_sha and head_ref — old == new except for a real rename."""
-    out = git(
-        ["diff", "--name-status", "-M", "--diff-filter=ACMR", base_sha, head_ref, "--", "*.py"],
-        cwd=repo,
-    )
-    pairs: list[tuple[str, str]] = []
-    for line in out.splitlines():
-        if not line:
-            continue
-        parts = line.split("\t")
-        status = parts[0]
-        if status.startswith("R"):
-            pairs.append((parts[1], parts[2]))
-        else:
-            pairs.append((parts[1], parts[1]))
-    return pairs
 
 
 def scan_findings(root: Path) -> dict[str, list[Finding]]:
