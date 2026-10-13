@@ -287,9 +287,9 @@ that the discipline (or an explicit, reviewable exemption) was followed.
 ## Refactor First — a mechanically-enforced instance of the procedure above
 
 For any heuristic craftCov can detect (see DESIGN.md's craftCov section, or
-`scripts/craftcov.py --list-detectors` — 8 of the 35 entries above as of
-this writing), the "which tidying, ask the developer" judgment call in step
-3 of the procedure becomes fully mechanical instead:
+`scripts/craftcov.py --list-detectors` — <!-- fact:detectable -->8<!-- /fact --> of the
+<!-- fact:entries -->35<!-- /fact --> entries above), the "which tidying, ask the developer"
+judgment call in step 3 of the procedure becomes fully mechanical instead:
 
 1. Before touching file `F`, scope craftCov to it:
    `uv run python3 scripts/craftcov.py --file <F>`.
@@ -321,7 +321,7 @@ spirit as the rest of this catalog.
 
 **Enforced, not just documented.** `scripts/check_refactor_first.py` (wired
 into CI as the `refactor-first` job, PR-only) fails a PR when a touched
-`.py` file's *total* across the 8 detectable heuristics didn't go down
+`.py` file's *total* across the <!-- fact:detectable -->8<!-- /fact --> detectable heuristics didn't go down
 relative to where the branch diverged from its base — or, if the file was
 already at 0, went up at all. It re-scans the PR's merge-base tree and its
 head tree and compares per file (`dupes` needs every file scanned at each
@@ -330,9 +330,9 @@ accurate "before" count for one file). `Tidy-Exempt:` bypasses it the same
 way it bypasses the message-pattern ratchet below — one exemption
 mechanism, not two.
 
-This only covers the 8 craftCov-detectable heuristics. Four more (CG032-
+This only covers the <!-- fact:detectable -->8<!-- /fact --> craftCov-detectable heuristics. Four more (CG032-
 CG035) have their own separate mechanical gate — see "The complexity
-ratchet" below. The remaining 23 keep the judgment-call procedure above,
+ratchet" below. The remaining entries keep the judgment-call procedure above,
 backed only by the message-pattern ratchet below, not a count-based gate.
 
 ## The complexity ratchet — cyclomatic, cognitive, invariant return, duplicated literal

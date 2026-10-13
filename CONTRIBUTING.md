@@ -25,8 +25,9 @@ python3 scripts/render_catalog.py
 ```
 
 This rewrites the two generated tables (between the `<!-- BEGIN GENERATED -->`
-/ `<!-- END GENERATED -->` markers) to match `catalog.yaml`, and touches
-nothing else in the file — the procedure, the principles, the legacy-code
+/ `<!-- END GENERATED -->` markers) and the entry/detector counts
+(`<!-- fact:NAME -->…<!-- /fact -->` spans, and the README badge) to match
+`catalog.yaml`, and touches nothing else — the procedure, the principles, the legacy-code
 workflow all stay hand-written. CI's `validate` job runs the same script
 with `--check` and fails the PR if you edited `catalog.yaml` and forgot to
 regenerate, so this can't silently drift.
