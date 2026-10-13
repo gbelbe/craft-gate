@@ -83,10 +83,3 @@ def test_mutation_ratchet_documents_absolute_or_improvement_rule() -> None:
     assert "evaluate_results" in source
     assert "improvement" in source
     assert ".mutation-baseline.json" in source
-
-
-if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_"):
-            test()
-    print("local craft-gate template tests passed")

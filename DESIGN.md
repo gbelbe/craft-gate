@@ -279,14 +279,11 @@ this section just answered. A genuine exception (generated code, a
 vendored file) belongs in coverage configuration itself — an `omit` entry
 — not a commit trailer.
 
-**Not dogfooded on craft-gate's own CI.** This repo's own tests
-(`tests/test_fixtures.py`) are a deliberate non-pytest script, not a suite
-with coverage tracking (see this repo's own README's Requirements — no
-test-framework dependency is a stated design choice), so there's no
-coverage.xml here to gate on. Wiring this into craft-gate's own `ci.yml`
-would mean building test infrastructure this repo has specifically chosen
-not to carry, just to dogfood a gate meant for consumers' own Python
-packages.
+**Not dogfooded on craft-gate's own CI.** This repo's tests run under
+pytest (`uv run pytest tests`), but its CI doesn't produce a `coverage.xml`
+or run diff-cover/mutmut against them: those two gates are meant for a
+consuming repo's own Python package, and wiring them here would mean
+choosing which of the scripts are "the package" just to dogfood a gate.
 
 **The standalone job is a default, not a mandate — embed the step when a
 coverage-producing job already exists.** Discovered by actually wiring
