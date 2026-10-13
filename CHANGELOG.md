@@ -10,6 +10,14 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** an independent reviewer for Claude Code users. The `craft-reviewer` subagent
+  reviews a branch as a lead developer with no knowledge of how it was written, against the
+  catalog's new-code principles; every finding must quote the code and cite a catalog code. The
+  `craft-review` skill runs it. Advisory and read-only; `bootstrap.sh` installs both, and the
+  local runner now prints the design-review prompts. Also: `tidy-first`'s frontmatter was invalid
+  YAML (an unquoted `: ` in its description); it is now a folded block, and a test parses every
+  shipped skill and agent.
+
 - **Added:** an advisory "Design review" section in the PR comment
   (`scripts/design_review.py`). For the Python functions a change touched it flags
   flag arguments, more than two parameters, "and" in a name, a query that changes

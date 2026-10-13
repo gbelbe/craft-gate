@@ -101,6 +101,11 @@ separation, responsibility, whether tests state the behaviour, and YAGNI. It pai
 look (flag arguments, more than two parameters, "and" in a name, a query that changes state,
 long functions). Neither blocks a merge; a person decides.
 
+`bootstrap.sh` also installs the `craft-review` skill and the `craft-reviewer` subagent
+(`.claude/skills/craft-review/`, `.claude/agents/craft-reviewer.md`) for Claude Code users: an
+independent, read-only review of the current branch, run before pushing. See
+`docs/design/reviewer.md`. Other tools can use `agents/craft-reviewer.md` as a plain prompt.
+
 ## 7. Review requirement on the gates themselves (optional)
 
 ```bash

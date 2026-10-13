@@ -14,6 +14,7 @@ reading to use the tool. For how the pieces fit together, start with
 | Mutation ratchet | [docs/design/mutation-ratchet.md](docs/design/mutation-ratchet.md) |
 | Diff-scoped mutation runs | [docs/design/diff-scoped-mutation-runs.md](docs/design/diff-scoped-mutation-runs.md) |
 | Behaviour coverage (Gherkin scenarios cover the changed lines) | [docs/design/behaviour-coverage.md](docs/design/behaviour-coverage.md) |
+| The independent reviewer (advisory design review and the craft-reviewer subagent) | [docs/design/reviewer.md](docs/design/reviewer.md) |
 | Reporting (the PR comment and SARIF export) | [docs/design/reporting.md](docs/design/reporting.md) |
 | Design choices worth knowing about, and the sources | [docs/design/design-choices.md](docs/design/design-choices.md) |
 

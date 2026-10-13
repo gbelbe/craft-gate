@@ -611,6 +611,13 @@ are prompts for the reviewer, not findings; nothing fails. The judgement calls w
 smell to flag (naming, responsibility, whether tests state the behaviour, YAGNI) are on
 the PR checklist, `templates/PULL_REQUEST_TEMPLATE.md`.
 
+**An independent reviewer.** For the same rules, a model can judge what a smell cannot. The
+`craft-reviewer` subagent (`agents/craft-reviewer.md`, run through the `craft-review` skill)
+reviews a branch as a lead developer with no knowledge of how it was written, graded against
+the "New-code principles" above. Every finding must quote the code and cite a catalog code, or
+it is dropped. It is advisory and read-only; it is not a gate, because a model's verdict is not
+repeatable. See `docs/design/reviewer.md`.
+
 ## Don't let the exemption become the rule
 
 `Tidy-Exempt:` trusts the author's judgment, which erodes under deadline
