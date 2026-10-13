@@ -150,11 +150,45 @@ def test_no_python_changes_means_nothing_to_check(project, run_main, capsys) -> 
     assert capsys.readouterr().out == ""
 
 
-def test_a_tidy_exempt_trailer_skips_the_gate(project, run_main, capsys) -> None:
-    project.commit("feat: worse\n\nTidy-Exempt: spike", other_py=SMELLY)
+def test_a_tidy_exempt_trailer_waives_the_per_file_ratchet(project, run_main, capsys) -> None:
+    # mod.py stays at 2 findings, which the ratchet would refuse; the trailer waives that
+    project.commit("fix: nudge\n\nTidy-Exempt: urgent", mod_py=SMELLIER + "# a comment\n")
 
     assert verdict(run_main, project) == 0
-    assert "Tidy-Exempt: trailer found" in capsys.readouterr().out
+    assert "per-file ratchet is waived" in capsys.readouterr().out
+
+
+def test_a_tidy_exempt_trailer_does_not_waive_a_smell_in_new_code(
+    project, run_main, capsys
+) -> None:
+    project.commit("feat: worse\n\nTidy-Exempt: spike", other_py=SMELLY)
+
+    assert verdict(run_main, project) == 1
+    err = capsys.readouterr().err
+    assert "new code is not clean" in err
+    assert f"{OTHER}:4  CG001 guard-clauses" in err
+
+
+def test_a_smell_on_an_added_line_fails_even_when_the_file_total_goes_down(
+    project, run_main, capsys
+) -> None:
+    # fixes the guard clause and the dead helper, but adds a new unused function
+    project.commit(
+        "tidy: more\n",
+        mod_py=SMELLY.replace("else:\n        return 2", "return 2")
+        + "\n\ndef brand_new():\n    return 9\n",
+    )
+
+    assert verdict(run_main, project) == 1
+    assert f"{MOD}:" in capsys.readouterr().err
+
+
+def test_a_legacy_smell_on_a_line_the_change_did_not_touch_is_not_new_code(
+    project, run_main
+) -> None:
+    project.commit("fix: only a comment\n\nTidy-Exempt: urgent", mod_py=SMELLIER + "# note\n")
+
+    assert verdict(run_main, project) == 0
 
 
 def test_a_base_ref_that_does_not_exist_is_skipped_with_a_warning(

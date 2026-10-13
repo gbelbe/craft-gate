@@ -229,13 +229,66 @@ def test_a_newly_triplicated_literal_fails(project, run_main, capsys) -> None:
     assert "duplicated string literal" in capsys.readouterr().err
 
 
-def test_a_tidy_exempt_trailer_skips_the_gate(project, run_main, capsys) -> None:
+def exempt(code: str) -> dict[str, str]:
+    return {"mod_py": code}
+
+
+def test_a_tidy_exempt_trailer_still_refuses_a_new_complex_function(
+    project, run_main, capsys
+) -> None:
     project.commit(
-        "feat: big\n\nTidy-Exempt: spike", mod_py=branchy("calm", 2) + branchy("big", THRESHOLD)
+        "feat: big\n\nTidy-Exempt: spike", **exempt(branchy("calm", 2) + branchy("big", THRESHOLD))
     )
 
+    assert gate(run_main) == 1
+    captured = capsys.readouterr()
+    assert "new code is still checked" in captured.out
+    assert "mod.py::big: new function with cyclomatic complexity 16" in captured.err
+
+
+def test_a_tidy_exempt_trailer_waives_the_debt_rules_for_legacy_code(
+    project, run_main, capsys
+) -> None:
+    base = branchy("big", THRESHOLD + 2)
+    project.commit("base big", mod_py=base)
+    project.branch("main", reset=True)
+    project.branch("touch")
+
+    project.commit("fix: nudge\n\nTidy-Exempt: urgent", **exempt(base.replace("r = 0", "r = 1")))
+
     assert gate(run_main) == 0
-    assert "skipping" in capsys.readouterr().out
+    assert "debt rules are waived" in capsys.readouterr().out
+
+
+def test_a_tidy_exempt_trailer_does_not_waive_a_new_invariant_return(project, run_main) -> None:
+    project.commit(
+        "feat: invariant\n\nTidy-Exempt: spike",
+        **exempt(
+            branchy("calm", 2)
+            + "def g(x):\n    out = []\n    if x:\n        return out\n    return out\n"
+        ),
+    )
+
+    assert gate(run_main) == 1
+
+
+def test_a_tidy_exempt_trailer_does_not_waive_a_new_triplicated_literal(project, run_main) -> None:
+    project.commit(
+        "feat: literals\n\nTidy-Exempt: spike",
+        **exempt(
+            branchy("calm", 2) + 'a = "repeated-text"\nb = "repeated-text"\nc = "repeated-text"\n'
+        ),
+    )
+
+    assert gate(run_main) == 1
+
+
+def test_new_violations_ignore_names_the_base_already_had() -> None:
+    violations = ratchet.find_new_violations({"old": 20}, {"old": 25, "new": 16})
+
+    assert violations == [
+        "new: new function with complexity 16 (> 15) — keep new functions at or below 15"
+    ]
 
 
 def test_an_unknown_base_ref_is_an_error(project, run_main, capsys) -> None:

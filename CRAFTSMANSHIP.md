@@ -327,9 +327,11 @@ relative to where the branch diverged from its base — or, if the file was
 already at 0, went up at all. It re-scans the PR's merge-base tree and its
 head tree and compares per file (`dupes` needs every file scanned at each
 point to find a match's other half, so there's no cheaper way to get an
-accurate "before" count for one file). `Tidy-Exempt:` bypasses it the same
-way it bypasses the message-pattern ratchet below — one exemption
-mechanism, not two.
+accurate "before" count for one file). `Tidy-Exempt:` waives this per-file
+ratchet, as it satisfies the message-pattern ratchet below, because an exempt change has
+nothing to tidy. It does not waive the **new-code rule**: the gate also fails any finding
+on a line the change added or rewrote (a new file must scan clean), since new code has no
+legacy to grandfather.
 
 This only covers the <!-- fact:detectable -->8<!-- /fact --> craftCov-detectable heuristics. Four more (CG032-
 CG035) have their own separate mechanical gate — see "The complexity
@@ -372,8 +374,9 @@ uv run python3 scripts/check_complexity_ratchet.py --base origin/main
 ```
 
 Wired into CI as the `complexity` job, PR-only, alongside `tidy` and
-`refactor-first`. `Tidy-Exempt:` bypasses it the same way it bypasses the
-other two — one exemption mechanism for all three gates.
+`refactor-first`. `Tidy-Exempt:` waives the debt rules (a touched over-threshold function must come out
+lower; a literal count must not grow) but not the new-code rules: a function, invariant
+return or duplicated literal that did not exist at the base still fails.
 
 ## Patch coverage — new code must be tested, not just committed
 

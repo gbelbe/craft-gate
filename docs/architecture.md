@@ -106,9 +106,12 @@ commit, which a cache would only make stale.
 4. **Changed lines.** Patch coverage asks the same question of coverage, and
    behaviour coverage asks it of the Gherkin scenarios alone.
 
-`Tidy-Exempt:` anywhere in the range makes the tidy ratchet, Refactor First and
-the complexity ratchet skip entirely. Patch coverage and the mutation ratchet
-have no bypass, by design.
+`Tidy-Exempt:` anywhere in the range satisfies the tidy ratchet and waives the
+legacy-debt rules of Refactor First and the complexity ratchet (a touched file's
+total must fall; a touched over-threshold function must come out lower). It never
+waives the new-code rules: a finding on an added line, a new function over the
+threshold, a new invariant return or duplicated literal. The test gates have no
+bypass, only a declared opt-out.
 
 ## Repo map
 
