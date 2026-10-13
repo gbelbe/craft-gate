@@ -110,7 +110,8 @@ visibility nor GitHub Advanced Security to run code scanning with.
 ## Install
 
 ```bash
-git clone --branch v0.1.0 --depth 1 https://github.com/gbelbe/craft-gate /tmp/craft-gate
+# vX.Y.Z: the latest tag, see https://github.com/gbelbe/craft-gate/releases
+git clone --branch vX.Y.Z --depth 1 https://github.com/gbelbe/craft-gate /tmp/craft-gate
 bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 ```
 
