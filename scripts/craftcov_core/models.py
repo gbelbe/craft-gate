@@ -30,9 +30,8 @@ Finding = TypedDict(
 )
 
 
-class _DuplicateOf(TypedDict):
-    duplicate_of: str
-    dup_lines: int
+# Functional syntax on purpose: vulture reads class-body fields as unused attributes.
+_DuplicateOf = TypedDict("_DuplicateOf", {"duplicate_of": str, "dup_lines": int})  # noqa: UP013
 
 
 class DuplicateFinding(Finding, _DuplicateOf):
