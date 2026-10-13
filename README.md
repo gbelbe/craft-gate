@@ -117,9 +117,9 @@ bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 
 This copies the files craft-gate owns (`CRAFTSMANSHIP.md`, `catalog.yaml`,
 every `scripts/*`, `.claude/skills/tidy-first/SKILL.md`) into your repo and
-prints the manual steps below — each is a template file to merge, not
-something bootstrap.sh guesses at, since these vary too much per project to
-auto-merge safely:
+points you at [INSTALL.md](INSTALL.md) for the manual steps, summarized
+below — each is a template file to merge, not something bootstrap.sh guesses
+at, since these vary too much per project to auto-merge safely:
 
 | # | What | Template | Goes into |
 |---|---|---|---|
@@ -165,7 +165,7 @@ Confirm the install works:
 bash scripts/check_tidy_ratchet.sh --base origin/main   # your default branch
 ```
 
-**Optional, not printed by `bootstrap.sh`:** `templates/tdd-bdd-yagni.snippet.md`
+**Optional, not part of the steps above:** `templates/tdd-bdd-yagni.snippet.md`
 is a companion `AGENTS.md` section mandating a Gherkin spec and a test list
 *before* implementation, with an explicit YAGNI challenge first. A
 methodology choice, not a craftsmanship gate — skip it if your project
