@@ -10,6 +10,10 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.23.0 — 2026-10-13
+
 - **Breaking:** the three test gates, patch coverage, the mutation ratchet and a new
   behaviour-coverage gate, are **on unless the repo declares otherwise**. Before,
   they ran only if you pasted the job in, and the mutation job quietly passed
@@ -22,17 +26,27 @@ While the major version is 0, a breaking change bumps the minor version.
   (`tests/features` by default) under coverage and requires the lines a diff
   changed to be covered by them. Thresholds are settings now (`threshold`,
   `improvement`), not edits to the workflow.
+- **Added:** the PR comment lists the test gates a repo has switched off, and why.
 
-Merged after v0.22.1; none of it changes what a consumer receives except where
-noted. `tidy:`, `test:` and `docs:` commits don't cut a release.
+## v0.22.2 — 2026-10-13
+
+Internal restructuring and tests; nothing a consumer has to change.
 
 - `bootstrap.sh` is driven by one file list and prints a pointer instead of 60
   lines of instructions; the manual steps now live in `INSTALL.md`.
+- `scripts/` holds exactly what `bootstrap.sh` installs. This repo's own tooling
+  (`render_catalog.py`, `next_version.py`) moved to `tools/`. The gate scripts no
+  longer insert their own directory into `sys.path`; Python already does when a
+  script is run by path.
 - The catalog counts in `CRAFTSMANSHIP.md`, the README badge and `AGENTS.md`
-  are generated from `catalog.yaml` by `scripts/render_catalog.py`, and checked
-  in CI.
+  are generated from `catalog.yaml` by `tools/render_catalog.py`, and checked
+  in CI. A test fails when a catalog code is missing from `CRAFTSMANSHIP.md`.
+- craftCov's summary is a `Summary` dataclass and a finding a `Finding`
+  `TypedDict`; the JSON report is unchanged.
 - The test suite runs under pytest, with tests for the complexity, Refactor
-  First and PR-comment gates.
+  First, PR-comment and bootstrap scripts.
+- The documentation is split: `DESIGN.md` is an index of per-gate notes under
+  `docs/design/`, with an architecture page and an operating guide.
 
 ## v0.22.1 — 2026-10-13
 

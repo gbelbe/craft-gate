@@ -6,7 +6,7 @@
 #
 # Run this from inside a checkout of craft-gate itself (clone a tagged
 # release rather than piping this over the network — see README.md):
-#   git clone --branch v0.1.0 --depth 1 https://github.com/<you>/craft-gate /tmp/craft-gate
+#   git clone --branch vX.Y.Z --depth 1 https://github.com/gbelbe/craft-gate /tmp/craft-gate
 #   bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 #
 # Only touches files this tool fully owns — the lists below, and
