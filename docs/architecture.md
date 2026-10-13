@@ -26,6 +26,7 @@ flowchart LR
         CX[check_complexity_ratchet.py]
         MR[check_mutation_ratchet.py]
         PC[craftcov_pr_comment.py]
+        GC[gate_config.py<br/>test gates on/off]
     end
 
     subgraph shared["Shared helpers"]
@@ -42,11 +43,17 @@ flowchart LR
     GD --> RF & CX & MR & PC
     AF --> CX & MR
     MP -. plans which mutants to re-run .-> MR
+    GC -. decides if they run .-> MR
+    GC --> PC
     DIFF([PR diff<br/>+ commit range]) --> TIDY & RF & CX & MR & PC
 ```
 
-The `patch-coverage` gate is not a craft-gate script: it is `diff-cover` run
-against *your* coverage report, so it appears only in the CI template.
+`patch-coverage` and `behaviour-coverage` are not craft-gate scripts: each is
+`diff-cover` run against *your* coverage report (all tests, and the Gherkin
+scenarios alone), so they appear only in the CI template. What ties the three test
+gates together is `gate_config.py`, which reads `[tool.craft-gate]` and decides
+whether each runs, is skipped on purpose, or fails because the repo lacks what it
+needs.
 
 ## Two directories, one rule
 
@@ -96,7 +103,8 @@ commit, which a cache would only make stale.
 3. **Touched functions.** The complexity and mutation ratchets map the diff's
    changed lines onto function line ranges (`gitdiff.touched_names`), so only a
    function the diff reaches is held to the ratchet; the rest is grandfathered.
-4. **Changed lines.** Patch coverage asks the same question of coverage.
+4. **Changed lines.** Patch coverage asks the same question of coverage, and
+   behaviour coverage asks it of the Gherkin scenarios alone.
 
 `Tidy-Exempt:` anywhere in the range makes the tidy ratchet, Refactor First and
 the complexity ratchet skip entirely. Patch coverage and the mutation ratchet

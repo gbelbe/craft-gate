@@ -26,7 +26,7 @@ It answers two separate questions, on purpose:
 - **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:` trailer
   naming the book, `test(characterize): ...` for legacy code, and
   `Tidy-Exempt: <reason>` when nothing applies.
-- **Five CI gates**, cheapest first:
+- **Six CI gates**, cheapest first:
 
   | Gate | Fails a PR when | Needs | `Tidy-Exempt:` skips it |
   |---|---|---|---|
@@ -35,8 +35,14 @@ It answers two separate questions, on purpose:
   | `complexity` | a function the diff touches is over threshold and did not come out lower; or a new invariant return or triplicated literal | the `complexity` extra | yes |
   | `patch-coverage` | the lines this diff changed are under-covered | `diff-cover` and your own `pytest --cov` | no |
   | `mutation-ratchet` | a touched function's mutants survive: its tests run it but would not notice a change | `mutmut` and a `[tool.mutmut]` section | no |
+  | `behaviour-coverage` | the lines this diff changed are not covered by Gherkin scenarios | `pytest-bdd` scenarios under `tests/features` | no |
 
-  All five skip bot-authored PRs (dependabot, renovate, ...). The reasoning
+  The last three are **on by default**. You switch one off in `pyproject.toml`,
+  with a written reason that shows in the PR comment; a gate that is on but has
+  nothing to check (no suite, no scenarios) fails instead of passing quietly. See
+  CRAFTSMANSHIP.md's "Test gates".
+
+  All six skip bot-authored PRs (dependabot, renovate, ...). The reasoning
   behind each is in [DESIGN.md](DESIGN.md).
 - **Two reporting jobs** — a sticky PR comment and a GitHub code-scanning
   (SARIF) export. Neither blocks a merge. The SARIF one needs a public repo or
@@ -63,7 +69,7 @@ much per project to merge automatically:
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook (optional) | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates + reporting (all seven jobs) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates + reporting (all eight jobs) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 | 5 | PR labels for review (optional) | `templates/label-tidy-prs.yml` | `.github/workflows/craft-gate-label.yml` |

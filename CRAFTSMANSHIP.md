@@ -468,6 +468,51 @@ recorded score — new, or never measured — must reach 80% outright; there is 
 first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code").
 
+## Test gates: on unless declared off — patch coverage, mutation, behaviour coverage
+
+Three gates ask whether a change is *tested*, not whether it is well structured:
+patch coverage (changed lines are covered), the mutation ratchet (the tests would
+notice if a touched function's behaviour changed) and behaviour coverage (changed
+lines are covered by Gherkin scenarios, not only by unit tests). All three run by
+default. Before running, each asks `scripts/gate_config.py` what to do:
+
+| The repo... | The gate... |
+|---|---|
+| has what it needs | runs |
+| switched it off in `pyproject.toml`, with a reason | is skipped; the reason is in the job summary and the PR comment |
+| has not switched it off but lacks what it needs | **fails**, saying what to add or how to opt out |
+
+The last row is the point: a gate never passes because it found nothing to check.
+What each one needs: patch coverage a pytest suite; mutation a `[tool.mutmut]`
+section; behaviour coverage `.feature` files under its `paths`. Mutation and
+behaviour coverage measure the same suite patch coverage does, so they are skipped,
+with that as the reason, when patch coverage is off.
+
+```toml
+[tool.craft-gate.patch-coverage]
+threshold = 90            # default; also: source = "your_package"
+
+[tool.craft-gate.mutation]
+enabled = false
+reason = "suite takes 40 minutes; revisit when it is split"
+
+[tool.craft-gate.bdd]
+paths = ["tests/features"]  # default
+threshold = 80              # default
+```
+
+A switched-off gate needs a non-empty `reason`; a typo in a section or key is an
+error, not silently ignored. There is no `Tidy-Exempt:` bypass for these gates: the
+way out is the declared opt-out, which stays visible.
+
+**Behaviour coverage.** The gate runs only the behaviour tests (`pytest tests/features
+--cov`) and applies `diff-cover` to that report, so every line the diff changed must
+be exercised by a scenario. A line can be fully covered by unit tests while no
+scenario describes the behaviour it serves; this catches that. A scenario step with
+no definition fails when the behaviour tests run, so orphaned steps surface here too.
+What it cannot see is whether a scenario was written *before* the code. See
+`docs/design/behaviour-coverage.md`.
+
 ## What to expect before you push — a checklist from real PRs
 
 The gates are mechanical, and a few of their behaviours surprise whoever meets them for the first time —

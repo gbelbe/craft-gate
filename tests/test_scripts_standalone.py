@@ -15,6 +15,7 @@ SCRIPTS = [
     "check_complexity_ratchet.py",
     "check_mutation_ratchet.py",
     "craftcov_pr_comment.py",
+    "gate_config.py",
 ]
 
 

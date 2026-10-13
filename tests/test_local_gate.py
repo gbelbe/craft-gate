@@ -6,10 +6,11 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+RUNNER = ROOT / "templates" / "local-craft-gate.sh"
 
 
 def test_local_runner_has_all_default_craft_gates() -> None:
-    runner = (ROOT / "templates" / "local-craft-gate.sh").read_text()
+    runner = (RUNNER).read_text()
 
     for required in (
         "check_complexity_ratchet.py",
@@ -26,18 +27,18 @@ def test_local_runner_has_all_default_craft_gates() -> None:
 
 
 def test_local_runner_fast_mode_skips_expensive_gates() -> None:
-    runner = (ROOT / "templates" / "local-craft-gate.sh").read_text()
+    runner = (RUNNER).read_text()
 
     assert "FAST=0" in runner
     assert "if [[ $FAST -eq 0 ]]" in runner
     assert "--fast" in runner
     assert "--mutation" in runner
     assert "git diff --name-only" in runner
-    assert "--improvement 20" in runner
+    assert '--improvement "$improvement"' in runner
 
 
 def test_local_runner_documents_focused_mutation_selection() -> None:
-    runner = (ROOT / "templates" / "local-craft-gate.sh").read_text()
+    runner = (RUNNER).read_text()
 
     assert "pytest_add_cli_args_test_selection" in runner
     assert "ster/**/*.py" in runner
@@ -83,3 +84,11 @@ def test_mutation_ratchet_documents_absolute_or_improvement_rule() -> None:
     assert "evaluate_results" in source
     assert "improvement" in source
     assert ".mutation-baseline.json" in source
+
+
+def test_local_runner_asks_gate_config_before_each_test_gate() -> None:
+    runner = (RUNNER).read_text()
+
+    for gate in ("patch-coverage", "bdd", "mutation"):
+        assert f"gate_runs {gate}" in runner, gate
+    assert "scripts/gate_config.py" in runner

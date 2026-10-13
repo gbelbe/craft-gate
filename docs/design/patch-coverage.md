@@ -64,3 +64,12 @@ script: `${arr[-1]}` for "last item" needs bash 4.3+, and macOS ships 3.2
 as `/usr/bin/bash` — silently breaks any contributor testing the local
 gate on a Mac who hasn't installed a newer bash. Fixed by tracking the
 last value in a plain variable instead of relying on negative indexing.
+
+## On by default, opted out in writing
+
+Patch coverage, the mutation ratchet and behaviour coverage used to be jobs a repo
+adopted by pasting them in; a repo that never did had no test gate and nothing said
+so. They now run unless `pyproject.toml` declares otherwise, and a gate that is on but
+has nothing to check (no pytest suite) fails instead of passing. Opting out needs a
+`reason`, which the PR comment shows. The rule, the table of states and an example
+are in CRAFTSMANSHIP.md's "Test gates"; `scripts/gate_config.py` implements it.
