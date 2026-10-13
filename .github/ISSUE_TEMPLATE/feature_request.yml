@@ -1,0 +1,31 @@
+name: Feature request
+description: A new heuristic, a new gate, or a change to how an existing one behaves.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The situation, not the solution. What slipped through, or what got in your way?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Where does the rule come from?
+      description: >-
+        A new catalog entry needs a source (author, book). If it is a mechanical check, how would
+        it be detected, and how would it avoid false positives?
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Does it need to work beyond Python?
+      options:
+        - Python only is fine
+        - Needs other languages

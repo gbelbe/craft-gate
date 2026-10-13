@@ -1,0 +1,53 @@
+name: Bug report
+description: A gate failed (or passed) when it should not have, or a script crashed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. A false positive or false negative from a gate is exactly the kind of report that
+        helps. For a security problem, please use the private route in SECURITY.md instead.
+  - type: input
+    id: version
+    attributes:
+      label: craft-gate version
+      description: The contents of `.craft-gate-version` in your repo, or the tag you installed.
+      placeholder: v0.23.0
+    validations:
+      required: true
+  - type: dropdown
+    id: gate
+    attributes:
+      label: Which part?
+      options:
+        - tidy ratchet
+        - refactor-first / craftCov
+        - complexity ratchet
+        - patch coverage
+        - mutation ratchet
+        - behaviour (Gherkin) coverage
+        - PR comment / design review
+        - bootstrap.sh / update workflow
+        - craft-reviewer subagent
+        - docs
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Paste the gate's output. If it flagged code it should not have, include the lines.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: A minimal repo or the exact commands is ideal.
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: Python version, OS, and whether this was CI or local.
+      placeholder: Python 3.12, ubuntu-latest, CI

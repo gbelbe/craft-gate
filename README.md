@@ -126,6 +126,7 @@ scripts/report_tidy_history.sh
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Adding a heuristic or rule; development setup |
 | [AGENTS.md](AGENTS.md) | The rules for coding agents working in this repo |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
+| [SECURITY.md](SECURITY.md) | How to report a vulnerability, and what is in scope |
 
 This repo applies its own tooling to itself (`AGENTS.md`,
 `.pre-commit-config.yaml`, `.claude/skills/tidy-first/SKILL.md` are produced by
