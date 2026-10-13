@@ -34,8 +34,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from craftcov import (  # noqa: E402
+from craftcov import (
     aggregate,
     build_detector_index,
     diff_by_heuristic,
@@ -44,7 +43,7 @@ from craftcov import (  # noqa: E402
     merge_corpus_findings,
     scan_files,
 )
-from gitdiff import git  # noqa: E402
+from gitdiff import git
 
 MARKER = "<!-- craftcov-pr-report -->"
 

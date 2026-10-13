@@ -46,9 +46,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from astfuncs import walk_functions  # noqa: E402
-from gitdiff import touched_names  # noqa: E402
+from astfuncs import walk_functions
+from gitdiff import touched_names
 
 DEFAULT_THRESHOLD = 80.0
 

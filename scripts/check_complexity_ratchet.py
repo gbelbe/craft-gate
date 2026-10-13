@@ -63,9 +63,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from astfuncs import walk_functions  # noqa: E402
-from gitdiff import has_tidy_exempt, touched_names  # noqa: E402
+from astfuncs import walk_functions
+from gitdiff import has_tidy_exempt, touched_names
 
 THRESHOLD = 15
 
