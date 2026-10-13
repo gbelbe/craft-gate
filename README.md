@@ -211,7 +211,8 @@ scripts/
   check_tidy_ratchet.sh     the CI/pre-push ratchet
   report_tidy_history.sh    the periodic exemption-ratio / sources report
   render_catalog.py         catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
-  craftcov.py               coverage-style scan for the detectable heuristics
+  craftcov.py               coverage-style scan for the detectable heuristics (entry point + facade)
+  craftcov_core/            its implementation: catalog, adapters, dupes, scan, cache, render, cli
   check_refactor_first.py   CI gate: a touched file's craftCov total must go down
   check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
   craftcov_pr_comment.py    optional: sticky PR comment

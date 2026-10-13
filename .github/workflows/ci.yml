@@ -243,6 +243,9 @@ jobs:
       - name: Shared git/AST helpers (behavioural tests, no pytest dependency)
         run: python3 tests/test_gitdiff.py
 
+      - name: craftCov pure pieces (characterization, no pytest dependency)
+        run: python3 tests/test_craftcov_units.py
+
       - name: templates/*.yml and templates/*.yaml are valid YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"
@@ -283,10 +286,10 @@ jobs:
       # — narrower than any one of them, so passing here means passing
       # everywhere, not aimed at one repo's particular ignore list. See
       # pyproject.toml's [tool.ruff] comment for line-length.
-      - name: scripts/*.py pass the rules every consumer repo enables
+      - name: scripts/ (incl. craftcov_core/) pass the rules every consumer repo enables
         run: |
-          uv run ruff check scripts/*.py
-          uv run ruff format --check scripts/*.py
+          uv run ruff check scripts
+          uv run ruff format --check scripts
 
       # Note: this now includes tests/fixtures/ (deliberately smelly ground
       # truth, see below) — most of the findings below are those files
@@ -297,6 +300,9 @@ jobs:
 
       - name: Ground-truth regression (tests/fixtures/ — every detector fires correctly)
         run: uv run python3 tests/test_fixtures.py
+
+      - name: craftCov CLI end to end (characterization, real ruff/pylint/vulture)
+        run: uv run python3 tests/test_craftcov_cli.py
 
   # Diff-aware: only meaningful against a PR's base branch.
   tidy:
