@@ -227,6 +227,9 @@ jobs:
       - name: Diff-scoped mutation planner (behavioural tests, no pytest dependency)
         run: python3 tests/test_mutation_plan.py
 
+      - name: Shared git/AST helpers (behavioural tests, no pytest dependency)
+        run: python3 tests/test_gitdiff.py
+
       - name: templates/*.yml and templates/*.yaml are valid YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"

@@ -58,11 +58,14 @@ from __future__ import annotations
 
 import argparse
 import ast
-import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import has_tidy_exempt, touched_names  # noqa: E402
 
 THRESHOLD = 15
 
@@ -84,7 +87,7 @@ def find_violations(
     never be flagged.
 
     With *touched* (a set of names this change's diff actually reaches —
-    see `_touched_names`): a name in *touched* whose *cc* is still over
+    see `gitdiff.touched_names`): a name in *touched* whose *cc* is still over
     *threshold* must have strictly *decreased*, not just avoided
     increasing — matching every consuming repo's own written policy
     ("if your change touches an over-threshold function, bring its
@@ -118,56 +121,6 @@ def find_violations(
             )
         # else: cc <= base, not known to be touched — grandfathered, allowed
     return violations
-
-
-def _changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
-    """Line numbers in *rel_path*'s current working-tree content that this
-    change added, modified, or deleted at, versus *base_ref* — via
-    `git diff -U0`.
-
-    Zero context means every hunk's "+" side is exactly the lines that
-    changed, nothing surrounding. A pure-deletion hunk reports a new-side
-    count of 0; its anchor line (the insertion point) is still counted as
-    touched, since deleting the last statement in a function is a change
-    *to* that function even though nothing was added.
-    """
-    out = subprocess.run(
-        ["git", "diff", "--no-color", "-U0", base_ref, "--", rel_path],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    lines: set[int] = set()
-    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", out, re.MULTILINE):
-        start = int(m.group(1))
-        count = int(m.group(2)) if m.group(2) is not None else 1
-        lines.update(range(start, start + count)) if count else lines.add(start)
-    return lines
-
-
-def _touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
-    """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
-    whose line range overlaps a line this change touched in that file.
-
-    One `git diff` per file, not per function — cheap enough, and a file
-    with no diff at all (nothing in *ranges* here was touched) skips
-    straight past without running git at all.
-    """
-    by_file: dict[str, list[str]] = {}
-    for name in ranges:
-        by_file.setdefault(name.split("::", 1)[0], []).append(name)
-
-    touched: set[str] = set()
-    for file_rel, names in by_file.items():
-        changed = _changed_lines(base_ref, root, file_rel)
-        if not changed:
-            continue
-        for name in names:
-            start, end = ranges[name]
-            if any(start <= line <= end for line in changed):
-                touched.add(name)
-    return touched
 
 
 def _functions(blocks: object) -> list[object]:
@@ -248,22 +201,6 @@ def compute_complexity(root: Path, threshold: int = THRESHOLD) -> dict[str, int]
 # actually rejected, which it scored 17 and 17.
 
 
-def _qualified(stack: list[str], name: str) -> str:
-    return ".".join([*stack, name])
-
-
-def _walk_functions(node: ast.AST, stack: list[str]):
-    """Every function in *node*, with the qualified name it should be reported under."""
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, ast.ClassDef):
-            yield from _walk_functions(child, [*stack, child.name])
-        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            yield _qualified(stack, child.name), child
-            yield from _walk_functions(child, [*stack, child.name])
-        else:
-            yield from _walk_functions(child, stack)
-
-
 def compute_cognitive_ranges(root: Path) -> dict[str, tuple[int, int, int]]:
     """Map ``<relpath>::<qualified function name>`` → (cognitive complexity, lineno, endline)."""
     from cognitive_complexity.api import get_cognitive_complexity  # lazy, as above
@@ -275,7 +212,7 @@ def compute_cognitive_ranges(root: Path) -> dict[str, tuple[int, int, int]]:
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         rel = path.relative_to(root).as_posix()
-        for name, node in _walk_functions(tree, []):
+        for name, node in walk_functions(tree, []):
             end = getattr(node, "end_lineno", node.lineno) or node.lineno
             result[f"{rel}::{name}"] = (get_cognitive_complexity(node), node.lineno, end)
     return result
@@ -338,7 +275,7 @@ def compute_invariant_returns(root: Path) -> dict[str, str]:
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         rel = path.relative_to(root).as_posix()
-        for name, node in _walk_functions(tree, []):
+        for name, node in walk_functions(tree, []):
             returned = _returns_one_never_rebound_name(node)
             if returned is not None:
                 result[f"{rel}::{name}"] = returned
@@ -458,22 +395,6 @@ def _measure_at_ref(
             )
 
 
-def has_tidy_exempt(base_ref: str) -> bool:
-    """True when a `Tidy-Exempt:` trailer appears anywhere in `base_ref..HEAD`.
-
-    Same bypass, same trailer, as check_tidy_ratchet.sh and
-    check_refactor_first.py — one exemption mechanism for every gate this
-    project ships, not a separate one per script.
-    """
-    out = subprocess.run(
-        ["git", "log", "--format=%B", f"{base_ref}..HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
@@ -502,8 +423,8 @@ def main(argv: list[str] | None = None) -> int:
     # Touched-and-still-over-threshold must decrease, not just not increase.
     cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
     cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
-    touched_cc = _touched_names(root, args.base, cc_ranges)
-    touched_cog = _touched_names(root, args.base, cog_ranges)
+    touched_cc = touched_names(root, args.base, cc_ranges)
+    touched_cog = touched_names(root, args.base, cog_ranges)
 
     violations = find_violations(base, head, metric="cyclomatic complexity", touched=touched_cc)
     violations += find_violations(

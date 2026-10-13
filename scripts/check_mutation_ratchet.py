@@ -42,10 +42,13 @@ import argparse
 import ast
 import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
 
@@ -57,44 +60,6 @@ _SURVIVED_CODES = {0}
 _NO_TESTS_CODES = {5, 33}
 
 
-def _changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
-    """Line numbers in *rel_path*'s current working-tree content that this
-    change added, modified, or deleted at, versus *base_ref* — via
-    `git diff -U0`. See check_complexity_ratchet.py's identical helper for
-    the full rationale (same technique, duplicated per this repo's
-    standalone-scripts convention rather than a shared import).
-    """
-    out = subprocess.run(
-        ["git", "diff", "--no-color", "-U0", base_ref, "--", rel_path],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    lines: set[int] = set()
-    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", out, re.MULTILINE):
-        start = int(m.group(1))
-        count = int(m.group(2)) if m.group(2) is not None else 1
-        lines.update(range(start, start + count)) if count else lines.add(start)
-    return lines
-
-
-def _qualified(stack: list[str], name: str) -> str:
-    return ".".join([*stack, name])
-
-
-def _walk_functions(node: ast.AST, stack: list[str]):
-    """Every function in *node*, with the qualified name it should be reported under."""
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, ast.ClassDef):
-            yield from _walk_functions(child, [*stack, child.name])
-        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            yield _qualified(stack, child.name), child
-            yield from _walk_functions(child, [*stack, child.name])
-        else:
-            yield from _walk_functions(child, stack)
-
-
 def function_ranges(root: Path, rel_path: str) -> dict[str, tuple[int, int]]:
     """Map ``<rel_path>::<qualified function name>`` -> (lineno, endline)."""
     path = root / rel_path
@@ -103,28 +68,10 @@ def function_ranges(root: Path, rel_path: str) -> dict[str, tuple[int, int]]:
     except (OSError, UnicodeDecodeError, SyntaxError):
         return {}
     ranges = {}
-    for name, node in _walk_functions(tree, []):
+    for name, node in walk_functions(tree, []):
         end = getattr(node, "end_lineno", node.lineno) or node.lineno
         ranges[f"{rel_path}::{name}"] = (node.lineno, end)
     return ranges
-
-
-def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
-    """Names from *ranges* whose line range overlaps a line this change touched."""
-    by_file: dict[str, list[str]] = {}
-    for name in ranges:
-        by_file.setdefault(name.split("::", 1)[0], []).append(name)
-
-    touched: set[str] = set()
-    for file_rel, names in by_file.items():
-        changed = _changed_lines(base_ref, root, file_rel)
-        if not changed:
-            continue
-        for name in names:
-            start, end = ranges[name]
-            if any(start <= line <= end for line in changed):
-                touched.add(name)
-    return touched
 
 
 def qualified_name_from_mutant_key(key: str) -> str | None:
@@ -279,17 +226,6 @@ def evaluate_domain(
             continue
         updated[name] = round(max(score, previous or 0.0), 4)
     return violations, updated
-
-
-def has_tidy_exempt(base_ref: str) -> bool:
-    """True when a `Tidy-Exempt:` trailer appears anywhere in `base_ref..HEAD`."""
-    out = subprocess.run(
-        ["git", "log", "--format=%B", f"{base_ref}..HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
 
 
 def diff_fingerprint(root: Path, base_ref: str) -> str:

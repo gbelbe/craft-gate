@@ -34,7 +34,6 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -48,21 +47,15 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
+from gitdiff import git, has_tidy_exempt
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-
-
-def _git(args: list[str], cwd: Path, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
-    if check and proc.returncode != 0:
-        raise SystemExit(f"✗ git {' '.join(args)} failed:\n{proc.stderr}")
-    return proc.stdout
 
 
 def touched_python_files(repo: Path, base_sha: str, head_ref: str) -> list[tuple[str, str]]:
     """(old_rel, new_rel) for every added/copied/modified/renamed .py file
     between base_sha and head_ref — old == new except for a real rename."""
-    out = _git(
+    out = git(
         ["diff", "--name-status", "-M", "--diff-filter=ACMR", base_sha, head_ref, "--", "*.py"],
         cwd=repo,
     )
@@ -77,11 +70,6 @@ def touched_python_files(repo: Path, base_sha: str, head_ref: str) -> list[tuple
         else:
             pairs.append((parts[1], parts[1]))
     return pairs
-
-
-def has_tidy_exempt(repo: Path, base_sha: str, head_ref: str) -> bool:
-    out = _git(["log", "--format=%B", f"{base_sha}..{head_ref}"], cwd=repo, check=False)
-    return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
 
 
 def per_file_totals(root: Path) -> dict[str, int]:
@@ -111,11 +99,42 @@ def scan_ref(repo: Path, ref: str, scratch_parent: Path) -> dict[str, int]:
     if ref == "HEAD":
         return per_file_totals(repo)
     worktree = (scratch_parent / "refactor-first-ref").resolve()
-    _git(["worktree", "add", "--detach", str(worktree), ref], cwd=repo)
+    git(["worktree", "add", "--detach", str(worktree), ref], cwd=repo)
     try:
         return per_file_totals(worktree)
     finally:
-        _git(["worktree", "remove", "--force", str(worktree)], cwd=repo, check=False)
+        git(["worktree", "remove", "--force", str(worktree)], cwd=repo, check=False)
+
+
+def regressions(
+    pairs: list[tuple[str, str]], base_totals: dict[str, int], head_totals: dict[str, int]
+) -> list[str]:
+    """One report line per touched file whose total did not go down (or stay at 0)."""
+    failures: list[str] = []
+    for old_rel, new_rel in pairs:
+        before = base_totals.get(old_rel, 0)
+        after = head_totals.get(new_rel, 0)
+        if (after == 0) if before == 0 else (after < before):
+            continue
+        label = new_rel if old_rel == new_rel else f"{old_rel} -> {new_rel}"
+        needed = "0" if before == 0 else f"< {before}"
+        failures.append(f"  {label}: {before} -> {after} (needed {needed})")
+    return failures
+
+
+def report_failures(failures: list[str]) -> None:
+    print(
+        "✗ Refactor First gate: total detectable-heuristic count did not go down for:",
+        file=sys.stderr,
+    )
+    for f in failures:
+        print(f, file=sys.stderr)
+    print(
+        "\n  Fix one instance of every heuristic craftcov.py finds present in a touched\n"
+        "  file (see CRAFTSMANSHIP.md's 'Refactor First'), bundled into one tidy(multi):\n"
+        "  commit, or add a Tidy-Exempt: trailer if nothing genuinely applies.",
+        file=sys.stderr,
+    )
 
 
 def main() -> int:
@@ -131,13 +150,7 @@ def main() -> int:
 
     repo = Path(args.path).resolve()
 
-    verify = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", args.base],
-        cwd=repo,
-        capture_output=True,
-        check=False,
-    )
-    if verify.returncode != 0:
+    if not git(["rev-parse", "--verify", "--quiet", args.base], cwd=repo, check=False).strip():
         print(
             f"⚠ refactor-first gate: '{args.base}' not found locally — "
             "skipping (git fetch it first)",
@@ -145,13 +158,13 @@ def main() -> int:
         )
         return 0
 
-    merge_base = _git(["merge-base", args.base, args.head], cwd=repo).strip()
+    merge_base = git(["merge-base", args.base, args.head], cwd=repo).strip()
 
     pairs = touched_python_files(repo, merge_base, args.head)
     if not pairs:
         return 0  # nothing touched, nothing to check
 
-    if has_tidy_exempt(repo, merge_base, args.head):
+    if has_tidy_exempt(merge_base, args.head, cwd=repo):
         print(
             f"refactor-first gate: Tidy-Exempt: trailer found in "
             f"{merge_base[:8]}..{args.head} — skipping."
@@ -163,30 +176,9 @@ def main() -> int:
         base_totals = scan_ref(repo, merge_base, scratch)
         head_totals = scan_ref(repo, args.head, scratch)
 
-    failures: list[str] = []
-    for old_rel, new_rel in pairs:
-        before = base_totals.get(old_rel, 0)
-        after = head_totals.get(new_rel, 0)
-        ok = after == 0 if before == 0 else after < before
-        if not ok:
-            label = new_rel if old_rel == new_rel else f"{old_rel} -> {new_rel}"
-            failures.append(
-                f"  {label}: {before} -> {after} (needed {'0' if before == 0 else f'< {before}'})"
-            )
-
+    failures = regressions(pairs, base_totals, head_totals)
     if failures:
-        print(
-            "✗ Refactor First gate: total detectable-heuristic count did not go down for:",
-            file=sys.stderr,
-        )
-        for f in failures:
-            print(f, file=sys.stderr)
-        print(
-            "\n  Fix one instance of every heuristic craftcov.py finds present in a touched\n"
-            "  file (see CRAFTSMANSHIP.md's 'Refactor First'), bundled into one tidy(multi):\n"
-            "  commit, or add a Tidy-Exempt: trailer if nothing genuinely applies.",
-            file=sys.stderr,
-        )
+        report_failures(failures)
         return 1
 
     print(f"✓ Refactor First gate: {len(pairs)} touched file(s) OK.")

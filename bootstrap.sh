@@ -13,7 +13,8 @@
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
 # scripts/craftcov.py, scripts/check_refactor_first.py,
 # scripts/check_complexity_ratchet.py, scripts/craftcov_pr_comment.py,
-# scripts/mutation_plan.py,
+# scripts/mutation_plan.py, scripts/gitdiff.py, scripts/astfuncs.py (the
+# helpers the gate scripts import — they must travel with them),
 # .claude/skills/tidy-first/SKILL.md, and
 # .craft-gate-version (a plain-text marker of which release this checkout
 # came from — see templates/update-check.yml, which reads it to detect
@@ -56,6 +57,8 @@ copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refa
 copy_file "$SRC_DIR/scripts/check_complexity_ratchet.py" "$TARGET/scripts/check_complexity_ratchet.py"
 copy_file "$SRC_DIR/scripts/craftcov_pr_comment.py" "$TARGET/scripts/craftcov_pr_comment.py"
 copy_file "$SRC_DIR/scripts/mutation_plan.py" "$TARGET/scripts/mutation_plan.py"
+copy_file "$SRC_DIR/scripts/gitdiff.py" "$TARGET/scripts/gitdiff.py"
+copy_file "$SRC_DIR/scripts/astfuncs.py" "$TARGET/scripts/astfuncs.py"
 copy_file "$SRC_DIR/scripts/check_mutation_ratchet.py" "$TARGET/scripts/check_mutation_ratchet.py"
 chmod +x "$TARGET/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/report_tidy_history.sh" \
   "$TARGET/scripts/craftcov.py" "$TARGET/scripts/check_refactor_first.py" \
