@@ -42,10 +42,13 @@ import argparse
 import ast
 import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
 
@@ -57,44 +60,6 @@ _SURVIVED_CODES = {0}
 _NO_TESTS_CODES = {5, 33}
 
 
-def _changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
-    """Line numbers in *rel_path*'s current working-tree content that this
-    change added, modified, or deleted at, versus *base_ref* — via
-    `git diff -U0`. See check_complexity_ratchet.py's identical helper for
-    the full rationale (same technique, duplicated per this repo's
-    standalone-scripts convention rather than a shared import).
-    """
-    out = subprocess.run(
-        ["git", "diff", "--no-color", "-U0", base_ref, "--", rel_path],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    lines: set[int] = set()
-    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", out, re.MULTILINE):
-        start = int(m.group(1))
-        count = int(m.group(2)) if m.group(2) is not None else 1
-        lines.update(range(start, start + count)) if count else lines.add(start)
-    return lines
-
-
-def _qualified(stack: list[str], name: str) -> str:
-    return ".".join([*stack, name])
-
-
-def _walk_functions(node: ast.AST, stack: list[str]):
-    """Every function in *node*, with the qualified name it should be reported under."""
-    for child in ast.iter_child_nodes(node):
-        if isinstance(child, ast.ClassDef):
-            yield from _walk_functions(child, [*stack, child.name])
-        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            yield _qualified(stack, child.name), child
-            yield from _walk_functions(child, [*stack, child.name])
-        else:
-            yield from _walk_functions(child, stack)
-
-
 def function_ranges(root: Path, rel_path: str) -> dict[str, tuple[int, int]]:
     """Map ``<rel_path>::<qualified function name>`` -> (lineno, endline)."""
     path = root / rel_path
@@ -103,28 +68,10 @@ def function_ranges(root: Path, rel_path: str) -> dict[str, tuple[int, int]]:
     except (OSError, UnicodeDecodeError, SyntaxError):
         return {}
     ranges = {}
-    for name, node in _walk_functions(tree, []):
+    for name, node in walk_functions(tree, []):
         end = getattr(node, "end_lineno", node.lineno) or node.lineno
         ranges[f"{rel_path}::{name}"] = (node.lineno, end)
     return ranges
-
-
-def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
-    """Names from *ranges* whose line range overlaps a line this change touched."""
-    by_file: dict[str, list[str]] = {}
-    for name in ranges:
-        by_file.setdefault(name.split("::", 1)[0], []).append(name)
-
-    touched: set[str] = set()
-    for file_rel, names in by_file.items():
-        changed = _changed_lines(base_ref, root, file_rel)
-        if not changed:
-            continue
-        for name in names:
-            start, end = ranges[name]
-            if any(start <= line <= end for line in changed):
-                touched.add(name)
-    return touched
 
 
 def qualified_name_from_mutant_key(key: str) -> str | None:
@@ -152,6 +99,8 @@ def mutant_outcome(exit_code: int | None) -> str:
         return "survived"
     if exit_code in _NO_TESTS_CODES:
         return "no_tests"
+    if exit_code is None:
+        return "pending"  # a verdict dropped (or never made) and not yet re-tested
     return "other"  # skipped / suspicious / caught-by-typecheck / segfault / not-checked
 
 
@@ -174,7 +123,13 @@ def collect_touched_results(
                 continue
             full_name = f"{rel}::{qual}"
             if full_name not in results:
-                results[full_name] = {"killed": 0, "survived": 0, "no_tests": 0, "other": 0}
+                results[full_name] = {
+                    "killed": 0,
+                    "survived": 0,
+                    "no_tests": 0,
+                    "other": 0,
+                    "pending": 0,
+                }
             results[full_name][mutant_outcome(exit_code)] += 1
     return results
 
@@ -237,15 +192,40 @@ def evaluate_results(
     return violations, updated
 
 
-def has_tidy_exempt(base_ref: str) -> bool:
-    """True when a `Tidy-Exempt:` trailer appears anywhere in `base_ref..HEAD`."""
-    out = subprocess.run(
-        ["git", "log", "--format=%B", f"{base_ref}..HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return any(line.startswith("Tidy-Exempt:") for line in out.splitlines())
+def evaluate_domain(
+    results: dict[str, dict[str, int]],
+    baseline: dict[str, float],
+    tolerance: float = 0.0,
+) -> tuple[list[str], dict[str, float]]:
+    """Judge functions re-tested because their *tests* changed, not the function itself.
+
+    They are not held to the threshold (the diff did not touch them), but a test change must
+    not leave one weaker than its recorded score by more than *tolerance* points. A stronger
+    score raises the baseline; a function with no baseline is recorded. The baseline never goes
+    down, so a weakened score is refused rather than quietly accepted.
+    """
+    violations: list[str] = []
+    updated = dict(baseline)
+    for name, counts in sorted(results.items()):
+        if counts.get("pending"):
+            left = counts["pending"]
+            violations.append(
+                f"{name}: {left} mutant(s) were not re-tested after the plan reset them"
+            )
+            continue
+        tested = counts["killed"] + counts["survived"]
+        if not tested:
+            continue
+        score = 100.0 * counts["killed"] / tested
+        previous = baseline.get(name)
+        if previous is not None and score < previous - tolerance:
+            was, now = f"{previous:.0f}%", f"{score:.0f}%"
+            violations.append(
+                f"{name}: a test change lowered its mutation score from {was} to {now}"
+            )
+            continue
+        updated[name] = round(max(score, previous or 0.0), 4)
+    return violations, updated
 
 
 def diff_fingerprint(root: Path, base_ref: str) -> str:
@@ -259,6 +239,40 @@ def diff_fingerprint(root: Path, base_ref: str) -> str:
     return hashlib.sha256(diff.encode()).hexdigest()
 
 
+PLAN_FILE = "mutation-plan.json"  # written by mutation_plan.py: the functions it had re-tested
+
+
+def group_by_file(names: set[str]) -> dict[str, set[str]]:
+    """{'rel::qual', ...} -> {rel: {qual, ...}}."""
+    grouped: dict[str, set[str]] = {}
+    for full in names:
+        rel, qual = full.split("::", 1)
+        grouped.setdefault(rel, set()).add(qual)
+    return grouped
+
+
+def load_baseline(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text()) if path.exists() else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def planned_domain(mutants_dir: Path) -> set[str]:
+    """'rel::qual' for each function mutation_plan.py re-tested because its tests changed."""
+    try:
+        planned = json.loads((mutants_dir / PLAN_FILE).read_text()).get("reset_functions", [])
+    except (OSError, json.JSONDecodeError):
+        return set()
+    names: set[str] = set()
+    for mangled in planned:
+        module, _, _function = mangled.rpartition(".x")
+        qual = qualified_name_from_mutant_key(f"{mangled}__mutmut_1")
+        if module and qual:
+            names.add(f"{module.replace('.', '/')}.py::{qual}")
+    return names
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
@@ -267,6 +281,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     parser.add_argument("--improvement", type=float, default=20.0)
     parser.add_argument("--baseline", default=".mutation-baseline.json")
+    parser.add_argument(
+        "--regression-tolerance",
+        type=float,
+        default=0.0,
+        help="points a re-tested function (tests changed, function untouched) may lose",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.path)
@@ -275,38 +295,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {mutants_dir} not found — run `mutmut run` first.", file=sys.stderr)
         return 2
 
-    meta_files = sorted(mutants_dir.rglob("*.meta"))
     all_ranges: dict[str, tuple[int, int]] = {}
-    for meta_path in meta_files:
+    for meta_path in sorted(mutants_dir.rglob("*.meta")):
         rel = str(meta_path.relative_to(mutants_dir))[: -len(".meta")]
         all_ranges.update(function_ranges(root, rel))
-
     if not all_ranges:
         print("Mutation ratchet: no mutated files with recoverable function ranges.")
         return 0
 
     touched = touched_names(root, args.base, all_ranges)
-    if not touched:
+    retested = (planned_domain(mutants_dir) & set(all_ranges)) - touched
+    if not touched and not retested:
         print("Mutation ratchet: no touched functions with mutation data.")
         return 0
 
-    touched_by_file: dict[str, set[str]] = {}
-    for full in touched:
-        rel, qual = full.split("::", 1)
-        touched_by_file.setdefault(rel, set()).add(qual)
-
-    results = collect_touched_results(root, mutants_dir, touched_by_file)
     baseline_path = root / args.baseline
-    try:
-        baseline = json.loads(baseline_path.read_text()) if baseline_path.exists() else {}
-    except json.JSONDecodeError:
-        baseline = {}
+    baseline = load_baseline(baseline_path)
     fingerprint = diff_fingerprint(root, args.base)
     metadata = baseline.pop("__meta__", {})
     if metadata.get("diff_fingerprint") == fingerprint:
         violations, updated = [], {**baseline, "__meta__": metadata}
     else:
+        results = collect_touched_results(root, mutants_dir, group_by_file(touched))
         violations, updated = evaluate_results(results, baseline, args.threshold, args.improvement)
+        domain = collect_touched_results(root, mutants_dir, group_by_file(retested))
+        weaker, raised = evaluate_domain(domain, baseline, args.regression_tolerance)
+        violations += weaker
+        updated.update({k: v for k, v in raised.items() if k in domain})
         updated["__meta__"] = {"diff_fingerprint": fingerprint}
 
     if not violations:

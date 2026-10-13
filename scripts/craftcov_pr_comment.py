@@ -44,15 +44,9 @@ from craftcov import (  # noqa: E402
     merge_corpus_findings,
     scan_files,
 )
+from gitdiff import git  # noqa: E402
 
 MARKER = "<!-- craftcov-pr-report -->"
-
-
-def _git(args: list[str], cwd: Path, check: bool = True) -> str:
-    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
-    if check and proc.returncode != 0:
-        raise SystemExit(f"✗ git {' '.join(args)} failed:\n{proc.stderr}")
-    return proc.stdout
 
 
 def full_scan(root: Path) -> dict:
@@ -72,11 +66,11 @@ def scan_ref(repo: Path, ref: str, scratch_parent: Path) -> dict:
     if ref == "HEAD":
         return full_scan(repo)
     worktree = (scratch_parent / "pr-comment-ref").resolve()
-    _git(["worktree", "add", "--detach", str(worktree), ref], cwd=repo)
+    git(["worktree", "add", "--detach", str(worktree), ref], cwd=repo)
     try:
         return full_scan(worktree)
     finally:
-        _git(["worktree", "remove", "--force", str(worktree)], cwd=repo, check=False)
+        git(["worktree", "remove", "--force", str(worktree)], cwd=repo, check=False)
 
 
 def _format_row(hid: str, old: int, new: int, catalog_by_id: dict[str, dict]) -> str:
@@ -198,8 +192,8 @@ def main() -> int:
         parser.error("--repo and --pr are required unless --dry-run")
 
     repo = Path(args.path).resolve()
-    merge_base = _git(["merge-base", args.base, "HEAD"], cwd=repo).strip()
-    head_sha = _git(["rev-parse", "HEAD"], cwd=repo).strip()
+    merge_base = git(["merge-base", args.base, "HEAD"], cwd=repo).strip()
+    head_sha = git(["rev-parse", "HEAD"], cwd=repo).strip()
 
     catalog_by_id = {e["id"]: e for e in load_catalog()}
 

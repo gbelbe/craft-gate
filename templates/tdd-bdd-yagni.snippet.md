@@ -113,7 +113,8 @@ this loop:
 1. Map changed lines to changed functions.
 2. Map each function to the smallest focused behavioral test files.
 3. Mark those tests with `@pytest.mark.mutation` when the repository uses it.
-4. Run mutmut on the configured source/test scope.
+4. Run mutmut on the configured source/test scope (`scripts/mutation_plan.py run` re-tests only
+   what your change can have affected, a full campaign only on first initialisation).
 5. Read survivors for changed functions and add the missing boundary/error
    assertion.
 6. Repeat until the function reaches 80%. (A function that already has a

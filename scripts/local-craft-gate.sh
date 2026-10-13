@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Local craft-gate runner. The consuming repo owns its test command and should
+# produce coverage.xml before calling this script. Configure mutmut's
+# pytest_add_cli_args_test_selection for a focused mutation test suite; the
+# normal CI test job still runs the complete suite. Pass --fresh periodically
+# to discard all cached mutation verdicts and run a complete campaign.
+set -euo pipefail
+
+BASE="origin/main"
+FAST=0
+FRESH=0
+MUTATION=auto
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base) BASE="$2"; shift 2 ;;
+    --fast) FAST=1; shift ;;
+    --fresh) FRESH=1; shift ;;
+    --mutation) MUTATION=on; shift ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+uv run python scripts/check_complexity_ratchet.py --path . --base "$BASE"
+bash scripts/check_tidy_ratchet.sh --base "$BASE"
+uv run python scripts/check_refactor_first.py --base "$BASE"
+
+if [[ $FAST -eq 0 ]]; then
+  if [[ $FRESH -eq 1 ]]; then
+    rm -rf mutants
+  fi
+  uv run diff-cover coverage.xml --compare-branch "$BASE" --fail-under 90
+  changed_python=$(git diff --name-only "$BASE"...HEAD -- \
+    'ster/**/*.py' 'src/**/*.py' 'lib/**/*.py' 'tests/**/*.py' '*.py' || true)
+  if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
+    uv run python scripts/mutation_plan.py run --base "$BASE"
+    uv run python scripts/check_mutation_ratchet.py --base "$BASE" --threshold 80 --improvement 20
+  else
+    echo "mutation ratchet: skipped (no Python production or test changes)"
+  fi
+fi
+
+uv run python scripts/craftcov_pr_comment.py --base "$BASE" --dry-run > craftcov-report.md
+uv run python scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif

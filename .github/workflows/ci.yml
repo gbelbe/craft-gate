@@ -33,6 +33,19 @@ jobs:
           print(f'{len(data)} entries OK')
           "
 
+      - name: bootstrap.sh on this repo is a no-op (installed copies match their sources)
+        # The repo is installed on itself; a source edited without re-running
+        # `bash bootstrap.sh .` leaves a stale installed copy (it happened to
+        # .claude/skills/tidy-first/SKILL.md).
+        # (.craft-gate-version is gitignored here, so it never shows up.)
+        run: |
+          bash bootstrap.sh . >/dev/null
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::bootstrap.sh changed files — run 'bash bootstrap.sh .' and commit:"
+            git status --short
+            exit 1
+          fi
+
       - name: shell scripts parse
         run: |
           for f in scripts/*.sh; do
@@ -223,6 +236,12 @@ jobs:
 
       - name: Mutation ratchet acceptance rule (behavioural tests, no pytest dependency)
         run: python3 tests/test_mutation_ratchet.py
+
+      - name: Diff-scoped mutation planner (behavioural tests, no pytest dependency)
+        run: python3 tests/test_mutation_plan.py
+
+      - name: Shared git/AST helpers (behavioural tests, no pytest dependency)
+        run: python3 tests/test_gitdiff.py
 
       - name: templates/*.yml and templates/*.yaml are valid YAML
         run: |
