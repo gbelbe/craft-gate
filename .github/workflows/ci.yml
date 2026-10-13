@@ -33,6 +33,20 @@ jobs:
           print(f'{len(data)} entries OK')
           "
 
+      - name: bootstrap.sh on this repo is a no-op (installed copies match their sources)
+        # The repo is installed on itself; a source edited without re-running
+        # `bash bootstrap.sh .` leaves a stale installed copy (it happened to
+        # .claude/skills/tidy-first/SKILL.md). .craft-gate-version is excluded:
+        # it is `git describe` output, so it changes with every commit.
+        run: |
+          bash bootstrap.sh . >/dev/null
+          git checkout -- .craft-gate-version
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::bootstrap.sh changed files — run 'bash bootstrap.sh .' and commit:"
+            git status --short
+            exit 1
+          fi
+
       - name: shell scripts parse
         run: |
           for f in scripts/*.sh; do
