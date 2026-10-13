@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .models import BY_HEURISTIC, TOTAL
 
-CACHE_VERSION = 4
+CACHE_VERSION = 5  # 5: nested class names lost their doubled dot ("A..B" -> "A.B")
 
 
 def empty_cache() -> dict:

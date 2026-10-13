@@ -151,21 +151,19 @@ NESTED = (
 
 
 def test_scope_index_qualifies_names_and_marks_kinds() -> None:
-    # KNOWN QUIRK, pinned as-is: a name nested under a class gets a doubled dot
-    # ("Outer..m"; the prefix already ends in "." and is joined with another).
     assert sorted(craftcov.build_scope_index(NESTED)) == [
         (1, 2, "function", "top"),
         (3, 8, "class", "Outer"),
-        (4, 5, "function", "Outer..m"),
-        (6, 8, "class", "Outer..Inner"),
-        (7, 8, "function", "Outer..Inner..n"),
+        (4, 5, "function", "Outer.m"),
+        (6, 8, "class", "Outer.Inner"),
+        (7, 8, "function", "Outer.Inner.n"),
     ]
 
 
 def test_enclosing_class_picks_the_innermost_class_and_none_outside() -> None:
     scopes = craftcov.build_scope_index(NESTED)
     assert craftcov.enclosing_class(scopes, 5) == "Outer"
-    assert craftcov.enclosing_class(scopes, 8) == "Outer..Inner"  # the quirk above
+    assert craftcov.enclosing_class(scopes, 8) == "Outer.Inner"
     assert craftcov.enclosing_class(scopes, 2) is None  # a top-level function
     assert craftcov.enclosing_class(scopes, 9) is None
     assert craftcov.enclosing_class([], 1) is None

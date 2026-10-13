@@ -18,7 +18,7 @@ def _collect_scopes(node: ast.AST, prefix: str, scopes: list[Scope]) -> None:
         qualname = f"{prefix}.{child.name}" if prefix else child.name
         end = getattr(child, "end_lineno", child.lineno)
         scopes.append((child.lineno, end, kind, qualname))
-        _collect_scopes(child, qualname + ("." if kind == CLASS else ""), scopes)
+        _collect_scopes(child, qualname, scopes)
 
 
 def build_scope_index(source: str) -> list[Scope]:
