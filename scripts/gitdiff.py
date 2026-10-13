@@ -10,6 +10,7 @@ Copied into consuming repos next to the scripts that import it (see bootstrap.sh
 
 from __future__ import annotations
 
+import argparse
 import re
 import subprocess
 from pathlib import Path
@@ -23,6 +24,17 @@ def git(args: list[str], cwd: Path | None = None, check: bool = True) -> str:
     if check and proc.returncode != 0:
         raise SystemExit(f"✗ git {' '.join(args)} failed:\n{proc.stderr}")
     return proc.stdout
+
+
+def base_ref_parser(description: str | None) -> argparse.ArgumentParser:
+    """An argument parser that already takes the ``--base`` ref every diff-aware gate needs."""
+    parser = argparse.ArgumentParser(
+        description=description, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--base", required=True, help="base ref this branch diverged from, e.g. origin/main"
+    )
+    return parser
 
 
 def changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import astfuncs
 import gitdiff
+import pytest
 
 
 def _run(repo: Path, *args: str) -> None:
@@ -90,3 +91,12 @@ def test_walk_functions_qualifies_methods_and_nested_functions() -> None:
     ]
     assert astfuncs.qualified([], "x") == "x"
     assert astfuncs.qualified(["A", "B"], "x") == "A.B.x"
+
+
+def test_base_ref_parser_requires_a_base_and_keeps_the_scripts_own_description() -> None:
+    parser = gitdiff.base_ref_parser("what this gate does")
+
+    assert parser.parse_args(["--base", "origin/main"]).base == "origin/main"
+    assert parser.description == "what this gate does"
+    with pytest.raises(SystemExit):
+        parser.parse_args([])

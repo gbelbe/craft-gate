@@ -27,7 +27,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
 import sys
@@ -43,7 +42,7 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
-from gitdiff import git
+from gitdiff import base_ref_parser, git
 
 MARKER = "<!-- craftcov-pr-report -->"
 
@@ -173,12 +172,7 @@ def post_or_update_comment(repo_slug: str, pr: int, body: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        "--base", required=True, help="base ref this branch diverged from, e.g. origin/main"
-    )
+    parser = base_ref_parser(__doc__)
     parser.add_argument("--path", default=".", help="repo root (default: current directory)")
     parser.add_argument("--repo", help="OWNER/NAME, required unless --dry-run")
     parser.add_argument("--pr", type=int, help="PR number, required unless --dry-run")
