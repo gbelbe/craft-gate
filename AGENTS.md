@@ -56,7 +56,7 @@ enforces the discipline — it fails a push/PR with no `tidy(...)` commit, no
 text check on commit messages only, so it costs milliseconds; it cannot judge
 whether the right tidying was picked.
 
-For the 8 heuristics craftCov detects (`scripts/craftcov.py
+For the heuristics craftCov detects (`scripts/craftcov.py
 --list-detectors`), skip the judgment call: `scripts/craftcov.py --file
 <path>` before touching a file, fix one instance of every heuristic present,
 bundle it into one `tidy(multi):` commit (see CRAFTSMANSHIP.md's "Refactor
@@ -115,12 +115,13 @@ Mutation-quality rule for new tests:
 
 ## Editing this repo specifically
 
-- `CRAFTSMANSHIP.md` and `catalog.yaml` must stay in sync by hand — the
-  content is the same, the format differs (prose table vs. structured data).
-  CI's `validate` job checks `catalog.yaml` parses and every entry has a
-  `kind`/`source`; it doesn't diff the two files against each other, so a
-  new catalog entry added to one and not the other won't be caught
-  automatically. Add to both in the same commit.
+- `catalog.yaml` is the source of truth. Edit it, then run
+  `python3 scripts/render_catalog.py`: that regenerates `CRAFTSMANSHIP.md`'s
+  `tidying` and `smell-fix` tables, its `<!-- fact:... -->` counts, and the
+  README's entry-count badge. CI's `validate` job runs it with `--check`.
+  Only `principle` and `workflow` entries are prose that you still write by
+  hand in `CRAFTSMANSHIP.md` *and* add to `catalog.yaml` in the same commit
+  (see CONTRIBUTING.md) — nothing checks those two against each other.
 - `skills/tidy-first/SKILL.md` is the distributable template — its wording
   is written to be correct once copied to `.claude/skills/tidy-first/` in
   *any* repo (including this one), not just as read in place. Don't add a

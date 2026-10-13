@@ -20,8 +20,8 @@ It answers two separate questions, on purpose:
 
 ## What it does
 
-- **A named, attributed catalog** (`CRAFTSMANSHIP.md` / `catalog.yaml`) — 35
-  entries, every one citing its source. "Feature Envy (Fowler,
+- **A named, attributed catalog** (`CRAFTSMANSHIP.md` / `catalog.yaml`) — every
+  entry citing its source (see the badge for the count). "Feature Envy (Fowler,
   *Refactoring*)" is a checkable claim; "this could be cleaner" is not.
 - **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:`
   trailer naming the book, `test(characterize): ...` for legacy code,
@@ -30,7 +30,7 @@ It answers two separate questions, on purpose:
   - **`tidy`** — a commit-message check, zero dependencies: did a tidying
     (or a recorded exemption) happen at all?
   - **`refactor-first`** — built on **craftCov**, a coverage-style scan for
-    8 mechanically-detectable heuristics: a touched file's total across
+    the mechanically-detectable heuristics: a touched file's total across
     them must go down (or stay at 0).
   - **`complexity`** — cyclomatic/cognitive complexity, invariant return,
     duplicated string literal: a function/literal the diff actually
