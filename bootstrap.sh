@@ -11,7 +11,7 @@
 #
 # Only touches files this tool fully owns — CRAFTSMANSHIP.md, catalog.yaml,
 # scripts/check_tidy_ratchet.sh, scripts/report_tidy_history.sh,
-# scripts/craftcov.py, scripts/check_refactor_first.py,
+# scripts/craftcov.py + scripts/craftcov_core/ (its package), scripts/check_refactor_first.py,
 # scripts/check_complexity_ratchet.py, scripts/craftcov_pr_comment.py,
 # scripts/mutation_plan.py, scripts/gitdiff.py, scripts/astfuncs.py (the
 # helpers the gate scripts import — they must travel with them),
@@ -53,6 +53,15 @@ copy_file "$SRC_DIR/catalog.yaml" "$TARGET/catalog.yaml"
 copy_file "$SRC_DIR/scripts/check_tidy_ratchet.sh" "$TARGET/scripts/check_tidy_ratchet.sh"
 copy_file "$SRC_DIR/scripts/report_tidy_history.sh" "$TARGET/scripts/report_tidy_history.sh"
 copy_file "$SRC_DIR/scripts/craftcov.py" "$TARGET/scripts/craftcov.py"
+# craftcov.py is a facade over this package; ship it as a unit, and drop modules
+# an earlier release shipped that this one no longer has.
+mkdir -p "$TARGET/scripts/craftcov_core"
+for src in "$SRC_DIR"/scripts/craftcov_core/*.py; do
+  copy_file "$src" "$TARGET/scripts/craftcov_core/$(basename "$src")"
+done
+for dst in "$TARGET"/scripts/craftcov_core/*.py; do
+  [[ -f "$SRC_DIR/scripts/craftcov_core/$(basename "$dst")" ]] || rm -f "$dst"
+done
 copy_file "$SRC_DIR/scripts/check_refactor_first.py" "$TARGET/scripts/check_refactor_first.py"
 copy_file "$SRC_DIR/scripts/check_complexity_ratchet.py" "$TARGET/scripts/check_complexity_ratchet.py"
 copy_file "$SRC_DIR/scripts/craftcov_pr_comment.py" "$TARGET/scripts/craftcov_pr_comment.py"

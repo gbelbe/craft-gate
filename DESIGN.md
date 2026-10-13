@@ -77,7 +77,7 @@ ports one technique, for the entries where each is a decent proxy — 8 of 35:
   quietly discarding it — tune with `--vulture-min-confidence N` once
   you've triaged a first pass and know your codebase's noise floor (its
   effect on the earlier example: `dead-code` 1685 → 36 at `N=80`).
-- **`dupes`** — not a subprocess, `scripts/craftcov.py`'s own code:
+- **`dupes`** — not a subprocess, `scripts/craftcov_core/dupes.py`'s own code:
   `consolidate-duplicate-conditional`, via a from-scratch port of the
   rolling-hash line-window matching technique both PMD CPD (Karp-Rabin
   string matching over a token stream — verified against PMD's own docs)
