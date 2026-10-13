@@ -78,7 +78,7 @@ Small, purely structural moves: they don't change behavior, so a tidying
 commit's test results must be identical before and after.
 
 <!-- BEGIN GENERATED: tidying -->
-<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
+<!-- Generated from catalog.yaml by tools/render_catalog.py — don't
      hand-edit this table; edit catalog.yaml and run that script instead.
      See CONTRIBUTING.md. -->
 | Code | id | Name | Smell / when to reach for it | What it does |
@@ -107,7 +107,7 @@ problems and their standard fixes. They apply to existing code you're about
 to touch *and* are worth watching for while writing new code.
 
 <!-- BEGIN GENERATED: smell-fix -->
-<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't
+<!-- Generated from catalog.yaml by tools/render_catalog.py — don't
      hand-edit this table; edit catalog.yaml and run that script instead.
      See CONTRIBUTING.md. -->
 | Code | id | Name (smell) | Smell / when to reach for it | What it does |

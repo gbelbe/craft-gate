@@ -148,3 +148,16 @@ def test_install_md_only_references_templates_that_exist() -> None:
     assert referenced
     for rel in referenced:
         assert (ROOT / rel).is_file(), rel
+
+
+def test_scripts_holds_exactly_what_bootstrap_installs() -> None:
+    """Anything in scripts/ that bootstrap.sh doesn't ship belongs in tools/."""
+    on_disk = {
+        p.relative_to(ROOT).as_posix()
+        for p in (ROOT / SCRIPTS).rglob("*")
+        if p.is_file() and "__pycache__" not in p.parts
+    }
+    shipped = {p for p in SHIPPED if p.startswith(f"{SCRIPTS}/")}
+    package = {p.relative_to(ROOT).as_posix() for p in (ROOT / SCRIPTS / CORE).glob("*.py")}
+
+    assert on_disk == shipped | package

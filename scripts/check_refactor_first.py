@@ -33,12 +33,10 @@ Examples:
 
 from __future__ import annotations
 
-import argparse
 import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from craftcov import (
     aggregate,
     build_detector_index,
@@ -47,7 +45,7 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
-from gitdiff import git, has_tidy_exempt
+from gitdiff import base_ref_parser, git, has_tidy_exempt
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -138,12 +136,7 @@ def report_failures(failures: list[str]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        "--base", required=True, help="base ref this branch diverged from, e.g. origin/main"
-    )
+    parser = base_ref_parser(__doc__)
     parser.add_argument("--head", default="HEAD")
     parser.add_argument("--path", default=str(REPO_ROOT), help="repo root (default: this repo)")
     args = parser.parse_args()

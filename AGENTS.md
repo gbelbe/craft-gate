@@ -116,7 +116,7 @@ Mutation-quality rule for new tests:
 ## Editing this repo specifically
 
 - `catalog.yaml` is the source of truth. Edit it, then run
-  `python3 scripts/render_catalog.py`: that regenerates `CRAFTSMANSHIP.md`'s
+  `python3 tools/render_catalog.py`: that regenerates `CRAFTSMANSHIP.md`'s
   `tidying` and `smell-fix` tables, its `<!-- fact:... -->` counts, and the
   README's entry-count badge. CI's `validate` job runs it with `--check`.
   Only `principle` and `workflow` entries are prose that you still write by

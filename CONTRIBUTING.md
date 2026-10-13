@@ -21,7 +21,7 @@ For the common case — a named smell with a fix (the `tidying` and
 **2. Regenerate `CRAFTSMANSHIP.md` from it:**
 
 ```bash
-python3 scripts/render_catalog.py
+python3 tools/render_catalog.py
 ```
 
 This rewrites the two generated tables (between the `<!-- BEGIN GENERATED -->`

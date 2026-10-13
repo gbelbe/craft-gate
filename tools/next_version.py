@@ -23,17 +23,19 @@ import sys
 _SUBJECT = re.compile(r"^(?P<type>[a-z]+)(?:\([^)]*\))?(?P<bang>!)?:\s")
 _BREAKING = re.compile(r"^BREAKING[ -]CHANGE:", re.MULTILINE)
 
+MAJOR, MINOR, PATCH = "major", "minor", "patch"
+
 # What each Conventional Commit type is worth. Anything absent releases nothing:
 # docs, style, test, chore and ci change no behaviour a user could observe.
 _LEVEL_OF = {
-    "feat": "minor",
-    "fix": "patch",
-    "perf": "patch",
-    "refactor": "patch",
-    "build": "patch",
-    "revert": "patch",
+    "feat": MINOR,
+    "fix": PATCH,
+    "perf": PATCH,
+    "refactor": PATCH,
+    "build": PATCH,
+    "revert": PATCH,
 }
-_RANK = {"patch": 1, "minor": 2, "major": 3}
+_RANK = {PATCH: 1, MINOR: 2, MAJOR: 3}
 
 
 def bump_level(messages: list[str]) -> str | None:
@@ -45,7 +47,7 @@ def bump_level(messages: list[str]) -> str | None:
         if match is None:
             continue  # not a Conventional Commit: it says nothing about level
         if match.group("bang") or _BREAKING.search(message):
-            level: str | None = "major"
+            level: str | None = MAJOR
         else:
             level = _LEVEL_OF.get(match.group("type"))
         if level and (best is None or _RANK[level] > _RANK[best]):
@@ -58,10 +60,10 @@ def next_version(current: str | None, level: str) -> str:
     if current is None:
         return "0.1.0"
     major, minor, patch = (int(p) for p in current.lstrip("v").split(".")[:3])
-    if level == "major":
+    if level == MAJOR:
         # 0.x may break without becoming 1.0 — that call is deliberate, not automatic.
         return f"0.{minor + 1}.0" if major == 0 else f"{major + 1}.0.0"
-    if level == "minor":
+    if level == MINOR:
         return f"{major}.{minor + 1}.0"
     return f"{major}.{minor}.{patch + 1}"
 

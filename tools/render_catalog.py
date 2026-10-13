@@ -17,8 +17,8 @@ detect) are kept in step the same way, so no prose or badge can go stale:
 README's entry-count badge.
 
 Usage:
-    python3 scripts/render_catalog.py            # regenerate in place
-    python3 scripts/render_catalog.py --check     # exit 1 if the file would
+    python3 tools/render_catalog.py            # regenerate in place
+    python3 tools/render_catalog.py --check     # exit 1 if the file would
                                                    # change (for CI)
 """
 
@@ -66,7 +66,7 @@ def replace_between(text: str, tag: str, replacement: str) -> str:
     begin = f"<!-- BEGIN GENERATED: {tag} -->"
     end = f"<!-- END GENERATED: {tag} -->"
     note = (
-        "<!-- Generated from catalog.yaml by scripts/render_catalog.py — don't\n"
+        "<!-- Generated from catalog.yaml by tools/render_catalog.py — don't\n"
         "     hand-edit this table; edit catalog.yaml and run that script instead.\n"
         "     See CONTRIBUTING.md. -->"
     )
@@ -128,7 +128,7 @@ def main() -> int:
     if check:
         names = ", ".join(p.name for p in stale)
         print(f"✗ {names} out of date with {CATALOG_PATH.name} — run:")
-        print("    python3 scripts/render_catalog.py")
+        print("    python3 tools/render_catalog.py")
         return 1
 
     for path in stale:

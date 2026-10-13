@@ -1,5 +1,5 @@
 # The actual catalog data — edit this, not CRAFTSMANSHIP.md's tables
-# directly (those are generated: scripts/render_catalog.py). See
+# directly (those are generated: tools/render_catalog.py). See
 # CONTRIBUTING.md's "Adding a heuristic or rule."
 #
 # kind: tidying (Beck, structural-only, existing code)
