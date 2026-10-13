@@ -141,19 +141,19 @@ should look like it.
 
 Design checklist, not a commit ritual — apply while writing, not after.
 
-- **A function does one thing, and stays small.** If you're reaching for
+- **A function does one thing, and stays small** (CG025). If you're reaching for
   "and" to describe what it does, it's two functions.
-- **Prefer 0–2 arguments; 3 is a smell, more needs restructuring.** Stricter
+- **Prefer 0–2 arguments; 3 is a smell, more needs restructuring** (CG026). Stricter
   than the mechanical gate below (which allows up to 5) on purpose — this is
   the *design* bar, the gate is the *floor* it won't let you fall under.
   Often `introduce-parameter-object` (above) is the fix, before the function
   is even written.
 - **No flag arguments.** A boolean parameter that makes a function silently
   do one of two different things should be two functions.
-- **Command-Query Separation.** A function either does something or answers
+- **Command-Query Separation** (CG027). A function either does something or answers
   something — never both. A function named `getX` that also mutates state
   will surprise every caller that doesn't read its body.
-- **SOLID** (Martin, *Agile Software Development*, 2002) — most relevant day
+- **SOLID** (CG028; Martin, *Agile Software Development*, 2002) — most relevant day
   to day: **Dependency Inversion** (isolate an external library behind a
   thin internal adapter — the rest of the code depends on your interface,
   not the library) and **Single Responsibility** (one reason to change,
@@ -161,7 +161,7 @@ Design checklist, not a commit ritual — apply while writing, not after.
 
 ### The bar for new code — Kent Beck, *Extreme Programming Explained* (1999/2004)
 
-Beck's four rules of simple design, **in priority order** — when they
+Beck's four rules of simple design (CG029), **in priority order** — when they
 conflict, an earlier rule wins:
 
 1. Passes all the tests.
@@ -171,8 +171,8 @@ conflict, an earlier rule wins:
 
 ### A stricter optional reference — Sandi Metz's rules
 
-Deliberately extreme, meant to provoke a conversation rather than be taken
-literally: classes ≤100 lines, methods ≤5 lines, ≤4 parameters. Useful when
+Sandi Metz's rules (CG030) are deliberately extreme, meant to provoke a
+conversation rather than be taken literally: classes ≤100 lines, methods ≤5 lines, ≤4 parameters. Useful when
 a project's own complexity ceiling feels too permissive and the team wants a
 sharper target to aim for — not a gate.
 
@@ -218,7 +218,8 @@ cheaper and faster than finding out from a failed push.
 Feathers' definition: **legacy code is code without tests** — age is
 irrelevant. Untested code can't be tidied safely the normal way, because
 "confirm the existing tests are unchanged" (the whole point of a structural
-commit) has nothing to confirm against.
+commit) has nothing to confirm against. The characterization test (CG031)
+is how you build that safety net first.
 
 The procedure, step by step:
 
