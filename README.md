@@ -23,89 +23,29 @@ It answers two separate questions, on purpose:
 - **A named, attributed catalog** (`CRAFTSMANSHIP.md` / `catalog.yaml`) — every
   entry citing its source (see the badge for the count). "Feature Envy (Fowler,
   *Refactoring*)" is a checkable claim; "this could be cleaner" is not.
-- **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:`
-  trailer naming the book, `test(characterize): ...` for legacy code,
+- **A commit convention** — `tidy(<type>): ...` with a `Tidy-Source:` trailer
+  naming the book, `test(characterize): ...` for legacy code, and
   `Tidy-Exempt: <reason>` when nothing applies.
 - **Five CI gates**, cheapest first:
-  - **`tidy`** — a commit-message check, zero dependencies: did a tidying
-    (or a recorded exemption) happen at all?
-  - **`refactor-first`** — built on **craftCov**, a coverage-style scan for
-    the mechanically-detectable heuristics: a touched file's total across
-    them must go down (or stay at 0).
-  - **`complexity`** — cyclomatic/cognitive complexity, invariant return,
-    duplicated string literal: a function/literal the diff actually
-    touches, already over threshold, must come out *lower* than it went
-    in — unchanged doesn't pass, only a genuine decrease does.
-  - **`patch-coverage`** — [`diff-cover`](https://github.com/Bachmann1234/diff_cover)
-    against a `pytest --cov` report: the lines this diff *changed* must be
-    ≥90% covered (your own threshold to set). Not a whole-repo floor — a
-    well-tested old codebase can't carry an untested new file past it.
-  - **`mutation-ratchet`** — [`mutmut`](https://github.com/boxed/mutmut):
-    a function this diff touches must clear a mutation-score floor (80%
-    starting point). Coverage proves a line *ran*; this proves a test
-    would actually *notice* if its behavior changed. On by default but a
-    requires the consuming repo's `[tool.mutmut]` source paths and runs by
-    default alongside the other gates; see DESIGN.md's "Mutation ratchet".
-  - All five skip bot-authored PRs (dependabot, renovate, etc.) — a
-    dependency bump usually has no heuristic to apply and no new code to
-    test. But only the first three understand `Tidy-Exempt:` — a human's
-    `patch-coverage` or `mutation-ratchet` failure has no trailer bypass,
-    by design; see DESIGN.md's "Patch coverage" and "Mutation ratchet".
-- **Two reporting jobs, on by default** — a sticky PR comment and a GitHub
-  code-scanning (SARIF) export, surfacing what the gates found where
-  you're already looking. Neither blocks a merge; the SARIF one needs a
-  public repo or GitHub Advanced Security, the only reason to skip it.
+
+  | Gate | Fails a PR when | Needs | `Tidy-Exempt:` skips it |
+  |---|---|---|---|
+  | `tidy` | no tidying, characterization test or recorded exemption is in the commit range | `bash`, `git` | yes |
+  | `refactor-first` | a touched file's total across the 8 detectable heuristics did not go down (or stay at 0) | the `craftcov` extra | yes |
+  | `complexity` | a function the diff touches is over threshold and did not come out lower; or a new invariant return or triplicated literal | the `complexity` extra | yes |
+  | `patch-coverage` | the lines this diff changed are under-covered | `diff-cover` and your own `pytest --cov` | no |
+  | `mutation-ratchet` | a touched function's mutants survive: its tests run it but would not notice a change | `mutmut` and a `[tool.mutmut]` section | no |
+
+  All five skip bot-authored PRs (dependabot, renovate, ...). The reasoning
+  behind each is in [DESIGN.md](DESIGN.md).
+- **Two reporting jobs** — a sticky PR comment and a GitHub code-scanning
+  (SARIF) export. Neither blocks a merge. The SARIF one needs a public repo or
+  GitHub Advanced Security, the only reason to skip it.
 - **A bootstrap script**, not a package dependency — copies the files it
-  owns into your repo and prints exactly what to wire up by hand. Never
-  silently merges into files that vary per project.
+  owns into your repo and leaves the files that vary per project to you.
 - **Agent-agnostic guidance** (`AGENTS.md`) — the catalog and procedure are
-  plain markdown any tool or human can read; an optional thin skill
-  wrapper is included for teams using Claude Code specifically.
-
-See [DESIGN.md](DESIGN.md) for the full rationale behind each of
-these — calibration numbers, engine choices, what's grandfathered and why.
-None of it is required reading to use the tool.
-
-## Requirements
-
-`tidy` needs only `bash` and `git` — every dev machine and CI runner
-already has both. `refactor-first` and `complexity` each need their own
-Python toolchain (below); skip either gate and you skip its dependency too.
-`patch-coverage` needs your own `pytest --cov` setup plus `diff-cover` —
-skip it if your repo isn't Python/pytest-shaped, or doesn't have a test
-suite worth gating on yet. `mutation-ratchet` needs `mutmut`, source paths in
-`[tool.mutmut]`, and a focused mutation test selection via
-`pytest_add_cli_args_test_selection`. Mark those behavioral unit tests with
-`@pytest.mark.mutation`; the normal CI test job still runs the full suite. It
-is enabled by default.
-
-Mutation runs are diff-scoped: `scripts/mutation_plan.py` re-tests only what the change can have
-affected (a production function mutmut already tracks, plus the functions a changed test, fixture,
-data file or unmutated helper reaches) and runs in full only on first initialisation or a cache-wide
-cause (lock file, dependency list, pytest arguments, root `conftest.py`); see DESIGN.md's
-"Diff-scoped mutation runs". Set `on_dependency_change = "warn"` and keep `tests/**/*.py` out of
-`cache_invalidation_files`, or mutmut's own invalidation resets everything first.
-
-The local runner starts mutation testing automatically when Python files change;
-use `--mutation` to force it for an otherwise non-Python change. Keep
-`source_paths` or `only_mutate` limited to production contracts covered by the
-focused tests. This keeps mutation results actionable instead of reporting
-large numbers of untested legacy mutants.
-
-The default ratchet uses two acceptance paths for each changed function:
-
-- mutation score `>=80%` passes immediately;
-- below `80%`, the function must already have a score in
-  `.mutation-baseline.json` and improve on it by at least `20%`.
-
-A touched function with **no** recorded baseline has only the first path: it
-must reach `80%` outright, or the gate refuses it. Its score is recorded once
-the gate passes; a refused run records nothing. There is no repository-wide
-aggregate baseline.
-The pre-push hook is optional (CI catches
-everything it does, just later). The two reporting jobs are part of the
-default setup; skip `craftcov-sarif` only if your repo has neither a public
-visibility nor GitHub Advanced Security to run code scanning with.
+  plain markdown any tool or human can read; an optional thin skill wrapper is
+  included for teams using Claude Code.
 
 ## Install
 
@@ -115,65 +55,30 @@ git clone --branch vX.Y.Z --depth 1 https://github.com/gbelbe/craft-gate /tmp/cr
 bash /tmp/craft-gate/bootstrap.sh ~/code/my-project
 ```
 
-This copies the files craft-gate owns (`CRAFTSMANSHIP.md`, `catalog.yaml`,
-every `scripts/*`, `.claude/skills/tidy-first/SKILL.md`) into your repo and
-points you at [INSTALL.md](INSTALL.md) for the manual steps, summarized
-below — each is a template file to merge, not something bootstrap.sh guesses
-at, since these vary too much per project to auto-merge safely:
+This copies the files craft-gate owns (`CRAFTSMANSHIP.md`, `catalog.yaml`, the
+gate scripts, `.claude/skills/tidy-first/SKILL.md`) into your repo. What it
+leaves to you is in [INSTALL.md](INSTALL.md), because those files differ too
+much per project to merge automatically:
 
 | # | What | Template | Goes into |
 |---|---|---|---|
 | 1 | Pre-push hook (optional) | `templates/pre-commit-hook.yaml` | `.pre-commit-config.yaml` |
-| 2 | CI gates + reporting (all seven jobs, on by default) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
+| 2 | CI gates + reporting (all seven jobs) | `templates/ci-job.yml` | `.github/workflows/ci.yml` |
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 | 5 | PR labels for review (optional) | `templates/label-tidy-prs.yml` | `.github/workflows/craft-gate-label.yml` |
 | 6 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
 
-Row 3 targets `AGENTS.md`, the cross-tool convention a growing set of
-coding agents read directly. Check what your own agent looks for; if it's
-a different filename, point it at `AGENTS.md` or symlink
-(`ln -s AGENTS.md CLAUDE.md`).
-
-`refactor-first` and `complexity` need their own toolchains added to your
-dependency file (exact versions — see this repo's own `pyproject.toml`):
-
-```toml
-craftcov = ["pyyaml>=6.0", "ruff>=0.13", "pylint>=3.3", "vulture>=2.14"]
-complexity = ["radon>=6.0", "cognitive-complexity>=1.3"]
-mutation = ["mutmut>=3.8"]
-# The default local developer environment installs all gate toolchains:
-dev = ["pytest>=9.0", "pytest-cov>=5.0", "diff-cover>=9.0", "mutmut>=3.8"]
-```
-
-`patch-coverage` needs `diff-cover` (and a coverage runner — `pytest-cov`
-or plain `coverage`) in your own `dev`-style dependency group, not a new
-craft-gate-owned extra: this gate runs *your* test suite, which craft-gate
-has no involvement in beyond wiring the job.
-
-`craftcov-sarif` needs a **public repo or GitHub Advanced Security** — code
-scanning isn't available otherwise, so skip just that one job if neither
-applies. `mutation-ratchet` needs the `mutation` extra (`mutmut`) plus your
-own test-running dependencies to actually do anything — without a
-`[tool.mutmut]` section in your `pyproject.toml` it's a verified-safe
-no-op (see DESIGN.md's "Mutation ratchet"), so it's fine to leave wired in
-even before you've decided to adopt it.
+Step 4 matters most in practice; without it, staying current means remembering
+to re-run `bootstrap.sh`. Each gate's toolchain, with exact version pins, is
+listed in this repo's [`pyproject.toml`](pyproject.toml) extras (`craftcov`,
+`complexity`, `mutation`). Skip a gate and you skip its dependency too.
 
 Confirm the install works:
 
 ```bash
 bash scripts/check_tidy_ratchet.sh --base origin/main   # your default branch
 ```
-
-**Optional, not part of the steps above:** `templates/tdd-bdd-yagni.snippet.md`
-is a companion `AGENTS.md` section mandating a Gherkin spec and a test list
-*before* implementation, with an explicit YAGNI challenge first. A
-methodology choice, not a craftsmanship gate — skip it if your project
-doesn't use BDD.
-
-Step 4 matters most in practice — without it, staying current means
-remembering to re-run `bootstrap.sh` by hand. See **Staying current**
-below.
 
 ## Example
 
@@ -198,122 +103,22 @@ scripts/report_tidy_history.sh
 #    5 Martin Fowler (with Kent Beck), Refactoring, 2nd ed. (2018)
 ```
 
-## Repo layout
+## Documentation
 
-```
-CRAFTSMANSHIP.md          procedure, commit convention, legacy-code method
-                           (hand-written) + the two catalog tables
-                           (generated — see catalog.yaml)
-catalog.yaml               the actual catalog data — edit this, not the
-                           tables in CRAFTSMANSHIP.md directly
-pyproject.toml             PyYAML (base) + the craftcov / complexity / mutation extras
-scripts/                    everything here is installed into consumers by bootstrap.sh
-  check_tidy_ratchet.sh     the CI/pre-push ratchet
-  report_tidy_history.sh    the periodic exemption-ratio / sources report
-  craftcov.py               coverage-style scan for the detectable heuristics (entry point + facade)
-  craftcov_core/            its implementation: catalog, adapters, dupes, scan, cache, render, cli
-  check_refactor_first.py   CI gate: a touched file's craftCov total must go down
-  check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
-  craftcov_pr_comment.py    optional: sticky PR comment
-  check_mutation_ratchet.py CI gate: touched functions' mutation score
-  mutation_plan.py          diff-scoped mutation runs: which mutants a change can have affected
-  gitdiff.py, astfuncs.py   helpers the gate scripts import; they travel with them
-  local-craft-gate.sh       runs the gates locally (installed from templates/)
-tools/                      this repo's own tooling; not installed into consumers
-  render_catalog.py         catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
-  next_version.py           Conventional-Commits -> semver, used by release.yml
-skills/tidy-first/
-  SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md
-templates/
-  AGENTS.md.snippet.md       section to paste into your AGENTS.md
-  tdd-bdd-yagni.snippet.md   optional companion section
-  pre-commit-hook.yaml       hook entry for .pre-commit-config.yaml
-  ci-job.yml                 job fragments for .github/workflows/ci.yml (all seven default jobs)
-  update-check.yml           weekly drift-check + auto-PR
-  label-tidy-prs.yml         labels PRs with tidy / tidy-exempt commits
-  CODEOWNERS.snippet         review requirement for the gate files
-bootstrap.sh               installer/updater
-tests/
-  fixtures/                 ground truth for craftCov's detectors
-  conftest.py               scripts on sys.path; tmp-git-repo and `main()` fixtures
-  test_fixtures.py          checks each detector fired where it should
-  test_craftcov_*.py        craftCov's pure pieces, CLI, and PR-comment renderer
-  test_check_*.py           the refactor-first, complexity and mutation gates
-```
-
-Run the suite with `uv run --extra dev pytest tests`.
+| | |
+|---|---|
+| [CRAFTSMANSHIP.md](CRAFTSMANSHIP.md) | The catalog, the commit convention, the legacy-code method, the mechanical thresholds |
+| [INSTALL.md](INSTALL.md) | The manual wiring steps after `bootstrap.sh` |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, with a diagram and a repo map |
+| [DESIGN.md](DESIGN.md) | Why each gate works the way it does (calibration, engines, what's grandfathered) |
+| [docs/operating.md](docs/operating.md) | Staying current, reviewing what craft-gate changed, the badge |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Adding a heuristic or rule; development setup |
+| [AGENTS.md](AGENTS.md) | The rules for coding agents working in this repo |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 
 This repo applies its own tooling to itself (`AGENTS.md`,
-`.pre-commit-config.yaml`, `.claude/skills/tidy-first/SKILL.md` — produced
-by `bash bootstrap.sh .`, not hand-written).
-
-## Staying current
-
-Every push to `main` auto-tags a release (`next_version.py` reads
-Conventional Commits: `feat:` → minor, `fix:`/`perf:`/`refactor:` → patch, a
-breaking-change footer → major). Pin a version with `git clone --branch
-vX.Y.Z`; `main` always has the latest, possibly-unreleased state.
-
-Add `templates/update-check.yml` as
-`.github/workflows/craft-gate-update.yml` and you never have to remember to
-re-run `bootstrap.sh`: a weekly job compares your `.craft-gate-version`
-against the latest release and opens a PR with whatever changed. Nothing
-auto-merges — review it like any other dependency bump. No new credentials:
-it uses the repo's own default `GITHUB_TOKEN`, and craft-gate is only ever
-read from, never written to.
-
-## Reviewing what craft-gate changed
-
-Everything craft-gate does reaches a repo through a PR, so review starts from
-labels, the way Dependabot's `dependencies` label works:
-
-```sh
-gh pr list --label craft-gate  --state all   # automated version syncs
-gh pr list --label tidy-first  --state all   # PRs with tidy(...) / test(characterize) commits
-gh pr list --label tidy-exempt --state all   # every use of a Tidy-Exempt bypass
-```
-
-`craft-gate` is applied by `update-check.yml`; the other two by
-`templates/label-tidy-prs.yml`, which follows the PR's commits and lists the
-`Tidy-Exempt:` reasons in its run summary. `tidy-exempt` is the one worth
-auditing, since it skips the Tidy First and Refactor First gates.
-
-Squash merging collapses a PR's commits into one, so the base branch only keeps
-the `tidy(...)` subjects and `Tidy-Exempt:` trailers if the squash message lists
-them. Set it once (needs admin) and `git log --grep='^tidy('` works on `main`:
-
-```sh
-gh api -X PATCH repos/<owner>/<repo> \
-  -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES
-```
-
-`templates/CODEOWNERS.snippet` adds the last piece: review on changes to the
-gate files themselves, since loosening a threshold or an ignore fails no check.
-It only blocks merges when branch protection requires Code Owner review.
-
-## Badge
-
-A static claim that the gates are wired in, the same pattern
-[pre-commit](https://github.com/pre-commit/pre-commit) uses for its own
-badge:
-
-```md
-[![craft-gate](https://img.shields.io/badge/craft--gate-enabled-blue)](https://github.com/gbelbe/craft-gate)
-```
-
-[![craft-gate](https://img.shields.io/badge/craft--gate-enabled-blue)](https://github.com/gbelbe/craft-gate)
-
-Or point at your own CI run instead of a static claim — live pass/fail,
-same technique this README's own `CI` badge at the top uses:
-
-```md
-[![CI](https://github.com/<you>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<you>/<repo>/actions/workflows/ci.yml)
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) — adding a heuristic is a one-file
-`catalog.yaml` edit plus a regenerate command.
+`.pre-commit-config.yaml`, `.claude/skills/tidy-first/SKILL.md` are produced by
+`bash bootstrap.sh .`, not hand-written).
 
 ## License
 

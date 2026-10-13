@@ -1,5 +1,17 @@
 # Contributing
 
+This file is for people. Coding agents working in this repo follow
+[AGENTS.md](AGENTS.md); the two don't repeat each other, so read both if you
+do both. [docs/architecture.md](docs/architecture.md) is the map of the repo.
+
+## Development setup
+
+```bash
+uv sync --extra dev                       # every gate's toolchain
+uv run pytest tests                       # the suite
+uv run ruff check scripts tools tests/*.py && uv run ruff format --check scripts tools tests/*.py
+```
+
 ## Adding a heuristic or rule
 
 For the common case — a named smell with a fix (the `tidying` and
@@ -63,7 +75,7 @@ row's `name` field, not a new entry.
 
 **A `detectors` field means specifically "craftcov.py's own scan covers
 this"** — only add one if you're wiring up ruff/pylint/vulture/dupes (see
-[DESIGN.md](DESIGN.md#craftcov) for the schema). A smell with a *different*
+[docs/design/craftcov.md](docs/design/craftcov.md) for the schema). A smell with a *different*
 mechanical check — your own script, not craftcov.py's four engines — gets
 no `detectors` field at all; document the check itself in its own
 CRAFTSMANSHIP.md section instead, the way `check_complexity_ratchet.py`
@@ -74,7 +86,7 @@ own point of view.
 
 ## Everything else
 
-Scripts, templates, workflows: normal PR process. Since this repo eats its
+Scripts, templates, workflows, docs: normal PR process. Since this repo eats its
 own dog food, your PR needs a `tidy(<type>):`, `test(characterize):`, or
 `Tidy-Exempt:` commit somewhere in it — see `CRAFTSMANSHIP.md` for what
 that means and why.

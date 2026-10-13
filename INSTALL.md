@@ -43,8 +43,8 @@ The local runner is `scripts/local-craft-gate.sh`. Call it after your test
 command has produced `coverage.xml`; it writes `craftcov-report.md` and
 `craftcov.sarif` and reuses mutmut's `mutants/` cache.
 
-Exact version pins are in the README's Install section. The rationale for each
-gate is in `DESIGN.md` (craftCov, the complexity ratchet, patch coverage, the
+Exact version pins are the extras in this repo's `pyproject.toml` (`craftcov`, `complexity`, `mutation`). The rationale for each
+gate is in `DESIGN.md`, which indexes the notes under `docs/design/` (craftCov, the complexity ratchet, patch coverage, the
 mutation ratchet, reporting).
 
 ## 3. AGENTS.md

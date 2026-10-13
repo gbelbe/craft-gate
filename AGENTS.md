@@ -10,15 +10,24 @@ procedure lives in `CRAFTSMANSHIP.md`, which both point back to.
 ## Code quality gate (mandatory before every commit)
 
 ```bash
-python3 -c "import yaml; yaml.safe_load(open('catalog.yaml'))"   # catalog.yaml parses
-for f in scripts/*.sh; do bash -n "$f"; done                     # scripts parse
+uv run --extra dev pytest tests                                  # the suite
+uv run --extra dev ruff check scripts tools tests/*.py           # lint (what CI runs)
+uv run --extra dev ruff format --check scripts tools tests/*.py
+python3 tools/render_catalog.py --check                          # generated docs match catalog.yaml
 bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit range earned its tidy
 ```
 
-Or let CI's `validate` and `tidy` jobs do it — see `.github/workflows/ci.yml`.
-(`refactor-first` and `complexity`, same file, are diff-aware against a
-real base branch the same way `tidy` is — there's nothing useful to run
-locally for either outside a PR context; see below.)
+Then, against a real base ref, the three diff-aware gates (CI runs the same
+commands on a PR, and they work locally too):
+
+```bash
+uv run --extra dev python3 scripts/check_refactor_first.py --base origin/main
+uv run --extra dev python3 scripts/check_complexity_ratchet.py --base origin/main --path .
+```
+
+CI's `validate`, `craftcov`, `tidy`, `refactor-first` and `complexity` jobs
+(`.github/workflows/ci.yml`) are required to merge; see below for what each
+checks. `docs/architecture.md` has the map of how they fit together.
 
 ## Tidy First & craftsmanship (mandatory before every feature/fix commit)
 
@@ -115,13 +124,13 @@ Mutation-quality rule for new tests:
 
 ## Editing this repo specifically
 
-- `catalog.yaml` is the source of truth. Edit it, then run
-  `python3 tools/render_catalog.py`: that regenerates `CRAFTSMANSHIP.md`'s
-  `tidying` and `smell-fix` tables, its `<!-- fact:... -->` counts, and the
-  README's entry-count badge. CI's `validate` job runs it with `--check`.
-  Only `principle` and `workflow` entries are prose that you still write by
-  hand in `CRAFTSMANSHIP.md` *and* add to `catalog.yaml` in the same commit
-  (see CONTRIBUTING.md) — nothing checks those two against each other.
+- `catalog.yaml` is the source of truth; `CRAFTSMANSHIP.md`'s tables, counts and
+  the README badge are generated from it (`python3 tools/render_catalog.py`).
+  The steps, and the `principle`/`workflow` entries you still write by hand,
+  are in `CONTRIBUTING.md`; don't duplicate them here.
+- `scripts/` is exactly what `bootstrap.sh` installs into other repos; this
+  repo's own tooling goes in `tools/`. Files in `scripts/` import each other by
+  bare name and must work when run by path from any directory.
 - `skills/tidy-first/SKILL.md` is the distributable template — its wording
   is written to be correct once copied to `.claude/skills/tidy-first/` in
   *any* repo (including this one), not just as read in place. Don't add a
