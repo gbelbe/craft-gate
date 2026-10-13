@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -22,10 +23,12 @@ SHIPPED = [
     "scripts/check_complexity_ratchet.py",
     "scripts/craftcov_pr_comment.py",
     "scripts/check_mutation_ratchet.py",
+    "scripts/mutation_plan.py",
+    "scripts/gitdiff.py",
+    "scripts/astfuncs.py",
     "scripts/local-craft-gate.sh",
     ".claude/skills/tidy-first/SKILL.md",
 ]
-EXECUTABLE = [p for p in SHIPPED if p.startswith(f"{SCRIPTS}/")]
 NOT_A_REPO = 1
 
 
@@ -70,11 +73,13 @@ def test_the_craftcov_package_is_shipped_whole(target) -> None:
     assert sorted(p.name for p in (target / SCRIPTS / CORE).glob("*.py")) == shipped
 
 
-def test_scripts_are_executable(target) -> None:
+def test_the_executable_bit_follows_the_source(target) -> None:
     bootstrap(target)
 
-    for rel in EXECUTABLE:
-        assert os.access(target / rel, os.X_OK), rel
+    for rel in SHIPPED:
+        assert os.access(target / rel, os.X_OK) == os.access(ROOT / _source(rel), os.X_OK), rel
+    assert os.access(target / "scripts/check_refactor_first.py", os.X_OK)
+    assert not os.access(target / "scripts/gitdiff.py", os.X_OK)  # imported, never run
 
 
 def test_the_version_marker_records_where_it_came_from(target) -> None:
@@ -130,10 +135,16 @@ def test_it_refuses_a_directory_that_is_not_a_git_repo(tmp_path) -> None:
     assert "doesn't look like a git repo root" in result.stderr
 
 
-def test_the_output_lists_the_manual_steps(target) -> None:
+def test_the_output_points_at_install_md_for_the_manual_steps(target) -> None:
     out = bootstrap(target).stdout
 
     assert "Manual steps left" in out
-    assert "templates/ci-job.yml" in out
-    assert "templates/pre-commit-hook.yaml" in out
-    assert "templates/AGENTS.md.snippet.md" in out
+    assert str(ROOT / "INSTALL.md") in out
+
+
+def test_install_md_only_references_templates_that_exist() -> None:
+    referenced = set(re.findall(r"templates/[\w.-]+", (ROOT / "INSTALL.md").read_text()))
+
+    assert referenced
+    for rel in referenced:
+        assert (ROOT / rel).is_file(), rel
