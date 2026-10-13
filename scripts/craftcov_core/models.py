@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any, TypedDict
 
 # Keys of the plain-dict shapes that are also the JSON on disk and on stdout
 # (summary, snapshot, findings, catalog entries) — named once so modules agree.
@@ -10,6 +11,46 @@ TOTAL = "total"
 BY_HEURISTIC = "by_heuristic"
 HEURISTIC_ID = "heuristic_id"
 CONFIDENCE = "confidence"
+
+
+# One detector hit, exactly as it is cached and printed as JSON. "class" is a Python keyword, so
+# this uses the functional syntax.
+Finding = TypedDict(
+    "Finding",
+    {
+        "line": int,
+        "col": int,
+        "tool": str,
+        "rule": str,
+        "confidence": "int | None",  # only vulture sets this
+        "heuristic_id": str,
+        "heuristic_code": str,
+        "class": "str | None",
+    },
+)
+
+
+class _DuplicateOf(TypedDict):
+    duplicate_of: str
+    dup_lines: int
+
+
+class DuplicateFinding(Finding, _DuplicateOf):
+    """A duplicate-code finding, which also points at the other copy."""
+
+
+@dataclass(frozen=True)
+class Summary:
+    """Counts of findings, as `aggregate` computes them from a scan."""
+
+    total: int
+    by_heuristic: dict[str, int]
+    by_file: dict[str, int]
+    by_class: dict[str, int]
+    by_library: dict[str, int]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -29,8 +70,8 @@ class ScanResults:
     satisfy extract-class (CG016): these are what got found, RunContext is
     how *this run* differs from the last one. Genuinely two concerns."""
 
-    agg: dict
-    by_file: dict[str, list[dict]]
+    agg: Summary
+    by_file: dict[str, list[Finding]]
     catalog: list[dict]
 
     @property

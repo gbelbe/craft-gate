@@ -29,7 +29,7 @@ from craftcov_core.catalog import CATALOG_PATH, DetectorIndex, build_detector_in
 from craftcov_core.cli import main
 from craftcov_core.discovery import discover_python_files, file_hash, normalize_path
 from craftcov_core.dupes import find_duplicate_blocks, run_dupes, strip_lines_for_dupes
-from craftcov_core.models import ReportOptions, RunContext, ScanResults, Timing
+from craftcov_core.models import Finding, ReportOptions, RunContext, ScanResults, Summary, Timing
 from craftcov_core.pipeline import ScanSettings, restrict_to_file, scan_repository
 from craftcov_core.render import (
     format_sarif,
@@ -45,10 +45,12 @@ __all__ = [
     "CACHE_VERSION",
     "CATALOG_PATH",
     "DetectorIndex",
+    "Finding",
     "ReportOptions",
     "RunContext",
     "ScanResults",
     "ScanSettings",
+    "Summary",
     "Timing",
     "aggregate",
     "build_detector_index",

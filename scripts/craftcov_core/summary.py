@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .models import Finding, Summary
+
 
 def diff_by_heuristic(
     old: dict[str, int] | None, new: dict[str, int]
@@ -24,7 +26,7 @@ def diff_by_heuristic(
     return changed
 
 
-def aggregate(by_file: dict[str, list[dict]]) -> dict:
+def aggregate(by_file: dict[str, list[Finding]]) -> Summary:
     by_heuristic: dict[str, int] = {}
     by_file_count: dict[str, int] = {}
     by_class: dict[str, int] = {}
@@ -44,10 +46,4 @@ def aggregate(by_file: dict[str, list[dict]]) -> dict:
             key = f"{rel}::{f['class']}" if f["class"] else rel
             by_class[key] = by_class.get(key, 0) + 1
 
-    return {
-        "total": total,
-        "by_heuristic": by_heuristic,
-        "by_file": by_file_count,
-        "by_class": by_class,
-        "by_library": by_library,
-    }
+    return Summary(total, by_heuristic, by_file_count, by_class, by_library)

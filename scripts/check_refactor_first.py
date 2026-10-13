@@ -87,7 +87,7 @@ def per_file_totals(root: Path) -> dict[str, int]:
     files = discover_python_files(root)
     by_file = scan_files(root, files, rule_maps, whole_tool, vulture_min_confidence=0)
     merge_corpus_findings(root, files, by_file, corpus_tool)
-    return aggregate(by_file)["by_file"]  # rel -> count; a file with 0 findings is simply absent
+    return aggregate(by_file).by_file  # rel -> count; a file with 0 findings is simply absent
 
 
 def scan_ref(repo: Path, ref: str, scratch_parent: Path) -> dict[str, int]:

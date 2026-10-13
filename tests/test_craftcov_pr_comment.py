@@ -7,6 +7,7 @@ import subprocess
 
 import craftcov_pr_comment as pr_comment
 import pytest
+from craftcov import Summary
 
 GUARD, DEAD = "guard-clauses", "dead-code"
 CATALOG = {GUARD: {"id": GUARD, "code": "CG004"}}
@@ -15,11 +16,11 @@ BASE = ("--base", "main")
 USAGE_ERROR, EXISTING_ID, LISTING_AND_PATCH = 2, 2, 2
 
 
-def agg(total: int, **by_heuristic: int) -> dict:
-    return {"total": total, "by_heuristic": by_heuristic}
+def agg(total: int, **by_heuristic: int) -> Summary:
+    return Summary(total, by_heuristic, {}, {}, {})
 
 
-def render(base: dict, head: dict, repo_slug: str | None = "o/r") -> str:
+def render(base: Summary, head: Summary, repo_slug: str | None = "o/r") -> str:
     return pr_comment.render_markdown(base, head, CATALOG, repo_slug, SHA)
 
 
