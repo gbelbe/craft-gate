@@ -12,7 +12,9 @@ from craftcov import Summary
 GUARD, DEAD = "guard-clauses", "dead-code"
 CATALOG = {GUARD: {"id": GUARD, "code": "CG004"}}
 SHA = "abc1234"
+DRY_RUN = "--dry-run"
 BASE = ("--base", "main")
+PATH, FEATURE = "--path", "feature"
 USAGE_ERROR, EXISTING_ID, LISTING_AND_PATCH = 2, 2, 2
 
 
@@ -173,10 +175,10 @@ def test_a_dry_run_prints_the_real_before_and_after(repo, run_main, capsys) -> N
         "def f(x):\n    if x:\n        return 1\n    else:\n        return 2\n\n\nprint(f(1))\n"
     )
     repo.commit("base", mod_py=smelly)
-    repo.branch("feature")
+    repo.branch(FEATURE)
     repo.commit("tidy: guard clause", mod_py=smelly.replace("else:\n        return 2", "return 2"))
 
-    code = run_main(pr_comment, *BASE, "--path", str(repo.path), "--dry-run")
+    code = run_main(pr_comment, *BASE, PATH, str(repo.path), DRY_RUN)
 
     assert code == 0
     body = capsys.readouterr().out
@@ -187,7 +189,7 @@ def test_a_dry_run_prints_the_real_before_and_after(repo, run_main, capsys) -> N
 
 def test_a_real_run_posts_and_reports_where(repo, run_main, gh, monkeypatch, capsys) -> None:
     repo.commit("base", mod_py="X = 1\n")
-    repo.branch("feature")
+    repo.branch(FEATURE)
     repo.commit("more", mod_py="X = 2\n")
     real_run = subprocess.run
     fake = gh([])  # replaces subprocess.run; route git back to the real one
@@ -197,8 +199,36 @@ def test_a_real_run_posts_and_reports_where(repo, run_main, gh, monkeypatch, cap
         lambda cmd, **kw: real_run(cmd, **kw) if cmd[0] == "git" else fake(cmd, **kw),
     )
 
-    code = run_main(pr_comment, *BASE, "--path", str(repo.path), "--repo", "o/r", "--pr", "7")
+    code = run_main(pr_comment, *BASE, PATH, str(repo.path), "--repo", "o/r", "--pr", "7")
 
     assert code == 0
     assert "posted/updated on o/r#7" in capsys.readouterr().out
     assert any("POST" in call for call in fake.calls)
+
+
+ONE, TWO = "X = 1\n", "X = 2\n"
+
+
+def dry_run(repo, run_main, capsys, pyproject: str = "") -> str:
+    """The comment body for a one-commit change to mod.py on a branch off main."""
+    if pyproject:
+        repo.write("pyproject.toml", pyproject)
+    repo.commit("base", mod_py=ONE)
+    repo.branch(FEATURE)
+    repo.commit("more", mod_py=TWO)
+    run_main(pr_comment, *BASE, PATH, str(repo.path), DRY_RUN)
+    return capsys.readouterr().out
+
+
+def test_a_dry_run_names_the_test_gates_the_repo_switched_off(repo, run_main, capsys) -> None:
+    off = '[tool.craft-gate.mutation]\nenabled = false\nreason = "too slow"\n'
+
+    body = dry_run(repo, run_main, capsys, pyproject=off)
+
+    assert "**Gates switched off in this repo**" in body
+    assert "| `mutation` | too slow |" in body
+    assert body.index(pr_comment.MARKER) < body.index("Gates switched off")
+
+
+def test_a_dry_run_has_no_switched_off_section_when_nothing_is_off(repo, run_main, capsys) -> None:
+    assert "switched off" not in dry_run(repo, run_main, capsys)

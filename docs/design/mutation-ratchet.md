@@ -78,12 +78,12 @@ solved it.
 
 **Not meaningfully dogfooded on craft-gate's own CI**, for the same reason
 as patch coverage — no pytest suite here to mutate against. Being one of
-the default seven jobs means craft-gate's own `ci.yml` *could* carry this
-job like any consumer's would, and it would correctly no-op (no
-`[tool.mutmut]` here either) rather than fail — but wiring it in just to
-exercise the no-op path isn't worth a seventh job that never does
-anything, so it's left out of this repo's own workflow the same way
-patch-coverage is.
+the default jobs means craft-gate's own `ci.yml` *could* carry this
+job like any consumer's would. With the gate on and no `[tool.mutmut]` here
+it would now fail (see the default-on rule in CRAFTSMANSHIP.md's "Test
+gates"), so wiring it in would mean either configuring mutmut for this repo
+or declaring it off with a reason. Neither buys anything yet, so it's left
+out of this repo's own workflow the same way patch-coverage is.
 
 ## Using it
 
@@ -104,5 +104,7 @@ must reach `80%` outright, or the gate refuses it. Its score is recorded once
 the gate passes; a refused run records nothing. There is no repository-wide
 aggregate baseline.
 
-Without a `[tool.mutmut]` section in `pyproject.toml` the job is a verified-safe
-no-op, so it is fine to leave wired in before you decide to adopt it.
+The gate is on by default. With no `[tool.mutmut]` section in `pyproject.toml` the
+job fails and says so, rather than passing with nothing to mutate; to run without
+it, declare `[tool.craft-gate.mutation] enabled = false` with a `reason`. The
+thresholds above are `threshold` and `improvement` in that same table.

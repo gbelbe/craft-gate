@@ -1,26 +1,38 @@
-# Add all seven jobs below to your .github/workflows/ci.yml — the default
-# setup this tool ships. The first five are enforcement gates
+# Add all eight jobs below to your .github/workflows/ci.yml — the default
+# setup this tool ships. The first six are enforcement gates
 # (CRAFTSMANSHIP.md's "The ratchet", "Refactor First", "The complexity
-# ratchet", "Patch coverage", and "Mutation ratchet"); the last two are
+# ratchet", "Patch coverage", "Mutation ratchet", and "Behaviour coverage");
+# the last two are
 # reporting, not gates (neither fails a build) but are part of the default
 # setup too — see their own comments below for the two real exceptions
 # (craftcov-sarif needs a public repo or GitHub Advanced Security).
-# Set the branch name in the places marked below — and, for patch-coverage
-# specifically, your own package name (see its own comment). Mutation-ratchet
-# needs `[tool.mutmut]` source paths in your own pyproject.toml.
+# Set the branch name in the places marked below. The last three gates
+# (patch-coverage, mutation-ratchet, behaviour-coverage) take their settings
+# from your pyproject.toml, not from this file: see "Test gates" just below.
 #
-# All five gates skip bot-authored PRs (dependabot, renovate, etc. — any
+# All six gates skip bot-authored PRs (dependabot, renovate, etc. — any
 # actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
 # or a `Tidy-Exempt:` trailer, and a dependency bump has no craftsmanship
 # heuristic — or new untested code — to apply/introduce anyway. A skipped
 # job still reports a passing check, so this doesn't loosen branch
 # protection for anyone else.
 #
-# On by default, opt out per repo: every gate here is meant to be adopted,
-# but none is universal — delete the one job block that doesn't fit your
-# repo (patch-coverage and mutation-ratchet both need a real pytest suite;
-# mutation-ratchet specifically also needs the runtime budget for it — see
-# its own comment) rather than leaving it in a state it can never pass.
+# Test gates: on unless you say otherwise, and you say so in writing.
+# patch-coverage, mutation-ratchet and behaviour-coverage run by default.
+# Each first asks scripts/gate_config.py whether it applies here:
+#   * on, and the repo has what it needs   -> the gate runs
+#   * switched off in pyproject.toml       -> the job is skipped, the reason is
+#                                             in the job summary and PR comment
+#   * on, but the repo lacks what it needs -> the job FAILS and says what to add
+# so a gate never passes just because it found nothing to check. To switch one
+# off:
+#   [tool.craft-gate.mutation]
+#   enabled = false
+#   reason = "suite takes 40 minutes; revisit when it is split"
+# A reason is required. mutation and behaviour coverage are skipped, with that as
+# the reason, when patch-coverage is off: they need the same pytest suite. See
+# CRAFTSMANSHIP.md's "Test gates". Thresholds are settings there too
+# (`threshold = 90`), not edits to this file.
 
   tidy:
     name: Tidy First ratchet
@@ -80,26 +92,21 @@
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
         run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
 
-# Unlike the three gates above, this one doesn't call a script craft-gate
-# ships — it wires up `pytest --cov` + diff-cover (github.com/Bachmann1234/
-# diff_cover), both third-party, against *your own* test suite. There is no
-# generic default here: fill in `--cov=<your_package>` below, and add
-# `diff-cover` (plus your coverage runner, if you don't already have one) to
-# your dev dependencies. `--fail-under 90` is the starting point CRAFTSMANSHIP.md
-# documents, not a mandated number — change it to match your own repo's bar.
-# Fails when the diff's *changed* lines are under-covered; a repo that's
-# 40% covered overall still passes here as long as every line this PR
-# touches is well-tested — the point is not letting new debt accumulate,
-# not retroactively demanding full coverage of everything that exists.
+# Unlike the three gates above, this one wires up `pytest --cov` + diff-cover
+# (github.com/Bachmann1234/diff_cover), both third-party, against *your own*
+# test suite; add `diff-cover` (plus your coverage runner, if you don't already
+# have one) to your dev dependencies. Fails when the diff's *changed* lines are
+# under-covered (`threshold`, default 90, set in pyproject.toml); a repo that's
+# 40% covered overall still passes as long as every line this PR touches is
+# well-tested — the point is not letting new debt accumulate, not
+# retroactively demanding full coverage of everything that exists. Measure a
+# specific package with `source = "your_package"` under [tool.craft-gate.patch-coverage].
 #
 # If you already have a job that runs `pytest --cov ... --cov-report=xml`
 # (a lint-and-test job, a matrix job, whatever) — add the "Patch coverage"
 # step below to THAT job instead of using this standalone one. This job
 # reruns your whole suite a second time just to get a second coverage.xml;
 # that's the right shape only when nothing else already produces one.
-# Verified against three real adoptions: two repos had an existing
-# coverage-producing job and got the step embedded there for free; one had
-# none and got this job as-is. See CRAFTSMANSHIP.md's "Patch coverage".
   patch-coverage:
     name: Patch coverage (diff-cover)
     runs-on: ubuntu-latest
@@ -111,17 +118,24 @@
 
       - uses: astral-sh/setup-uv@v7
 
+      - name: Is this gate on for this repo?
+        id: gate
+        run: python3 scripts/gate_config.py patch-coverage
+
       - name: uv sync --extra dev
+        if: steps.gate.outputs.status == 'run'
         run: uv sync --extra dev
 
       - name: Run tests with coverage
-        run: uv run pytest --cov=<your_package> --cov-report=xml   # ← set your package
+        if: steps.gate.outputs.status == 'run'
+        run: uv run pytest --cov${{ steps.gate.outputs.source && format('={0}', steps.gate.outputs.source) || '' }} --cov-report=xml
 
-      - name: "Patch coverage: changed lines must be ≥ 90% covered"
+      - name: "Patch coverage: changed lines must be covered"
+        if: steps.gate.outputs.status == 'run'
         run: |
           uv run diff-cover coverage.xml \
             --compare-branch "origin/${{ github.base_ref }}" \
-            --fail-under 90
+            --fail-under ${{ steps.gate.outputs.threshold }}
 
 # The one gate here that doesn't call a script craft-gate ships either — it
 # wires up mutmut (github.com/boxed/mutmut), third-party, against *your own*
@@ -134,8 +148,9 @@
 # patch-coverage; a genuinely equivalent mutant gets mutmut's own
 # `# pragma: no mutate` instead.
 #
-# Configure `[tool.mutmut]` in the consuming project's pyproject.toml before
-# installing the default gate. The dependency is part of the default dev
+# Needs `[tool.mutmut]` in the consuming project's pyproject.toml: with the gate
+# on and that section missing, the job fails and says so (see "Test gates"
+# above); it no longer passes quietly. The dependency is part of the default dev
 # toolchain and the local runner uses the same cached `mutants/` directory.
 # Recommended config:
 #   source_paths = ["your_package"]
@@ -157,10 +172,16 @@
 
       - uses: astral-sh/setup-uv@v7
 
+      - name: Is this gate on for this repo?
+        id: gate
+        run: python3 scripts/gate_config.py mutation
+
       - name: uv sync --extra mutation --extra dev   # ← plus whatever installs your own test deps
+        if: steps.gate.outputs.status == 'run'
         run: uv sync --extra mutation --extra dev
 
       - name: Cache mutmut results
+        if: steps.gate.outputs.status == 'run'
         uses: actions/cache@v6
         with:
           path: mutants
@@ -171,14 +192,54 @@
       # dependency list, pytest's own arguments, the root conftest); otherwise only what the diff
       # can have changed. See DESIGN.md, "Diff-scoped mutation runs".
       - name: mutmut run (diff-scoped)
+        if: steps.gate.outputs.status == 'run'
         run: uv run python3 scripts/mutation_plan.py run --base "origin/${{ github.base_ref || 'main' }}"
 
       - name: "Mutation ratchet: touched functions' mutation score"
+        if: steps.gate.outputs.status == 'run'
         run: |
           uv run python3 scripts/check_mutation_ratchet.py \
             --base "origin/${{ github.base_ref || 'main' }}" \
-            --threshold 80 \
-            --improvement 20
+            --threshold ${{ steps.gate.outputs.threshold }} \
+            --improvement ${{ steps.gate.outputs.improvement }}
+
+# Behaviour (Gherkin) coverage: the same question as patch-coverage, asked of the
+# scenarios alone. It runs only the behaviour tests (`paths`, default
+# tests/features, e.g. pytest-bdd scenarios) with coverage and requires the
+# lines this diff changed to be covered by them (`threshold`, default 80). Unit
+# tests can cover a line without any scenario ever describing the behaviour it
+# serves; this fails that. A scenario with a step that has no definition fails
+# when the behaviour tests run, so orphaned steps are caught here too. Needs
+# `.feature` files under `paths`, and fails saying so when there are none.
+  behaviour-coverage:
+    name: Behaviour coverage (Gherkin)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Is this gate on for this repo?
+        id: gate
+        run: python3 scripts/gate_config.py bdd
+
+      - name: uv sync --extra dev   # ← plus pytest-bdd, which your test deps should already have
+        if: steps.gate.outputs.status == 'run'
+        run: uv sync --extra dev
+
+      - name: Run the behaviour tests with coverage
+        if: steps.gate.outputs.status == 'run'
+        run: uv run pytest ${{ steps.gate.outputs.paths }} --cov --cov-report=xml:coverage-bdd.xml
+
+      - name: "Behaviour coverage: changed lines must be covered by scenarios"
+        if: steps.gate.outputs.status == 'run'
+        run: |
+          uv run diff-cover coverage-bdd.xml \
+            --compare-branch "origin/${{ github.base_ref }}" \
+            --fail-under ${{ steps.gate.outputs.threshold }}
 
 # ── Reporting, not enforcement — but still part of the default setup ────────
 # Neither job fails a build; both make what the gates above found visible

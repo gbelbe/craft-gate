@@ -24,6 +24,7 @@ SHIPPED = [
     "scripts/craftcov_pr_comment.py",
     "scripts/check_mutation_ratchet.py",
     "scripts/mutation_plan.py",
+    "scripts/gate_config.py",
     "scripts/gitdiff.py",
     "scripts/astfuncs.py",
     "scripts/local-craft-gate.sh",

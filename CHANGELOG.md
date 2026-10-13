@@ -10,6 +10,19 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Breaking:** the three test gates, patch coverage, the mutation ratchet and a new
+  behaviour-coverage gate, are **on unless the repo declares otherwise**. Before,
+  they ran only if you pasted the job in, and the mutation job quietly passed
+  without `[tool.mutmut]`. Now each job first asks `scripts/gate_config.py`: it
+  runs, is skipped because `pyproject.toml`'s `[tool.craft-gate.<gate>]` says
+  `enabled = false` with a required `reason` (shown in the PR comment), or fails
+  saying what the repo lacks. To upgrade, re-run `bootstrap.sh`, copy the new jobs
+  from `templates/ci-job.yml`, and for each gate you don't want yet add the opt-out.
+- **Added:** behaviour coverage. It runs only the Gherkin scenarios
+  (`tests/features` by default) under coverage and requires the lines a diff
+  changed to be covered by them. Thresholds are settings now (`threshold`,
+  `improvement`), not edits to the workflow.
+
 Merged after v0.22.1; none of it changes what a consumer receives except where
 noted. `tidy:`, `test:` and `docs:` commits don't cut a release.
 

@@ -24,8 +24,8 @@ cat $CRAFT_GATE/templates/ci-job.yml
 ```
 
 Add the jobs to `.github/workflows/ci.yml` and set your branch name. There are
-seven: five gates (the tidy ratchet, Refactor First, the complexity ratchet,
-patch coverage, the mutation ratchet) and two reporting jobs (a sticky PR comment
+eight: six gates (the tidy ratchet, Refactor First, the complexity ratchet,
+patch coverage, the mutation ratchet, behaviour coverage) and two reporting jobs (a sticky PR comment
 and a code-scanning SARIF upload) that show what the gates found without blocking
 a merge themselves.
 
@@ -35,8 +35,14 @@ Each gate needs its own toolchain; skip a gate and you skip its dependency:
 |---|---|
 | Refactor First | a `craftcov` extra: ruff, pylint, vulture (and pyyaml unless already a dependency) |
 | Complexity ratchet | a `complexity` extra: radon, cognitive-complexity |
-| Patch coverage | `diff-cover` and a coverage runner in your dev deps, with `--cov=<your_package>` set in the job. Skip it if the repo has no pytest suite worth gating on yet |
+| Patch coverage | `diff-cover` and a coverage runner in your dev deps, and a pytest suite |
 | Mutation ratchet | a `mutation` extra (mutmut), your own test-running deps, and a `[tool.mutmut]` section in `pyproject.toml` |
+| Behaviour coverage | `pytest-bdd` (or any runner that puts scenarios under pytest) and `.feature` files under `tests/features` |
+
+The last three are on by default and take their settings from `pyproject.toml`'s
+`[tool.craft-gate]`, not from the workflow file. To skip one, set `enabled = false`
+with a `reason` there; a gate that is on but has nothing to check fails and tells you
+so. CRAFTSMANSHIP.md's "Test gates" has the table and an example.
 | SARIF upload | a public repo or GitHub Advanced Security. Skip just this job if neither applies |
 
 The local runner is `scripts/local-craft-gate.sh`. Call it after your test
