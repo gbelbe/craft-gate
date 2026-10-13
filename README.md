@@ -231,8 +231,13 @@ templates/
 bootstrap.sh               installer/updater
 tests/
   fixtures/                 ground truth for craftCov's detectors
+  conftest.py               scripts on sys.path; tmp-git-repo and `main()` fixtures
   test_fixtures.py          checks each detector fired where it should
+  test_craftcov_*.py        craftCov's pure pieces, CLI, and PR-comment renderer
+  test_check_*.py           the refactor-first, complexity and mutation gates
 ```
+
+Run the suite with `uv run --extra dev pytest tests`.
 
 This repo applies its own tooling to itself (`AGENTS.md`,
 `.pre-commit-config.yaml`, `.claude/skills/tidy-first/SKILL.md` — produced

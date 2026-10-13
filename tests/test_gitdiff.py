@@ -1,17 +1,14 @@
-#!/usr/bin/env python3
 """The shared git/AST helpers, behaviourally, against a real throwaway repository."""
 
 from __future__ import annotations
 
 import ast
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import astfuncs  # noqa: E402
-import gitdiff  # noqa: E402
+import astfuncs
+import gitdiff
 
 
 def _run(repo: Path, *args: str) -> None:
@@ -93,10 +90,3 @@ def test_walk_functions_qualifies_methods_and_nested_functions() -> None:
     ]
     assert astfuncs.qualified([], "x") == "x"
     assert astfuncs.qualified(["A", "B"], "x") == "A.B.x"
-
-
-if __name__ == "__main__":
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for t in tests:
-        t()
-    print(f"✓ {len(tests)} shared-helper tests passed")

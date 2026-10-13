@@ -1,21 +1,13 @@
-#!/usr/bin/env python3
 """Ground-truth regression test for craftCov's detectors.
 
-Not pytest — this project deliberately has no test-framework dependency
-(see README's Requirements: PyYAML + whichever detector tools you use, and
-nothing else). Runs craftcov.py against tests/fixtures/ (one small,
-hand-authored file per detectable heuristic, each with a docstring
-explaining exactly what it's supposed to trigger and why) and checks that
+Runs craftcov.py against tests/fixtures/ (one small, hand-authored file per detectable heuristic,
+each with a docstring explaining exactly what it's supposed to trigger and why) and checks that
 each detector fires where it should.
 
-Presence checks, not exact-match: a fixture built to trigger one heuristic
-often legitimately trips others too (replace_conditional_with_polymorphism.py
-also trips guard-clauses and explaining-constant — that's the fixture being
-honest about how real code behaves, not a bug to suppress). The one file
-held to an exact-zero standard is clean.py, the negative control.
-
-Usage:
-    python3 tests/test_fixtures.py
+Presence checks, not exact-match: a fixture built to trigger one heuristic often legitimately
+trips others too (replace_conditional_with_polymorphism.py also trips guard-clauses and
+explaining-constant — that's the fixture being honest about how real code behaves, not a bug to
+suppress). The one file held to an exact-zero standard is clean.py, the negative control.
 """
 
 from __future__ import annotations
@@ -24,6 +16,8 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -44,9 +38,9 @@ EXPECTED: dict[str, set[str]] = {
 MUST_BE_CLEAN = {"clean.py"}
 
 
-def main() -> int:
-    cache = ROOT / ".craftcov_cache.json.fixtures_test"
-    snapshot = ROOT / ".craftcov_last_report.json.fixtures_test"
+@pytest.fixture(scope="module")
+def findings(tmp_path_factory: pytest.TempPathFactory) -> dict[str, list[dict]]:
+    scratch = tmp_path_factory.mktemp("fixtures-scan")
     proc = subprocess.run(
         [
             sys.executable,
@@ -54,9 +48,9 @@ def main() -> int:
             "--path",
             str(FIXTURES),
             "--cache-file",
-            str(cache),
+            str(scratch / "cache.json"),
             "--snapshot-file",
-            str(snapshot),
+            str(scratch / "snapshot.json"),
             "--no-cache",
             "--no-diff",
             "--format",
@@ -65,44 +59,27 @@ def main() -> int:
         capture_output=True,
         text=True,
         cwd=ROOT,
+        check=False,
     )
-    cache.unlink(missing_ok=True)
-    snapshot.unlink(missing_ok=True)
-    if proc.returncode != 0:
-        print(f"✗ craftcov.py exited {proc.returncode}:\n{proc.stderr}", file=sys.stderr)
-        return 1
-
-    data = json.loads(proc.stdout)
-    findings = data["findings"]
-
-    failures: list[str] = []
-
-    for rel, expected_ids in EXPECTED.items():
-        found_ids = {f["heuristic_id"] for f in findings.get(rel, [])}
-        missing = expected_ids - found_ids
-        if missing:
-            failures.append(f"{rel}: expected {sorted(missing)}, got {sorted(found_ids) or '(nothing)'}")
-
-    for rel in MUST_BE_CLEAN:
-        found = findings.get(rel, [])
-        if found:
-            ids = sorted({f["heuristic_id"] for f in found})
-            failures.append(f"{rel}: expected zero findings (negative control), got {ids}")
-
-    all_fixture_files = {p.name for p in FIXTURES.glob("*.py")}
-    unaccounted = all_fixture_files - set(EXPECTED) - MUST_BE_CLEAN
-    if unaccounted:
-        failures.append(f"fixtures present but not listed in EXPECTED or MUST_BE_CLEAN: {sorted(unaccounted)}")
-
-    if failures:
-        print("✗ ground-truth regression failed:")
-        for f in failures:
-            print(f"  - {f}")
-        return 1
-
-    print(f"✓ all {len(EXPECTED)} detectors fired on their ground-truth fixture, clean.py stayed clean")
-    return 0
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)["findings"]
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@pytest.mark.parametrize(("rel", "expected_ids"), sorted(EXPECTED.items()))
+def test_each_detector_fires_on_its_ground_truth_fixture(findings, rel, expected_ids) -> None:
+    found_ids = {f["heuristic_id"] for f in findings.get(rel, [])}
+
+    assert expected_ids <= found_ids, f"{rel}: got {sorted(found_ids) or '(nothing)'}"
+
+
+@pytest.mark.parametrize("rel", sorted(MUST_BE_CLEAN))
+def test_the_negative_control_stays_clean(findings, rel) -> None:
+    ids = sorted({f["heuristic_id"] for f in findings.get(rel, [])})
+
+    assert ids == []
+
+
+def test_every_fixture_file_is_accounted_for() -> None:
+    on_disk = {p.name for p in FIXTURES.glob("*.py")}
+
+    assert on_disk == set(EXPECTED) | MUST_BE_CLEAN

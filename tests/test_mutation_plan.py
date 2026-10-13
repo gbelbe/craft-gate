@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""What a change invalidates in the mutation cache, and nothing more (no pytest dependency).
+"""What a change invalidates in the mutation cache, and nothing more.
 
 mutmut tracks production functions by hash but cannot see what a test, a fixture, a data file or an
 unmutated helper does to a verdict. The planner decides, from the diff and mutmut's own stats, which
@@ -49,21 +48,23 @@ SELECTION = (
     "tests/unit/test_promote.py",
     "tests/unit/test_server.py",
 )
+RESET_VERDICTS = 2
 MUTATED = ("ster/store/_load_save.py", "ster/mcp_context.py", "ster/mcp_server.py")
 
 
-def make(
-    changes, *, stats=STATS, sources=None, sections=(), selection=SELECTION, old_selection=None
-):
+def make(changes, **overrides):
+    """Plan for `changes`; `overrides` replace any of the defaults below."""
+    given = {"stats": STATS, "sources": None, "sections": (), "selection": SELECTION, **overrides}
+    old_selection = overrides.get("old_selection") or SELECTION
     return mp.plan(
         mp.Inputs(
             changes=tuple(changes),
             mutated_files=frozenset(MUTATED),
-            selection=tuple(selection),
-            old_selection=tuple(SELECTION if old_selection is None else old_selection),
-            stats=stats,
-            sources=sources or {},
-            changed_sections=tuple(sections),
+            selection=tuple(given["selection"]),
+            old_selection=tuple(old_selection),
+            stats=given["stats"],
+            sources=given["sources"] or {},
+            changed_sections=tuple(given["sections"]),
             all_modules=frozenset(),
         )
     )
@@ -303,7 +304,7 @@ def test_resetting_functions_clears_only_their_verdicts() -> None:
 
     count = mp.reset_verdicts(meta, {PROMOTE})
 
-    assert count == 2
+    assert count == RESET_VERDICTS
     assert meta["exit_code_by_key"] == {
         "ster.store._load_save.x__promote_one__mutmut_1": None,
         "ster.store._load_save.x__promote_one__mutmut_2": None,
@@ -396,10 +397,3 @@ def test_a_fingerprint_that_matches_no_known_selection_is_refused() -> None:
     except mp.CacheFormatError:
         return
     raise AssertionError("expected CacheFormatError")
-
-
-if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_"):
-            test()
-    print("mutation plan tests passed")

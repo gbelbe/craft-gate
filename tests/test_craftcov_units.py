@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Characterization of craftcov's pure pieces (no pytest dependency, no external tools).
+"""Characterization of craftcov's pure pieces.
 
 Pins what the module does today so it can be restructured under it: the
 dupes engine, scope attribution, detector indexing, aggregation, the cache and
@@ -13,12 +12,10 @@ import contextlib
 import io
 import json
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-import craftcov  # noqa: E402
+import craftcov
 
 BY_FILE = "by_file"
 BY_HEURISTIC = "by_heuristic"
@@ -459,10 +456,3 @@ def test_corpus_findings_default_to_eight_lines_and_need_the_dupes_tool() -> Non
         craftcov.merge_corpus_findings(root, ["a.py", "b.py"], by_file, {DUPES: {ENTRY: entry}})
         assert sorted(by_file) == ["a.py", "b.py"]
         assert by_file["a.py"][0][HEURISTIC_CODE] == ""
-
-
-if __name__ == "__main__":
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for t in tests:
-        t()
-    print(f"craftcov unit characterization passed ({len(tests)})")

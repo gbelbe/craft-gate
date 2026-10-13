@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Characterization of the craftcov CLI end to end (no pytest dependency).
+"""Characterization of the craftcov CLI end to end.
 
 Runs scripts/craftcov.py as a subprocess, with the real ruff / pylint / vulture, against a
 throwaway git repo built from tests/fixtures/. Pins the observable contract — report text,
@@ -375,10 +374,3 @@ def test_vulture_confidence_floor_filters_its_findings(repo: Repo) -> None:
     low = repo.json(NO_CACHE)[SUMMARY][BY_HEURISTIC][DEAD_CODE]
     high = repo.json(NO_CACHE, "--vulture-min-confidence", "100")[SUMMARY][BY_HEURISTIC]
     assert (low, high[DEAD_CODE]) == (5, 3)  # the two 60% vulture findings drop out
-
-
-if __name__ == "__main__":
-    tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for t in tests:
-        t()
-    print(f"craftcov CLI characterization passed ({len(tests)})")

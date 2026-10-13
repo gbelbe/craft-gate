@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""The mutation ratchet's acceptance rule, behaviourally (no pytest dependency).
+"""The mutation ratchet's acceptance rule, behaviourally.
 
 A touched function is accepted when it scores at least the threshold (80%), or, only when it
 already has a recorded baseline score, when it improves on that score by at least the improvement
@@ -165,10 +164,3 @@ def test_a_function_whose_mutants_were_not_all_re_tested_is_flagged() -> None:
     violations, _ = evaluate_domain(results, {"f": 50.0})
 
     assert violations == ["f: 3 mutant(s) were not re-tested after the plan reset them"]
-
-
-if __name__ == "__main__":
-    for name, test in sorted(globals().items()):
-        if name.startswith("test_"):
-            test()
-    print("mutation ratchet rule tests passed")
