@@ -43,6 +43,7 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
+from design_review import render_review, review_diff
 from gate_config import render_skipped, skipped_gates
 from gitdiff import base_ref_parser, git
 
@@ -198,9 +199,8 @@ def main() -> int:
         head_agg = scan_ref(repo, "HEAD", scratch)
 
     body = render_markdown(base_agg, head_agg, catalog_by_id, args.repo, head_sha)
-    switched_off = render_skipped(skipped_gates(repo))
-    if switched_off:
-        body += "\n\n" + switched_off
+    advisory = [render_skipped(skipped_gates(repo)), render_review(review_diff(repo, args.base))]
+    body = "\n\n".join([body, *filter(None, advisory)])
 
     if args.dry_run:
         print(body)

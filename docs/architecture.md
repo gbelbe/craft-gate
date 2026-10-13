@@ -27,6 +27,7 @@ flowchart LR
         MR[check_mutation_ratchet.py]
         PC[craftcov_pr_comment.py]
         GC[gate_config.py<br/>test gates on/off]
+        DR[design_review.py<br/>advisory prompts]
     end
 
     subgraph shared["Shared helpers"]
@@ -45,6 +46,7 @@ flowchart LR
     MP -. plans which mutants to re-run .-> MR
     GC -. decides if they run .-> MR
     GC --> PC
+    DR --> PC
     DIFF([PR diff<br/>+ commit range]) --> TIDY & RF & CX & MR & PC
 ```
 

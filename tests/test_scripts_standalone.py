@@ -16,6 +16,7 @@ SCRIPTS = [
     "check_mutation_ratchet.py",
     "craftcov_pr_comment.py",
     "gate_config.py",
+    "design_review.py",
 ]
 
 

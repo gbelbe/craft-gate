@@ -33,6 +33,7 @@ SHIPPED=(
   scripts/check_mutation_ratchet.py
   scripts/mutation_plan.py
   scripts/gate_config.py
+  scripts/design_review.py
   # helpers the gate scripts import — they must travel with them
   scripts/gitdiff.py
   scripts/astfuncs.py

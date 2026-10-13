@@ -73,7 +73,8 @@ much per project to merge automatically:
 | 3 | Agent guidance | `templates/AGENTS.md.snippet.md` | `AGENTS.md` |
 | 4 | Weekly auto-update | `templates/update-check.yml` | `.github/workflows/craft-gate-update.yml` |
 | 5 | PR labels for review (optional) | `templates/label-tidy-prs.yml` | `.github/workflows/craft-gate-label.yml` |
-| 6 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
+| 6 | PR checklist for judgement calls (optional) | `templates/PULL_REQUEST_TEMPLATE.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
+| 7 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
 
 Step 4 matters most in practice; without it, staying current means remembering
 to re-run `bootstrap.sh`. Each gate's toolchain, with exact version pins, is
