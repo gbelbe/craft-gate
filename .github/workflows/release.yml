@@ -1,7 +1,7 @@
 name: Release
 
 # Every push to main asks the commit log what version it earned, via
-# scripts/next_version.py (Conventional Commits: feat -> minor, fix/perf/
+# tools/next_version.py (Conventional Commits: feat -> minor, fix/perf/
 # refactor/build/revert -> patch, a ! or BREAKING CHANGE: -> major, anything
 # else — docs/chore/test/ci/style — releases nothing). No separate
 # publish step to decouple from here (unlike a package that ships to a
@@ -29,7 +29,7 @@ jobs:
       - name: Work out the next version
         id: next
         run: |
-          version="$(python3 scripts/next_version.py)"
+          version="$(python3 tools/next_version.py)"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           if [ -z "$version" ]; then
             echo "No releasable commits since the last tag — nothing to do." >> "$GITHUB_STEP_SUMMARY"

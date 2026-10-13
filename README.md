@@ -207,16 +207,20 @@ CRAFTSMANSHIP.md          procedure, commit convention, legacy-code method
 catalog.yaml               the actual catalog data — edit this, not the
                            tables in CRAFTSMANSHIP.md directly
 pyproject.toml             PyYAML (base) + the craftcov / complexity / mutation extras
-scripts/
+scripts/                    everything here is installed into consumers by bootstrap.sh
   check_tidy_ratchet.sh     the CI/pre-push ratchet
   report_tidy_history.sh    the periodic exemption-ratio / sources report
-  render_catalog.py         catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
   craftcov.py               coverage-style scan for the detectable heuristics (entry point + facade)
   craftcov_core/            its implementation: catalog, adapters, dupes, scan, cache, render, cli
   check_refactor_first.py   CI gate: a touched file's craftCov total must go down
   check_complexity_ratchet.py  CI gate: complexity, invariant return, duplicated literal
   craftcov_pr_comment.py    optional: sticky PR comment
   check_mutation_ratchet.py CI gate: touched functions' mutation score
+  mutation_plan.py          diff-scoped mutation runs: which mutants a change can have affected
+  gitdiff.py, astfuncs.py   helpers the gate scripts import; they travel with them
+  local-craft-gate.sh       runs the gates locally (installed from templates/)
+tools/                      this repo's own tooling; not installed into consumers
+  render_catalog.py         catalog.yaml -> CRAFTSMANSHIP.md's tables (--check in CI)
   next_version.py           Conventional-Commits -> semver, used by release.yml
 skills/tidy-first/
   SKILL.md                 optional Claude Code skill wrapper around CRAFTSMANSHIP.md

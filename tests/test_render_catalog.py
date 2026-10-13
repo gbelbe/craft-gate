@@ -1,18 +1,8 @@
-#!/usr/bin/env python3
 """render_catalog.py's generated counts, behaviourally."""
 
 from __future__ import annotations
 
-import importlib.util
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parent.parent
-_SPEC = importlib.util.spec_from_file_location(
-    "render_catalog", ROOT / "scripts" / "render_catalog.py"
-)
-assert _SPEC and _SPEC.loader
-render = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(render)
+import render_catalog as render
 
 CATALOG = [
     {"id": "a", "kind": "tidying", "detectors": [{"tool": "ruff"}]},
