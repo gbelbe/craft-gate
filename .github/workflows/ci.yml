@@ -243,6 +243,9 @@ jobs:
       - name: Shared git/AST helpers (behavioural tests, no pytest dependency)
         run: python3 tests/test_gitdiff.py
 
+      - name: craftCov pure pieces (characterization, no pytest dependency)
+        run: python3 tests/test_craftcov_units.py
+
       - name: templates/*.yml and templates/*.yaml are valid YAML
         run: |
           python3 -c "import yaml; yaml.safe_load(open('templates/pre-commit-hook.yaml')); print('pre-commit-hook.yaml OK')"
@@ -297,6 +300,9 @@ jobs:
 
       - name: Ground-truth regression (tests/fixtures/ — every detector fires correctly)
         run: uv run python3 tests/test_fixtures.py
+
+      - name: craftCov CLI end to end (characterization, real ruff/pylint/vulture)
+        run: uv run python3 tests/test_craftcov_cli.py
 
   # Diff-aware: only meaningful against a PR's base branch.
   tidy:
