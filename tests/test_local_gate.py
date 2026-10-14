@@ -63,7 +63,10 @@ def test_ci_template_keeps_all_five_gates_and_two_reports() -> None:
 def test_ci_template_uses_freshness_aware_mutation_cache() -> None:
     template = (ROOT / "templates" / "ci-job.yml").read_text()
 
-    assert "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock')" in template
+    assert (
+        "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock', 'scripts/gate-requirements.txt')"
+        in template
+    )
     # mutation_plan.py decides what a test change invalidates; mutmut's own reset is turned down
     assert 'on_dependency_change = "warn"' in template
     assert "mutation_plan.py run" in template

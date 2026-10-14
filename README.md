@@ -77,13 +77,13 @@ much per project to merge automatically:
 | 7 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
 
 Step 4 matters most in practice; without it, staying current means remembering
-to re-run `bootstrap.sh`. Each gate's toolchain, with exact version pins, is
-listed in this repo's [`pyproject.toml`](pyproject.toml) extras (`craftcov`,
-`complexity`, `mutation`). Skip a gate and you skip its dependency too.
+to re-run `bootstrap.sh`. The tools the gates run (ruff, pylint, vulture, radon, mutmut,
+diff-cover, pytest-cov) are pinned in [`scripts/gate-requirements.txt`](scripts/gate-requirements.txt),
+which `bootstrap.sh` installs and the jobs pass to `uv run --with-requirements`: your repo
+needs `uv`, and no extras of its own for them.
 
 Python 3.10 or later. `scripts/gate_config.py` reads `pyproject.toml` with `tomllib`
-(standard library from 3.11); on 3.10 your environment needs `tomli` installed, which
-this repo's `pyproject.toml` declares for itself. The scripts are bash and Python, tested on
+(standard library from 3.11); on 3.10 the pinned `tomli` in `scripts/gate-requirements.txt` supplies it. The scripts are bash and Python, tested on
 Linux and macOS; Windows is untested.
 
 Confirm the install works:

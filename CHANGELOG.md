@@ -10,6 +10,14 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Changed:** a repo no longer needs `craftcov`, `complexity` or `mutation` extras in its own
+  `pyproject.toml` to run the gate jobs. The tools are pinned to exact versions in
+  `scripts/gate-requirements.txt` (installed by `bootstrap.sh`) and every job passes that file to
+  `uv run --with-requirements`, so a ruff or pylint release cannot change a verdict between a PR's
+  base and head, and `gate_config.py` runs on any Python. The three test gates install your own test
+  dependencies with `uv sync --all-extras`. Re-copy the jobs from `templates/ci-job.yml` and re-run
+  `bootstrap.sh`; extras you already have keep working. A test keeps the pins equal to this repo's
+  lock file and inside the ranges its `pyproject.toml` declares.
 - **Fixed:** the tidy ratchet passed with a warning when its base ref was missing, even in CI, so a
   checkout without history (`fetch-depth: 0`) or a wrong base branch left the gate green forever.
   In CI (`CI` or `GITHUB_ACTIONS` set) it now fails and says why; on a developer machine it still warns.

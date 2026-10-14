@@ -8,7 +8,13 @@
 # (craftcov-sarif needs a public repo or GitHub Advanced Security).
 # Set the branch name in the places marked below. The last three gates
 # (patch-coverage, mutation-ratchet, behaviour-coverage) take their settings
-# from your pyproject.toml, not from this file: see "Test gates" just below.
+# from craft-gate.toml (or pyproject.toml's [tool.craft-gate]), not from this file:
+# see "Test gates" just below.
+#
+# The tools the jobs run (ruff, pylint, vulture, radon, mutmut, diff-cover, pytest-cov) come from
+# scripts/gate-requirements.txt, which bootstrap.sh installs, at exact versions. Your repo needs
+# only `uv`; the three test gates also need your own test dependencies, installed by
+# `uv sync --all-extras`.
 #
 # All six gates skip bot-authored PRs (dependabot, renovate, etc. — any
 # actor ending in `[bot]`): those tools can't write a `tidy(<type>)` commit
@@ -21,7 +27,7 @@
 # patch-coverage, mutation-ratchet and behaviour-coverage run by default.
 # Each first asks scripts/gate_config.py whether it applies here:
 #   * on, and the repo has what it needs   -> the gate runs
-#   * switched off in pyproject.toml       -> the job is skipped, the reason is
+#   * switched off in the config           -> the job is skipped, the reason is
 #                                             in the job summary and PR comment
 #   * on, but the repo lacks what it needs -> the job FAILS and says what to add
 # so a gate never passes just because it found nothing to check. To switch one
@@ -47,9 +53,9 @@
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
 # A separate job, not a step in `tidy` above, because it's a real CI pass —
-# it needs craftCov's toolchain (`uv sync --extra craftcov`; see DESIGN.md's
-# craftCov section and pyproject.toml's `craftcov` extra) where `tidy` above
-# needs nothing beyond bash. Fails a PR when a touched .py file's total
+# it needs craftCov's toolchain (ruff, pylint, vulture), which `uv run --with-requirements
+# scripts/gate-requirements.txt` supplies at pinned versions, so your pyproject needs no extra for it;
+# `tidy` above needs nothing beyond bash. Fails a PR when a touched .py file's total
 # across the 8 mechanically-detectable heuristics didn't go down (or,
 # starting from 0, went up at all) — see CRAFTSMANSHIP.md's "Refactor First".
   refactor-first:
@@ -63,15 +69,12 @@
 
       - uses: astral-sh/setup-uv@v7
 
-      - name: uv sync --extra craftcov
-        run: uv sync --extra craftcov
-
       - name: "Refactor First: touched files' detectable-heuristic total must go down (or stay 0)"
-        run: uv run python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/check_refactor_first.py --base "origin/${{ github.base_ref }}"
 
 # Independent of craftCov — its own script, its own catalog entries
-# (CG032-CG035), its own dependency extra (`uv sync --extra complexity`;
-# see DESIGN.md's "The complexity ratchet"). Fails a PR when a touched
+# (CG032-CG035), its own tools (radon, cognitive-complexity, from the same pinned
+# requirements file; see DESIGN.md's "The complexity ratchet"). Fails a PR when a touched
 # function/literal's cyclomatic/cognitive complexity, invariant-return, or
 # duplicated-string-literal metric got worse than where the branch
 # diverged — grandfathers what's already there, blocks what gets worse.
@@ -86,17 +89,14 @@
 
       - uses: astral-sh/setup-uv@v7
 
-      - name: uv sync --extra complexity
-        run: uv sync --extra complexity
-
       - name: "Complexity ratchet: cyclomatic/cognitive complexity, invariant return, duplicated literal"
-        run: uv run python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/check_complexity_ratchet.py --base "origin/${{ github.base_ref }}"
 
 # Unlike the three gates above, this one wires up `pytest --cov` + diff-cover
 # (github.com/Bachmann1234/diff_cover), both third-party, against *your own*
 # test suite; add `diff-cover` (plus your coverage runner, if you don't already
 # have one) to your dev dependencies. Fails when the diff's *changed* lines are
-# under-covered (`threshold`, default 90, set in pyproject.toml); a repo that's
+# under-covered (`threshold`, default 90, set in craft-gate.toml); a repo that's
 # 40% covered overall still passes as long as every line this PR touches is
 # well-tested — the point is not letting new debt accumulate, not
 # retroactively demanding full coverage of everything that exists. Test files are
@@ -122,21 +122,21 @@
 
       - name: Is this gate on for this repo?
         id: gate
-        run: python3 scripts/gate_config.py patch-coverage
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/gate_config.py patch-coverage
 
-      - name: uv sync --extra dev
+      - name: uv sync --all-extras   # ← installs your own test deps; narrow it if your extras conflict
         if: steps.gate.outputs.status == 'run'
-        run: uv sync --extra dev
+        run: uv sync --all-extras
 
       - name: Run tests with coverage
         if: steps.gate.outputs.status == 'run'
-        run: uv run pytest --cov${{ steps.gate.outputs.source && format('={0}', steps.gate.outputs.source) || '' }} --cov-report=xml
+        run: uv run --with-requirements scripts/gate-requirements.txt pytest --cov${{ steps.gate.outputs.source && format('={0}', steps.gate.outputs.source) || '' }} --cov-report=xml
 
       - name: "Patch coverage: changed lines must be covered"
         if: steps.gate.outputs.status == 'run'
         run: |
           set -f   # the exclude globs are for diff-cover, not for this shell
-          uv run diff-cover coverage.xml \
+          uv run --with-requirements scripts/gate-requirements.txt diff-cover coverage.xml \
             --compare-branch "origin/${{ github.base_ref }}" \
             --fail-under ${{ steps.gate.outputs.threshold }} \
             ${{ steps.gate.outputs.exclude && format('--exclude {0}', steps.gate.outputs.exclude) || '' }}
@@ -178,18 +178,18 @@
 
       - name: Is this gate on for this repo?
         id: gate
-        run: python3 scripts/gate_config.py mutation
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/gate_config.py mutation
 
-      - name: uv sync --extra mutation --extra dev   # ← plus whatever installs your own test deps
+      - name: uv sync --all-extras   # ← installs your own test deps; narrow it if your extras conflict
         if: steps.gate.outputs.status == 'run'
-        run: uv sync --extra mutation --extra dev
+        run: uv sync --all-extras
 
       - name: Cache mutmut results
         if: steps.gate.outputs.status == 'run'
         uses: actions/cache@v6
         with:
           path: mutants
-          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock') }}
+          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock', 'scripts/gate-requirements.txt') }}
           restore-keys: mutmut-${{ runner.os }}-
 
       # Full campaign on first initialisation and on the few cache-wide causes (a lock file, the
@@ -197,12 +197,12 @@
       # can have changed. See DESIGN.md, "Diff-scoped mutation runs".
       - name: mutmut run (diff-scoped)
         if: steps.gate.outputs.status == 'run'
-        run: uv run python3 scripts/mutation_plan.py run --base "origin/${{ github.base_ref || 'main' }}"
+        run: uv run --with-requirements scripts/gate-requirements.txt python3 scripts/mutation_plan.py run --base "origin/${{ github.base_ref || 'main' }}"
 
       - name: "Mutation ratchet: touched functions' mutation score"
         if: steps.gate.outputs.status == 'run'
         run: |
-          uv run python3 scripts/check_mutation_ratchet.py \
+          uv run --with-requirements scripts/gate-requirements.txt python3 scripts/check_mutation_ratchet.py \
             --base "origin/${{ github.base_ref || 'main' }}" \
             --threshold ${{ steps.gate.outputs.threshold }} \
             --improvement ${{ steps.gate.outputs.improvement }}
@@ -228,21 +228,21 @@
 
       - name: Is this gate on for this repo?
         id: gate
-        run: python3 scripts/gate_config.py bdd
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/gate_config.py bdd
 
-      - name: uv sync --extra dev   # ← plus pytest-bdd, which your test deps should already have
+      - name: uv sync --all-extras   # ← your own test deps, including pytest-bdd
         if: steps.gate.outputs.status == 'run'
-        run: uv sync --extra dev
+        run: uv sync --all-extras
 
       - name: Run the behaviour tests with coverage
         if: steps.gate.outputs.status == 'run'
-        run: uv run pytest ${{ steps.gate.outputs.paths }} --cov --cov-report=xml:coverage-bdd.xml
+        run: uv run --with-requirements scripts/gate-requirements.txt pytest ${{ steps.gate.outputs.paths }} --cov --cov-report=xml:coverage-bdd.xml
 
       - name: "Behaviour coverage: changed lines must be covered by scenarios"
         if: steps.gate.outputs.status == 'run'
         run: |
           set -f   # the exclude globs are for diff-cover, not for this shell
-          uv run diff-cover coverage-bdd.xml \
+          uv run --with-requirements scripts/gate-requirements.txt diff-cover coverage-bdd.xml \
             --compare-branch "origin/${{ github.base_ref }}" \
             --fail-under ${{ steps.gate.outputs.threshold }} \
             ${{ steps.gate.outputs.exclude && format('--exclude {0}', steps.gate.outputs.exclude) || '' }}
@@ -270,14 +270,11 @@
 
       - uses: astral-sh/setup-uv@v7
 
-      - name: uv sync --extra craftcov
-        run: uv sync --extra craftcov
-
       - name: Post/update the craftCov PR comment
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          uv run python3 scripts/craftcov_pr_comment.py \
+          uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/craftcov_pr_comment.py \
             --base "origin/${{ github.base_ref }}" \
             --repo "${{ github.repository }}" \
             --pr "${{ github.event.pull_request.number }}"
@@ -302,11 +299,8 @@
 
       - uses: astral-sh/setup-uv@v7
 
-      - name: uv sync --extra craftcov
-        run: uv sync --extra craftcov
-
       - name: Generate craftCov SARIF
-        run: uv run python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/craftcov.py --format sarif --no-cache --no-diff > craftcov.sarif
 
       - uses: github/codeql-action/upload-sarif@v4
         with:

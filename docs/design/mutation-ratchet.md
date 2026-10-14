@@ -11,9 +11,9 @@ results and fails when a function the diff touches scores below a flat
 floor.
 
 ```bash
-uv sync --extra mutation
-uv run mutmut run
-uv run python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
+T="--with-requirements scripts/gate-requirements.txt"   # mutmut is pinned there
+uv run $T mutmut run
+uv run $T python3 scripts/check_mutation_ratchet.py --base origin/main --threshold 80
 ```
 
 **On by default (`templates/ci-job.yml`'s fifth gate).** Configure

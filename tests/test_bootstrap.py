@@ -27,6 +27,7 @@ SHIPPED = [
     "scripts/gate_config.py",
     "scripts/design_review.py",
     "scripts/config_loosening.py",
+    "scripts/gate-requirements.txt",
     "scripts/gitdiff.py",
     "scripts/astfuncs.py",
     "scripts/local-craft-gate.sh",
