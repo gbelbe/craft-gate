@@ -10,6 +10,14 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** the tidy ratchet passed with a warning when its base ref was missing, even in CI, so a
+  checkout without history (`fetch-depth: 0`) or a wrong base branch left the gate green forever.
+  In CI (`CI` or `GITHUB_ACTIONS` set) it now fails and says why; on a developer machine it still warns.
+- **Changed:** `templates/CODEOWNERS.snippet` owns the whole `scripts/` directory and `.claude/`
+  (`gate_config.py` holds the defaults and `gitdiff.py` decides what a change touched, and neither was
+  listed), plus `craft-gate.toml` and `pyproject.toml`. A test fails if a shipped file has no owner.
+- **Fixed:** the local runner's mutation-skip check named `ster/**/*.py`, a directory from another
+  project; it now looks at any changed `*.py`.
 - **Fixed:** a gate could pass silently on a file with a non-ASCII name. Git quotes such names
   (`"caf\303\251.py"`) unless told not to, so the complexity ratchet skipped them and Refactor First
   crashed. Every git call that lists paths now turns that off.

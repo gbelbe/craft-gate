@@ -65,8 +65,7 @@ if [[ $FAST -eq 0 ]]; then
       --fail-under "$threshold" $(exclude_args)
     set +f
   fi
-  changed_python=$(git diff --name-only "$BASE"...HEAD -- \
-    'ster/**/*.py' 'src/**/*.py' 'lib/**/*.py' 'tests/**/*.py' '*.py' || true)
+  changed_python=$(git diff --name-only "$BASE"...HEAD -- '*.py' || true)
   if gate_runs mutation; then
     if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
       threshold="$(gate_setting threshold)"
