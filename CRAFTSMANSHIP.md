@@ -493,9 +493,10 @@ Rules the file follows:
 - **Every value is proven.** `tests/features/config_effects.feature` moves each value and shows
   the verdict move with it, and a test fails if a value in the schema has no scenario. A value
   that did nothing would be decoration.
-- **Loosening is a decision.** Raising a limit or lowering a threshold fails no check, so review
-  changes to this file like changes to the gates (`templates/CODEOWNERS.snippet`). Never edit a
-  value to make a gate pass; fix the code.
+- **Loosening is a decision.** Raising a limit or lowering a threshold fails no check, so the PR
+  comment lists every value a change makes weaker (`scripts/config_loosening.py`, "Thresholds
+  loosened"), and `templates/CODEOWNERS.snippet` puts the file under review. Never edit a value to
+  make a gate pass; fix the code.
 - **New code stays strict by default.** `exemptions.new-code = true` reopens the loophole that
   `Tidy-Exempt:` used to be; leave it false.
 

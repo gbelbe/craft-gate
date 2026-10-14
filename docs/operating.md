@@ -40,8 +40,10 @@ gh api -X PATCH repos/<owner>/<repo> \
   -f squash_merge_commit_title=PR_TITLE -f squash_merge_commit_message=COMMIT_MESSAGES
 ```
 
-`templates/CODEOWNERS.snippet` adds the last piece: review on changes to the
-gate files themselves, since loosening a threshold or an ignore fails no check.
+A looser `craft-gate.toml` fails no check, so the PR comment has a "Thresholds loosened" section
+(`scripts/config_loosening.py`): it compares the config at the base with the head and lists each
+value that got weaker, with before and after. It never blocks. `templates/CODEOWNERS.snippet` adds
+the last piece: review on changes to the gate files and the config, so a person decides.
 It only blocks merges when branch protection requires Code Owner review.
 
 ## Badge

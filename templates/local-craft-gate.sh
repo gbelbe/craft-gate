@@ -80,6 +80,8 @@ if [[ $FAST -eq 0 ]]; then
   fi
 fi
 
+echo "--- thresholds loosened (advisory; a person decides) ---"
+uv run python scripts/config_loosening.py --base "$BASE"
 echo "--- design review (advisory; nothing here fails the run) ---"
 uv run python scripts/design_review.py --base "$BASE"
 uv run python scripts/craftcov_pr_comment.py --base "$BASE" --dry-run > craftcov-report.md

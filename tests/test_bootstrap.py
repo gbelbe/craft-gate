@@ -26,6 +26,7 @@ SHIPPED = [
     "scripts/mutation_plan.py",
     "scripts/gate_config.py",
     "scripts/design_review.py",
+    "scripts/config_loosening.py",
     "scripts/gitdiff.py",
     "scripts/astfuncs.py",
     "scripts/local-craft-gate.sh",

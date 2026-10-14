@@ -25,7 +25,7 @@ RULES = {
     "design review": "design_review.py",
     "the independent reviewer": "craft-review",
     "the PR checklist": "PULL_REQUEST_TEMPLATE.md",
-    "a looser value is reviewed": "reviewed like changes to the gates",
+    "a looser value is listed": "lists every value the change loosens",
 }
 
 

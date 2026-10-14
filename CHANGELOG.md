@@ -10,6 +10,13 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** a "Thresholds loosened" section in the PR comment (`scripts/config_loosening.py`). It
+  compares `craft-gate.toml` (or `[tool.craft-gate]`) at the base of the PR with the head and lists
+  each value that makes the gates weaker: a limit raised, a floor lowered, a gate switched off, an
+  exemption widened, a pattern added to what is not counted. Tightening and reformatting are silent.
+  Advisory; pair it with CODEOWNERS on the config. Every value in the schema has a row in a Gherkin
+  table and a ruling on which direction is looser, and a test fails if one does not.
+  Re-run `bootstrap.sh` to get the script.
 - **Added:** `craft-gate.toml`, one readable file for every number and rule the gates use: the
   complexity limits, Refactor First's per-file rule, the design-review limits, the test gates'
   thresholds, and what a `Tidy-Exempt:` trailer may waive. Copy `templates/craft-gate.toml`; every

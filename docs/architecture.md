@@ -28,6 +28,7 @@ flowchart LR
         PC[craftcov_pr_comment.py]
         GC[gate_config.py<br/>test gates on/off]
         DR[design_review.py<br/>advisory prompts]
+        CL[config_loosening.py<br/>base vs head config]
     end
 
     subgraph shared["Shared helpers"]
@@ -47,6 +48,7 @@ flowchart LR
     GC -. decides if they run .-> MR
     GC --> PC
     DR --> PC
+    CL --> PC
     DIFF([PR diff<br/>+ commit range]) --> TIDY & RF & CX & MR & PC
 ```
 

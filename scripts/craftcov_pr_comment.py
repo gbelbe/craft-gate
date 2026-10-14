@@ -31,11 +31,13 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
+from config_loosening import render_loosened, review_config  # noqa: E402
 from craftcov import (  # noqa: E402
     Summary,
     aggregate,
@@ -177,12 +179,20 @@ def post_or_update_comment(repo_slug: str, pr: int, body: str) -> None:
         )
 
 
-def _review_section(repo: Path, base: str) -> str:
-    """The advisory design review, or nothing when the repo's config cannot be read."""
+def _config_section(build: Callable[[], str]) -> str:
+    """A section built from the repo's config, or nothing when that config cannot be read."""
     try:
-        return render_review(review_diff(repo, base))
+        return build()
     except ConfigError:
         return ""  # the config problem is reported by the gates that read it; the comment goes on
+
+
+def _review_section(repo: Path, base: str) -> str:
+    return _config_section(lambda: render_review(review_diff(repo, base)))
+
+
+def _loosened_section(repo: Path, base: str) -> str:
+    return _config_section(lambda: render_loosened(review_config(repo, base)))
 
 
 def main() -> int:
@@ -210,7 +220,11 @@ def main() -> int:
         head_agg = scan_ref(repo, "HEAD", scratch)
 
     body = render_markdown(base_agg, head_agg, catalog_by_id, args.repo, head_sha)
-    advisory = [render_skipped(skipped_gates(repo)), _review_section(repo, args.base)]
+    advisory = [
+        render_skipped(skipped_gates(repo)),
+        _loosened_section(repo, args.base),
+        _review_section(repo, args.base),
+    ]
     body = "\n\n".join([body, *filter(None, advisory)])
 
     if args.dry_run:
