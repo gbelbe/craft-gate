@@ -33,7 +33,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from craftcov import (
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from craftcov import (  # noqa: E402
     Summary,
     aggregate,
     build_detector_index,
@@ -43,9 +46,9 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
-from design_review import render_review, review_diff
-from gate_config import render_skipped, skipped_gates
-from gitdiff import base_ref_parser, git
+from design_review import render_review, review_diff  # noqa: E402
+from gate_config import render_skipped, skipped_gates  # noqa: E402
+from gitdiff import base_ref_parser, git  # noqa: E402
 
 MARKER = "<!-- craftcov-pr-report -->"
 

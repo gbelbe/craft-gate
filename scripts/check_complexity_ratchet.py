@@ -69,8 +69,11 @@ import tempfile
 from pathlib import Path
 from typing import NamedTuple
 
-from astfuncs import walk_functions
-from gitdiff import has_tidy_exempt, touched_names
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import has_tidy_exempt, touched_names  # noqa: E402
 
 THRESHOLD = 15
 

@@ -16,30 +16,50 @@ Usage:
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-from craftcov_core.adapters import run_pylint, run_ruff, run_vulture
-from craftcov_core.cache import (
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from craftcov_core.adapters import run_pylint, run_ruff, run_vulture  # noqa: E402
+from craftcov_core.cache import (  # noqa: E402
     CACHE_VERSION,
     load_cache,
     load_report_snapshot,
     save_cache,
     save_report_snapshot,
 )
-from craftcov_core.catalog import CATALOG_PATH, DetectorIndex, build_detector_index, load_catalog
-from craftcov_core.cli import main
-from craftcov_core.discovery import discover_python_files, file_hash, normalize_path
-from craftcov_core.dupes import find_duplicate_blocks, run_dupes, strip_lines_for_dupes
-from craftcov_core.models import Finding, ReportOptions, RunContext, ScanResults, Summary, Timing
-from craftcov_core.pipeline import ScanSettings, restrict_to_file, scan_repository
-from craftcov_core.render import (
+from craftcov_core.catalog import (  # noqa: E402
+    CATALOG_PATH,
+    DetectorIndex,
+    build_detector_index,
+    load_catalog,
+)
+from craftcov_core.cli import main  # noqa: E402
+from craftcov_core.discovery import discover_python_files, file_hash, normalize_path  # noqa: E402
+from craftcov_core.dupes import (  # noqa: E402
+    find_duplicate_blocks,
+    run_dupes,
+    strip_lines_for_dupes,
+)
+from craftcov_core.models import (  # noqa: E402
+    Finding,
+    ReportOptions,
+    RunContext,
+    ScanResults,
+    Summary,
+    Timing,
+)
+from craftcov_core.pipeline import ScanSettings, restrict_to_file, scan_repository  # noqa: E402
+from craftcov_core.render import (  # noqa: E402
     format_sarif,
     print_detector_list,
     print_report,
     print_text_report,
 )
-from craftcov_core.scan import merge_corpus_findings, scan_files
-from craftcov_core.scopes import build_scope_index, enclosing_class
-from craftcov_core.summary import aggregate, diff_by_heuristic
+from craftcov_core.scan import merge_corpus_findings, scan_files  # noqa: E402
+from craftcov_core.scopes import build_scope_index, enclosing_class  # noqa: E402
+from craftcov_core.summary import aggregate, diff_by_heuristic  # noqa: E402
 
 __all__ = [
     "CACHE_VERSION",
