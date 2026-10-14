@@ -87,7 +87,8 @@ complexity limits, Refactor First's per-file rule, the design-review limits, the
 test gates, and what a `Tidy-Exempt:` trailer may waive. craft-gate's `templates/craft-gate.toml`
 lists every value with its default. Read the repo's file for the real numbers before you write
 code, and **never loosen a value to make a gate pass**: fix the code. If a change must edit that
-file, say why in the commit message; loosening is shown in review.
+file, say why in the commit message: changes to it are reviewed like changes to the gates
+themselves, because a looser value fails no check.
 
 **The test gates are on by default.** `patch-coverage`, `mutation-ratchet` and
 `behaviour-coverage` run unless the config switches one off with `enabled = false` and a written
@@ -105,6 +106,11 @@ fix each prompt or write one line on why it does not apply. If it has the `craft
 run it: it hands the diff to the `craft-reviewer` subagent, a lead-developer reviewer with no
 knowledge of how the code was written. Give it nothing but the base ref; your reasons are exactly
 what it must not inherit. Both are advisory, and both cover the judgement calls no gate can make.
+
+**Opening a pull request.** If the repo has `.github/PULL_REQUEST_TEMPLATE.md`, fill in its reviewer
+checklist honestly (one thing per function, names, commands vs queries, responsibility, tests that
+state the behaviour, YAGNI): tick what you checked, or say why it does not apply. It covers the
+judgement calls no gate can make.
 
 Before declaring a Python behavior change complete, apply the mutation-quality
 checklist:
