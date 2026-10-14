@@ -60,12 +60,10 @@ def make(changes, **overrides):
         mp.Inputs(
             changes=tuple(changes),
             mutated_files=frozenset(MUTATED),
-            selection=tuple(given["selection"]),
-            old_selection=tuple(old_selection),
+            selection=mp.Selection(tuple(given["selection"]), tuple(old_selection)),
             stats=given["stats"],
             sources=given["sources"] or {},
             changed_sections=tuple(given["sections"]),
-            all_modules=frozenset(),
         )
     )
 
@@ -237,14 +235,14 @@ def test_an_unmutated_module_resets_what_the_tests_importing_it_cover() -> None:
         mp.Inputs(
             changes=(("M", "ster/util.py"),),
             mutated_files=frozenset(MUTATED),
-            selection=SELECTION,
-            old_selection=SELECTION,
+            selection=mp.Selection(SELECTION, SELECTION),
             stats=STATS,
             sources={"tests/unit/test_server.py": "from ster import util\n"},
             changed_sections=(),
-            all_modules=frozenset({"ster.util", "ster.mcp_server"}),
-            imports={"ster.mcp_server": {"ster.util"}, "ster.util": set()},
-            test_modules={"tests/unit/test_server.py": {"ster.mcp_server"}},
+            graph=mp.ImportGraph(
+                imports={"ster.mcp_server": {"ster.util"}, "ster.util": set()},
+                tests={"tests/unit/test_server.py": {"ster.mcp_server"}},
+            ),
         )
     )
 
