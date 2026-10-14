@@ -9,7 +9,7 @@ do both. Security problems go through [SECURITY.md](SECURITY.md), not an issue. 
 ```bash
 uv sync --extra dev                       # every gate's toolchain
 uv run pytest tests                       # the suite
-uv run ruff check scripts tools tests/*.py && uv run ruff format --check scripts tools tests/*.py
+uv run ruff check scripts tools tests/*.py tests/features/*.py && uv run ruff format --check scripts tools tests/*.py tests/features/*.py
 ```
 
 ## Adding a heuristic or rule

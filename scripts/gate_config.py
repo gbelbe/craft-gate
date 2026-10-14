@@ -38,28 +38,71 @@ PATCH, MUTATION, BDD = "patch-coverage", "mutation", "bdd"
 GATES = (PATCH, MUTATION, BDD)
 ENABLED, REASON, THRESHOLD, PATHS, EXCLUDE = "enabled", "reason", "threshold", "paths", "exclude"
 TABLE = "craft-gate"
+CONFIG_FILE = "craft-gate.toml"
+COMPLEXITY, REFACTOR_FIRST, DESIGN_REVIEW, EXEMPTIONS = (
+    "complexity",
+    "refactor-first",
+    "design-review",
+    "exemptions",
+)
 
 # Test code is executed by definition, so its own changed lines would pad the percentage; diff-cover
 # is told to leave these globs out and judge production code only.
 TEST_FILES = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]
 
+# Every value a repo can set, with the default each gate used when these were hard-coded.
 DEFAULTS: dict[str, dict[str, Any]] = {
     PATCH: {ENABLED: True, REASON: "", THRESHOLD: 90, "source": "", EXCLUDE: TEST_FILES},
     MUTATION: {ENABLED: True, REASON: "", THRESHOLD: 80, "improvement": 20},
     BDD: {ENABLED: True, REASON: "", THRESHOLD: 80, PATHS: ["tests/features"], EXCLUDE: TEST_FILES},
+    COMPLEXITY: {
+        "cyclomatic": 15,
+        "cognitive": 15,
+        "duplicated-literal-occurrences": 3,
+        "duplicated-literal-min-length": 5,
+    },
+    REFACTOR_FIRST: {"per-file": "must-decrease"},
+    DESIGN_REVIEW: {"max-parameters": 2, "max-lines": 20},
+    EXEMPTIONS: {"legacy-debt": True, "new-code": False},
+}
+CHOICES = {(REFACTOR_FIRST, "per-file"): ("must-decrease", "must-not-increase")}
+PERCENT_KEYS = (THRESHOLD, "improvement")
+MINIMUMS = {  # the smallest sensible value of each count; below it the gate would flag everything
+    "cyclomatic": 1,
+    "cognitive": 1,
+    "duplicated-literal-occurrences": 2,
+    "duplicated-literal-min-length": 1,
+    "max-parameters": 0,
+    "max-lines": 1,
 }
 NEEDS_COVERAGE = (MUTATION, BDD)
 _PRUNED_DIRS = {".git", ".venv", "venv", "node_modules", "site-packages", "build", "dist", ".tox"}
 _PERCENT_MAX = 100
 
 
-def _where(gate: str | None = None) -> str:
-    """How a section is spelled in pyproject.toml, for messages."""
-    return f"[tool.{TABLE}.{gate}]" if gate else f"[tool.{TABLE}]"
+def _where(section: str | None = None) -> str:
+    """How a section is spelled in craft-gate.toml or pyproject.toml, for messages."""
+    if section is None:
+        return f"{CONFIG_FILE} (or [tool.{TABLE}] in pyproject.toml)"
+    return f"[{section}] in {CONFIG_FILE} (or [tool.{TABLE}.{section}])"
 
 
 class ConfigError(Exception):
-    """pyproject.toml's [tool.craft-gate] table is unusable."""
+    """The craft-gate configuration is unusable."""
+
+
+@dataclass(frozen=True)
+class Waive:
+    """Which rules a `Tidy-Exempt:` trailer waives: the debt rules, and the new-code rules."""
+
+    legacy_debt: bool = False
+    new_code: bool = False
+
+
+def waive_from(settings: dict[str, dict[str, Any]], exempt: bool) -> Waive:
+    """What the trailer waives, per the repo's `[exemptions]`; nothing without a trailer."""
+    section = settings[EXEMPTIONS]
+    return Waive(exempt and section["legacy-debt"], exempt and section["new-code"])
 
 
 @dataclass(frozen=True)
@@ -70,46 +113,75 @@ class Decision:
     settings: dict[str, Any] = field(default_factory=dict)
 
 
-def _read_tool_table(root: Path) -> dict[str, Any]:
-    path = root / "pyproject.toml"
+def _parse(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {}
     try:
-        return tomllib.loads(path.read_text()).get("tool", {})
+        return tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as exc:
-        raise ConfigError(f"pyproject.toml does not parse: {exc}") from exc
+        raise ConfigError(f"{path.name} does not parse: {exc}") from exc
 
 
-def _check_value(gate: str, key: str, value: Any) -> None:
-    default = DEFAULTS[gate][key]
-    ok = isinstance(value, type(default))
-    if key in (THRESHOLD, "improvement"):
-        ok = isinstance(value, int) and 0 <= value <= _PERCENT_MAX
-    elif key in (PATHS, EXCLUDE):
-        ok = isinstance(value, list) and all(isinstance(p, str) for p in value)
-    if not ok:
-        raise ConfigError(f"{_where(gate)} {key} is not valid: {value!r}")
+def _read_tool_table(root: Path) -> dict[str, Any]:
+    return _parse(root / "pyproject.toml").get("tool", {})
 
 
-def _gate_settings(table: dict[str, Any], gate: str) -> dict[str, Any]:
-    given = table.get(gate, {})
-    unknown = sorted(set(given) - set(DEFAULTS[gate]))
+def _read_table(root: Path, tool: dict[str, Any]) -> dict[str, Any]:
+    """craft-gate.toml when the repo has one, otherwise pyproject.toml's [tool.craft-gate]."""
+    if (root / CONFIG_FILE).is_file():
+        return _parse(root / CONFIG_FILE)
+    return tool.get(TABLE, {})
+
+
+def _valid(section: str, key: str, value: Any) -> bool:
+    default = DEFAULTS[section][key]
+    if (section, key) in CHOICES:
+        return value in CHOICES[(section, key)]
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, int):
+        if isinstance(value, bool) or not isinstance(value, int):
+            return False
+        return 0 <= value <= _PERCENT_MAX if key in PERCENT_KEYS else value >= MINIMUMS[key]
+    if isinstance(default, list):
+        return isinstance(value, list) and all(isinstance(p, str) for p in value)
+    return isinstance(value, type(default))
+
+
+def _section_settings(table: dict[str, Any], section: str) -> dict[str, Any]:
+    given = table.get(section, {})
+    unknown = sorted(set(given) - set(DEFAULTS[section]))
     if unknown:
-        raise ConfigError(f"{_where(gate)} has unknown key(s): {', '.join(unknown)}")
+        raise ConfigError(f"{_where(section)} has unknown key(s): {', '.join(unknown)}")
     for key, value in given.items():
-        _check_value(gate, key, value)
-    merged = {**DEFAULTS[gate], **given}
+        if not _valid(section, key, value):
+            raise ConfigError(f"{_where(section)} {key} is not valid: {value!r}")
+    merged = {**DEFAULTS[section], **given}
     return {k: list(v) if isinstance(v, list) else v for k, v in merged.items()}
 
 
 def _load(root: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    """(settings per gate, the whole [tool] table), validated."""
+    """(settings per section, the whole [tool] table), validated."""
     tool = _read_tool_table(root)
-    table = tool.get(TABLE, {})
-    unknown = sorted(set(table) - set(GATES))
+    table = _read_table(root, tool)
+    unknown = sorted(set(table) - set(DEFAULTS))
     if unknown:
-        raise ConfigError(f"{_where()} has unknown gate(s): {', '.join(unknown)}")
-    return {gate: _gate_settings(table, gate) for gate in GATES}, tool
+        raise ConfigError(f"{_where()} has unknown section(s): {', '.join(unknown)}")
+    return {section: _section_settings(table, section) for section in DEFAULTS}, tool
+
+
+def load_settings(root: Path) -> dict[str, dict[str, Any]]:
+    """Every section's settings for the repo at *root*, defaults filled in. Raises ConfigError."""
+    return _load(root)[0]
+
+
+def find_root(start: Path) -> Path:
+    """The nearest directory at or above *start* that holds the config, pyproject.toml or .git."""
+    start = start.resolve()
+    for directory in (start, *start.parents):
+        if any((directory / name).exists() for name in (CONFIG_FILE, "pyproject.toml", ".git")):
+            return directory
+    return start
 
 
 def _off_reason(settings: dict[str, Any], gate: str) -> str | None:

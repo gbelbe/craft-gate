@@ -242,7 +242,7 @@ def test_a_tidy_exempt_trailer_still_refuses_a_new_complex_function(
 
     assert gate(run_main) == 1
     captured = capsys.readouterr()
-    assert "new code is still checked" in captured.out
+    assert "waiving: debt rules" in captured.out
     assert "mod.py::big: new function with cyclomatic complexity 16" in captured.err
 
 
@@ -257,7 +257,7 @@ def test_a_tidy_exempt_trailer_waives_the_debt_rules_for_legacy_code(
     project.commit("fix: nudge\n\nTidy-Exempt: urgent", **exempt(base.replace("r = 0", "r = 1")))
 
     assert gate(run_main) == 0
-    assert "debt rules are waived" in capsys.readouterr().out
+    assert "waiving: debt rules" in capsys.readouterr().out
 
 
 def test_a_tidy_exempt_trailer_does_not_waive_a_new_invariant_return(project, run_main) -> None:

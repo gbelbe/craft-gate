@@ -52,6 +52,14 @@ from craftcov import (  # noqa: E402
     merge_corpus_findings,
     scan_files,
 )
+from gate_config import (  # noqa: E402
+    REFACTOR_FIRST,
+    ConfigError,
+    Waive,
+    find_root,
+    load_settings,
+    waive_from,
+)
 from gitdiff import (  # noqa: E402
     added_lines,
     base_ref_parser,
@@ -61,6 +69,7 @@ from gitdiff import (  # noqa: E402
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+MUST_DECREASE = "must-decrease"
 
 
 def scan_findings(root: Path) -> dict[str, list[Finding]]:
@@ -103,17 +112,25 @@ def scan_ref(repo: Path, ref: str, scratch_parent: Path, scan=scan_findings):
 
 
 def regressions(
-    pairs: list[tuple[str, str]], base_totals: dict[str, int], head_totals: dict[str, int]
+    pairs: list[tuple[str, str]],
+    base_totals: dict[str, int],
+    head_totals: dict[str, int],
+    mode: str = MUST_DECREASE,
 ) -> list[str]:
-    """One report line per touched file whose total did not go down (or stay at 0)."""
+    """One report line per touched file whose total broke the per-file rule.
+
+    A clean file must stay clean. Otherwise *mode* decides: "must-decrease" (the default)
+    wants a strictly lower total; "must-not-increase" accepts an unchanged one.
+    """
+    strict = mode == MUST_DECREASE
     failures: list[str] = []
     for old_rel, new_rel in pairs:
         before = base_totals.get(old_rel, 0)
         after = head_totals.get(new_rel, 0)
-        if (after == 0) if before == 0 else (after < before):
+        if (after == 0) if before == 0 else ((after < before) if strict else (after <= before)):
             continue
         label = new_rel if old_rel == new_rel else f"{old_rel} -> {new_rel}"
-        needed = "0" if before == 0 else f"< {before}"
+        needed = "0" if before == 0 else f"{'<' if strict else '<='} {before}"
         failures.append(f"  {label}: {before} -> {after} (needed {needed})")
     return failures
 
@@ -171,6 +188,18 @@ def report_failures(failures: list[str]) -> None:
     )
 
 
+def _waived(waive: Waive) -> str:
+    rules = [
+        name
+        for name, off in (
+            ("the per-file ratchet", waive.legacy_debt),
+            ("the new-code rule", waive.new_code),
+        )
+        if off
+    ]
+    return " and ".join(rules)
+
+
 def main() -> int:
     parser = base_ref_parser(__doc__)
     parser.add_argument("--head", default="HEAD")
@@ -193,25 +222,34 @@ def main() -> int:
     if not pairs:
         return 0  # nothing touched, nothing to check
 
-    exempt = has_tidy_exempt(merge_base, args.head, cwd=repo)
-    if exempt:
+    try:
+        settings = load_settings(find_root(repo))
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    waive = waive_from(settings, has_tidy_exempt(merge_base, args.head, cwd=repo))
+    if waive.legacy_debt or waive.new_code:
         print(
             f"refactor-first gate: Tidy-Exempt: trailer found in {merge_base[:8]}..{args.head}"
-            " — the per-file ratchet is waived; new code is still checked."
+            f" — waiving: {_waived(waive)}."
         )
 
     with tempfile.TemporaryDirectory(prefix="craft-gate-refactor-first-") as tmp:
         scratch = Path(tmp)
         head_findings = scan_ref(repo, args.head, scratch)
-        base_totals = {} if exempt else scan_ref(repo, merge_base, scratch, per_file_totals)
+        base_totals = (
+            {} if waive.legacy_debt else scan_ref(repo, merge_base, scratch, per_file_totals)
+        )
 
     status = 0
     head_totals = aggregate(head_findings).by_file
-    failures = [] if exempt else regressions(pairs, base_totals, head_totals)
+    mode = settings[REFACTOR_FIRST]["per-file"]
+    failures = [] if waive.legacy_debt else regressions(pairs, base_totals, head_totals, mode)
     if failures:
         report_failures(failures)
         status = 1
-    new_failures = new_code_findings(repo, (merge_base, args.head), pairs, head_findings)
+    spans = (merge_base, args.head)
+    new_failures = [] if waive.new_code else new_code_findings(repo, spans, pairs, head_findings)
     if new_failures:
         report_new_code(new_failures)
         status = 1

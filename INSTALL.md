@@ -39,7 +39,8 @@ Each gate needs its own toolchain; skip a gate and you skip its dependency:
 | Mutation ratchet | a `mutation` extra (mutmut), your own test-running deps, and a `[tool.mutmut]` section in `pyproject.toml` |
 | Behaviour coverage | `pytest-bdd` (or any runner that puts scenarios under pytest) and `.feature` files under `tests/features` |
 
-The last three are on by default and take their settings from `pyproject.toml`'s
+The last three are on by default and take their settings from `craft-gate.toml` (copy
+`templates/craft-gate.toml`; it lists every value at its default) or `pyproject.toml`'s
 `[tool.craft-gate]`, not from the workflow file. To skip one, set `enabled = false`
 with a `reason` there; a gate that is on but has nothing to check fails and tells you
 so. CRAFTSMANSHIP.md's "Test gates" has the table and an example.

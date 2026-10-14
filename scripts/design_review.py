@@ -26,10 +26,9 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
 from astfuncs import walk_functions  # noqa: E402
+from gate_config import DESIGN_REVIEW, ConfigError, find_root, load_settings  # noqa: E402
 from gitdiff import added_lines, base_ref_parser, git, touched_python_files  # noqa: E402
 
-DESIGN_PARAMETERS = 2  # Clean Code's bar; the gate's hard limit is 5
-LONG_FUNCTION_LINES = 20
 QUERY_PREFIXES = ("get_", "is_", "has_", "find_", "count_", "compute_", "calculate_")
 MUTATORS = frozenset(
     {"append", "extend", "update", "pop", "remove", "clear", "insert", "add", "discard", "sort"}
@@ -37,6 +36,13 @@ MUTATORS = frozenset(
 RECEIVER = "self"
 TEST_FILE_PREFIX = "test_"  # fixtures make test functions look parameter-heavy; not a design signal
 DEFAULT_LIMIT = 15
+
+
+class Limits(NamedTuple):
+    """What counts as too many parameters or too long: Clean Code's bar, not the gate's limit."""
+
+    max_parameters: int = 2  # the gate's hard limit is 5
+    max_lines: int = 20  # the gate's limit is 50 statements
 
 
 class Note(NamedTuple):
@@ -84,16 +90,16 @@ def _changes_state(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
-def _prompts(name: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+def _prompts(node: ast.FunctionDef | ast.AsyncFunctionDef, limits: Limits) -> list[str]:
     prompts = [
         f"flag argument `{flag}`: does it make this do two different things? "
         "(Clean Code: split it into two functions)"
         for flag in _flag_arguments(node)
     ]
     count = len(_parameters(node))
-    if count > DESIGN_PARAMETERS:
+    if count > limits.max_parameters:
         prompts.append(
-            f"{count} parameters: the design bar is {DESIGN_PARAMETERS} or fewer "
+            f"{count} parameters: the design bar is {limits.max_parameters} or fewer "
             "(the gate allows 5); is a parameter object hiding here?"
         )
     if "_and_" in node.name:
@@ -103,14 +109,19 @@ def _prompts(name: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[st
             "reads like a query but changes state: command-query separation says do one, not both"
         )
     length = (node.end_lineno or node.lineno) - node.lineno + 1
-    if length > LONG_FUNCTION_LINES:
+    if length > limits.max_lines:
         prompts.append(
-            f"{length} lines: the design bar is about {LONG_FUNCTION_LINES}; what could come out?"
+            f"{length} lines: the design bar is about {limits.max_lines}; what could come out?"
         )
     return prompts
 
 
-def review_source(source: str, added: set[int], path: str = "") -> list[Note]:
+def review_source(
+    source: str,
+    added: set[int],
+    path: str = "",
+    limits: Limits = Limits(),  # noqa: B008
+) -> list[Note]:
     """Prompts for every function in *source* that contains a line in *added*."""
     try:
         tree = ast.parse(source)
@@ -120,12 +131,14 @@ def review_source(source: str, added: set[int], path: str = "") -> list[Note]:
     for name, node in walk_functions(tree, []):
         touched = any(node.lineno <= line <= (node.end_lineno or node.lineno) for line in added)
         if touched:
-            notes += [Note(path, node.lineno, name, text) for text in _prompts(name, node)]
+            notes += [Note(path, node.lineno, name, text) for text in _prompts(node, limits)]
     return sorted(notes, key=lambda n: (n.path, n.line))
 
 
 def review_diff(root: Path, base: str, head: str = "HEAD") -> list[Note]:
     """Prompts for the functions touched between the merge-base of *base* and *head*."""
+    section = load_settings(find_root(root))[DESIGN_REVIEW]
+    limits = Limits(section["max-parameters"], section["max-lines"])
     merge_base = git(["merge-base", base, head], cwd=root).strip()
     notes: list[Note] = []
     for old_rel, new_rel in touched_python_files(root, merge_base, head):
@@ -133,7 +146,7 @@ def review_diff(root: Path, base: str, head: str = "HEAD") -> list[Note]:
             continue
         added = added_lines(merge_base, head, root, tuple(dict.fromkeys((old_rel, new_rel))))
         source = git(["show", f"{head}:{new_rel}"], cwd=root, check=False)
-        notes += review_source(source, added, new_rel)
+        notes += review_source(source, added, new_rel, limits)
     return notes
 
 
@@ -162,7 +175,12 @@ def main() -> int:
     parser = base_ref_parser(__doc__)
     parser.add_argument("--path", default=".", help="repo root (default: current directory)")
     args = parser.parse_args()
-    print(render_review(review_diff(Path(args.path).resolve(), args.base)))
+    try:
+        notes = review_diff(Path(args.path).resolve(), args.base)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(render_review(notes))
     return 0
 
 

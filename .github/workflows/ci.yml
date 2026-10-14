@@ -224,8 +224,8 @@ jobs:
       # pyproject.toml's [tool.ruff] comment for line-length.
       - name: scripts/ (incl. craftcov_core/), tools/ and tests/ pass the rules every consumer repo enables
         run: |
-          uv run ruff check scripts tools tests/*.py
-          uv run ruff format --check scripts tools tests/*.py
+          uv run ruff check scripts tools tests/*.py tests/features/*.py
+          uv run ruff format --check scripts tools tests/*.py tests/features/*.py
 
       # Note: this now includes tests/fixtures/ (deliberately smelly ground
       # truth, see below) — most of the findings below are those files

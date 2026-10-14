@@ -47,7 +47,7 @@ from craftcov import (  # noqa: E402
     scan_files,
 )
 from design_review import render_review, review_diff  # noqa: E402
-from gate_config import render_skipped, skipped_gates  # noqa: E402
+from gate_config import ConfigError, render_skipped, skipped_gates  # noqa: E402
 from gitdiff import base_ref_parser, git  # noqa: E402
 
 MARKER = "<!-- craftcov-pr-report -->"
@@ -177,6 +177,14 @@ def post_or_update_comment(repo_slug: str, pr: int, body: str) -> None:
         )
 
 
+def _review_section(repo: Path, base: str) -> str:
+    """The advisory design review, or nothing when the repo's config cannot be read."""
+    try:
+        return render_review(review_diff(repo, base))
+    except ConfigError:
+        return ""  # the config problem is reported by the gates that read it; the comment goes on
+
+
 def main() -> int:
     parser = base_ref_parser(__doc__)
     parser.add_argument("--path", default=".", help="repo root (default: current directory)")
@@ -202,7 +210,7 @@ def main() -> int:
         head_agg = scan_ref(repo, "HEAD", scratch)
 
     body = render_markdown(base_agg, head_agg, catalog_by_id, args.repo, head_sha)
-    advisory = [render_skipped(skipped_gates(repo)), render_review(review_diff(repo, args.base))]
+    advisory = [render_skipped(skipped_gates(repo)), _review_section(repo, args.base)]
     body = "\n\n".join([body, *filter(None, advisory)])
 
     if args.dry_run:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import design_review as review
 
 ALL = set(range(1, 200))
+CONFIG_ERROR = 2
 FEATURE, THREE_PARAMS = "feature", "3 parameters"
 CAP, OVER_CAP, BEYOND = 5, 20, 15
 
@@ -179,3 +180,15 @@ def test_review_diff_skips_test_files_because_fixtures_are_not_a_design_signal(r
     repo.commit("more", test_mod_py="def test_x(a, b, c):\n    assert a\n")
 
     assert review.review_diff(repo.path, "main") == []
+
+
+def test_the_cli_reports_an_unreadable_config_instead_of_crashing(repo, run_main, capsys) -> None:
+    repo.write("craft-gate.toml", "[design-review]\nmax-lines = 0\n")
+    repo.commit("base", mod_py="X = 1\n")
+    repo.branch(FEATURE)
+    repo.commit("more", mod_py="X = 2\n")
+
+    code = run_main(review, "--base", "main", "--path", str(repo.path))
+
+    assert code == CONFIG_ERROR
+    assert "max-lines" in capsys.readouterr().err
