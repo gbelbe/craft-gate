@@ -10,6 +10,9 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** `mutation_plan.py` still failed Refactor First in a repo that vendors it without craft-gate's
+  tests: `Plan.selection_added` was read only by them, so the dead-code scan flagged it. `plan` and
+  `apply` now print the new test files, which is also what a reader of the summary was missing.
 - **Changed:** a repo no longer needs `craftcov`, `complexity` or `mutation` extras in its own
   `pyproject.toml` to run the gate jobs. The tools are pinned to exact versions in
   `scripts/gate-requirements.txt` (installed by `bootstrap.sh`) and every job passes that file to
