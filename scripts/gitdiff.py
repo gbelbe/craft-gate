@@ -15,12 +15,15 @@ import re
 import subprocess
 from pathlib import Path
 
+QUOTEPATH_OFF = "core.quotepath=false"  # else git prints non-ASCII paths as "caf\303\251.py"
 _HUNK_HEADER = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 
 
 def git(args: list[str], cwd: Path | None = None, check: bool = True) -> str:
     """stdout of ``git <args>``; with *check*, a non-zero exit aborts with git's stderr."""
-    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        ["git", "-c", QUOTEPATH_OFF, *args], cwd=cwd, capture_output=True, text=True, check=False
+    )
     if check and proc.returncode != 0:
         raise SystemExit(f"✗ git {' '.join(args)} failed:\n{proc.stderr}")
     return proc.stdout

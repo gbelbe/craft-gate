@@ -232,7 +232,7 @@ def evaluate_domain(
 
 def diff_fingerprint(root: Path, base_ref: str) -> str:
     diff = subprocess.run(
-        ["git", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
+        ["git", "-c", "core.quotepath=false", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
         cwd=root,
         capture_output=True,
         text=True,
