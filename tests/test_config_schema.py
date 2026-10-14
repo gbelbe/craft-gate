@@ -92,6 +92,11 @@ def test_find_root_walks_up_to_the_config(tmp_path) -> None:
         ("[exemptions]\nlegacy = true\n", "legacy"),
         (f"[{COMPLEXITY}.{CYCLOMATIC}]\nvalue = 3\n", CYCLOMATIC),
         ("[mystery]\nx = 1\n", "mystery"),
+        ('[patch-coverage]\nsource = "x\\nstatus=skip"\n', "source"),
+        ('[patch-coverage]\nsource = "pkg; rm -rf ."\n', "source"),
+        ('[mutation]\nenabled = false\nreason = "a\\nstatus=run"\n', "reason"),
+        ('[bdd]\npaths = ["tests/features\\nstatus=skip"]\n', "paths"),
+        ('[bdd]\nexclude = ["a\\rb"]\n', "exclude"),
     ],
 )
 def test_a_bad_value_or_a_typo_is_an_error_naming_it(tmp_path, toml, needle) -> None:
