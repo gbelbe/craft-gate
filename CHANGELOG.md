@@ -10,6 +10,10 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** `scripts/mutation_plan.py` no longer fails Refactor First in the repos that vendor it
+  (5 craftCov findings, on lines the consumer's diff counts as added, which no `Tidy-Exempt:` waives).
+  `Inputs` is split into `Selection` and `ImportGraph`, an unread field is gone, two magic numbers are
+  named, and `plan` / `apply` output now lists new test files.
 - **Changed:** a repo no longer needs `craftcov`, `complexity` or `mutation` extras in its own
   `pyproject.toml` to run the gate jobs. The tools are pinned to exact versions in
   `scripts/gate-requirements.txt` (installed by `bootstrap.sh`) and every job passes that file to
