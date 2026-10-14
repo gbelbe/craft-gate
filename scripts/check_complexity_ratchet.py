@@ -194,7 +194,16 @@ def _discover_python_files(root: Path) -> list[Path]:
     """
     try:
         out = subprocess.run(
-            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"],
+            [
+                "git",
+                "-c",
+                "core.quotepath=false",
+                "ls-files",
+                "--cached",
+                "--others",
+                "--exclude-standard",
+                "*.py",
+            ],
             cwd=root,
             capture_output=True,
             text=True,

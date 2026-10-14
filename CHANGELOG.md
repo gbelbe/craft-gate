@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** a gate could pass silently on a file with a non-ASCII name. Git quotes such names
+  (`"caf\303\251.py"`) unless told not to, so the complexity ratchet skipped them and Refactor First
+  crashed. Every git call that lists paths now turns that off.
+- **Fixed:** a newline in a `craft-gate.toml` string (for example `source = "x\nstatus=skip"`) added a
+  line to the workflow's `$GITHUB_OUTPUT`, switching a gate off with no `reason` and no warning.
+  Strings must now be one printable line, and `source` a plain package or directory name.
 - **Fixed:** the weekly update workflow (`templates/update-check.yml`) staged six files, so a release
   that changed any gate script left the consumer's scripts behind while `.craft-gate-version` said it
   was current, and the drift was never caught again. It now stages everything bootstrap wrote and

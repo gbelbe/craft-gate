@@ -14,7 +14,7 @@ def discover_python_files(root: Path) -> list[str]:
     git repo."""
     try:
         out = subprocess.run(
-            ["git", "ls-files", "*.py"],
+            ["git", "-c", "core.quotepath=false", "ls-files", "*.py"],
             cwd=root,
             capture_output=True,
             text=True,

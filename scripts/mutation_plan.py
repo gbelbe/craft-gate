@@ -338,7 +338,13 @@ def selection_fingerprint(values: list[str] | tuple[str, ...]) -> str:
 
 
 def _git(root: Path, *args: str) -> str:
-    out = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
+    out = subprocess.run(
+        ["git", "-c", "core.quotepath=false", *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     return out.stdout if out.returncode == 0 else ""
 
 

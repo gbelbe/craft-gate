@@ -278,3 +278,22 @@ def test_exclude_is_published_space_separated_for_the_workflow(tmp_path, monkeyp
     assert (
         "exclude=tests/* */tests/* test_*.py *_test.py conftest.py" in out.read_text().splitlines()
     )
+
+
+def test_a_newline_in_the_config_cannot_add_a_line_to_the_workflow_output(
+    tmp_path, monkeypatch
+) -> None:
+    root = project(tmp_path, '[tool.craft-gate.patch-coverage]\nsource = "x\\nstatus=skip"\n')
+    output = tmp_path / "out"
+    monkeypatch.setenv(GH_OUTPUT, str(output))
+
+    code = cfg.main(["patch-coverage", PATH_FLAG, str(root)])
+
+    assert code == 1
+    assert not output.exists()
+
+
+def test_a_package_path_is_a_valid_source(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.patch-coverage]\nsource = "src/my_pkg-2.x"\n')
+
+    assert cfg.decide(root, cfg.PATCH).settings["source"] == "src/my_pkg-2.x"

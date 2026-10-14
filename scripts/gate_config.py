@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -78,6 +79,7 @@ MINIMUMS = {  # the smallest sensible value of each count; below it the gate wou
 NEEDS_COVERAGE = (MUTATION, BDD)
 _PRUNED_DIRS = {".git", ".venv", "venv", "node_modules", "site-packages", "build", "dist", ".tox"}
 _PERCENT_MAX = 100
+_SOURCE = re.compile(r"[\w./-]*")  # a package or directory name, as --cov takes it
 
 
 def _where(section: str | None = None) -> str:
@@ -133,6 +135,12 @@ def _read_table(root: Path, tool: dict[str, Any]) -> dict[str, Any]:
     return tool.get(TABLE, {})
 
 
+def _one_line(value: Any) -> bool:
+    """A string with no newline or other control character: it is written to $GITHUB_OUTPUT as
+    `key=value`, so a newline would let a config file add a line of its own (`status=skip`)."""
+    return isinstance(value, str) and value.isprintable()
+
+
 def _valid(section: str, key: str, value: Any) -> bool:
     default = DEFAULTS[section][key]
     if (section, key) in CHOICES:
@@ -144,8 +152,10 @@ def _valid(section: str, key: str, value: Any) -> bool:
             return False
         return 0 <= value <= _PERCENT_MAX if key in PERCENT_KEYS else value >= MINIMUMS[key]
     if isinstance(default, list):
-        return isinstance(value, list) and all(isinstance(p, str) for p in value)
-    return isinstance(value, type(default))
+        return isinstance(value, list) and all(_one_line(p) for p in value)
+    if key == "source":
+        return _one_line(value) and _SOURCE.fullmatch(value) is not None
+    return _one_line(value) if isinstance(default, str) else isinstance(value, type(default))
 
 
 def _section_settings(table: dict[str, Any], section: str) -> dict[str, Any]:
