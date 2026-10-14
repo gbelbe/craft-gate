@@ -46,8 +46,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from astfuncs import walk_functions
-from gitdiff import touched_names
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
 

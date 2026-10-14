@@ -40,7 +40,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from craftcov import (
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from craftcov import (  # noqa: E402
     Finding,
     aggregate,
     build_detector_index,
@@ -49,7 +52,13 @@ from craftcov import (
     merge_corpus_findings,
     scan_files,
 )
-from gitdiff import added_lines, base_ref_parser, git, has_tidy_exempt, touched_python_files
+from gitdiff import (  # noqa: E402
+    added_lines,
+    base_ref_parser,
+    git,
+    has_tidy_exempt,
+    touched_python_files,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

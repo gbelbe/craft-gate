@@ -22,8 +22,11 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-from astfuncs import walk_functions
-from gitdiff import added_lines, base_ref_parser, git, touched_python_files
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from astfuncs import walk_functions  # noqa: E402
+from gitdiff import added_lines, base_ref_parser, git, touched_python_files  # noqa: E402
 
 DESIGN_PARAMETERS = 2  # Clean Code's bar; the gate's hard limit is 5
 LONG_FUNCTION_LINES = 20
