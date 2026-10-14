@@ -10,6 +10,11 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** the weekly update workflow (`templates/update-check.yml`) staged six files, so a release
+  that changed any gate script left the consumer's scripts behind while `.craft-gate-version` said it
+  was current, and the drift was never caught again. It now stages everything bootstrap wrote and
+  treats a new untracked file as a change. Re-copy the workflow to get it. The header also notes that
+  a PR opened with `GITHUB_TOKEN` gets no CI until someone pushes to it.
 - **Added:** a "Thresholds loosened" section in the PR comment (`scripts/config_loosening.py`). It
   compares `craft-gate.toml` (or `[tool.craft-gate]`) at the base of the PR with the head and lists
   each value that makes the gates weaker: a limit raised, a floor lowered, a gate switched off, an

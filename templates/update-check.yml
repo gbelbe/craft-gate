@@ -6,6 +6,9 @@
 # new credentials: the default GITHUB_TOKEN already has contents/PR write
 # on this repo, and craft-gate is only ever read from, never written to.
 #
+# The PR is opened with GITHUB_TOKEN, and GitHub does not start workflows for PRs that token opens:
+# push an empty commit to the branch (or close and reopen the PR) to get the required checks.
+#
 # Manual run any time: Actions tab -> "craft-gate update check" -> Run workflow.
 
 name: craft-gate update check
@@ -55,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           LATEST: ${{ steps.check.outputs.latest }}
         run: |
-          if git diff --quiet; then
+          if [ -z "$(git status --porcelain)" ]; then  # untracked files count: a release can only add one
             echo "Version bumped but nothing actually changed — no PR needed." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -64,9 +67,7 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          git add CRAFTSMANSHIP.md catalog.yaml scripts/check_tidy_ratchet.sh \
-            scripts/report_tidy_history.sh .claude/skills/tidy-first/SKILL.md \
-            .craft-gate-version
+          git add -A  # everything bootstrap.sh wrote: a partial update would still bump the version
           git commit -m "$(printf 'chore(craft-gate): update to %s\n\nTidy-Exempt: automated dependency sync, see craft-gate'"'"'s CHANGELOG\n' "$LATEST")"
           git push -u origin "$BRANCH" --force
 
