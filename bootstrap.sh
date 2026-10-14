@@ -34,6 +34,7 @@ SHIPPED=(
   scripts/mutation_plan.py
   scripts/gate_config.py
   scripts/design_review.py
+  scripts/config_loosening.py
   # helpers the gate scripts import — they must travel with them
   scripts/gitdiff.py
   scripts/astfuncs.py

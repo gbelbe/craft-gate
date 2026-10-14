@@ -80,3 +80,25 @@ a flag argument is sometimes right, and the reviewer decides. The rules with no 
 (naming, responsibility, whether a test states the behaviour, YAGNI) are on the PR checklist,
 `templates/PULL_REQUEST_TEMPLATE.md`.
 
+## Thresholds loosened
+
+A looser value in `craft-gate.toml` fails no check, so the change is reported instead.
+`scripts/config_loosening.py` parses the config at the PR's merge-base and at its head and lists,
+in a "Thresholds loosened" section, each value that makes the gates weaker, with before and after:
+
+| Value | Loosened when |
+|---|---|
+| `cyclomatic`, `cognitive`, `max-parameters`, `max-lines`, `duplicated-literal-occurrences`, `duplicated-literal-min-length` | it goes up |
+| `threshold`, `improvement` | it goes down |
+| `enabled` | `true` becomes `false` |
+| `exemptions.legacy-debt`, `exemptions.new-code` | `false` becomes `true` |
+| `refactor-first.per-file` | `must-decrease` becomes `must-not-increase` |
+| `exclude` | a pattern is added |
+| `paths` | a path is removed |
+
+`reason` and `source` judge nothing. The comparison is on parsed values, so reformatting, reordering
+and moving settings between `pyproject.toml` and `craft-gate.toml` are silent; a repo with no config
+at the base is compared with the defaults. It is advisory and never fails: teams do loosen a limit on
+purpose, and the aim is that someone decides. `CODEOWNERS` on the file makes it a required review.
+`tests/features/config_loosening.feature` has a row for each direction of every value, and a test
+fails if a key in the schema lacks a ruling.

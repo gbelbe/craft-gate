@@ -125,7 +125,8 @@ complexity limits, Refactor First's per-file rule, the design-review limits, the
 test gates, and what a `Tidy-Exempt:` trailer may waive. craft-gate's `templates/craft-gate.toml`
 lists every value with its default. Read the repo's file for the real numbers before you write
 code, and **never loosen a value to make a gate pass**: fix the code. If a change must edit that
-file, say why in the commit message; loosening is shown in review.
+file, say why in the commit message: the PR comment lists every value the change loosens, and a
+person decides, because a looser value fails no check.
 
 **The test gates are on by default.** `patch-coverage`, `mutation-ratchet` and
 `behaviour-coverage` run unless the config switches one off with `enabled = false` and a written
@@ -136,6 +137,11 @@ file, say why in the commit message; loosening is shown in review.
 line you add or change must be exercised by a scenario, not only by unit tests: add or extend a
 scenario with the change. Test files are left out of the patch and behaviour percentages, so a
 test's own lines never count toward them.
+
+**Opening a pull request.** If the repo has `.github/PULL_REQUEST_TEMPLATE.md`, fill in its reviewer
+checklist honestly (one thing per function, names, commands vs queries, responsibility, tests that
+state the behaviour, YAGNI): tick what you checked, or say why it does not apply. It covers the
+judgement calls no gate can make.
 
 Mutation-quality rule for new tests:
 

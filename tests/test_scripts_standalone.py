@@ -17,6 +17,7 @@ SCRIPTS = [
     "craftcov_pr_comment.py",
     "gate_config.py",
     "design_review.py",
+    "config_loosening.py",
 ]
 
 
