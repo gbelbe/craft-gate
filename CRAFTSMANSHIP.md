@@ -600,6 +600,24 @@ export showing the repo's current state overall
 a build. See DESIGN.md's **Reporting** section for the full detail and
 the CI wiring.
 
+The same comment carries two more non-blocking sections: **Gates switched off in
+this repo** (any test gate opted out, with its reason), and **Design review
+(advisory)**. The second covers the rules in "New-code principles" that no gate can
+decide from a diff. `scripts/design_review.py` flags, in the Python functions a change
+touched, the smells that usually point at them: a flag argument (a `bool` parameter) for
+*one thing*, more than two parameters, "and" in a name, a `get_`/`is_`/`find_` function
+that changes state (command-query separation), and a function over about 20 lines. They
+are prompts for the reviewer, not findings; nothing fails. The judgement calls with no
+smell to flag (naming, responsibility, whether tests state the behaviour, YAGNI) are on
+the PR checklist, `templates/PULL_REQUEST_TEMPLATE.md`.
+
+**An independent reviewer.** For the same rules, a model can judge what a smell cannot. The
+`craft-reviewer` subagent (`agents/craft-reviewer.md`, run through the `craft-review` skill)
+reviews a branch as a lead developer with no knowledge of how it was written, graded against
+the "New-code principles" above. Every finding must quote the code and cite a catalog code, or
+it is dropped. It is advisory and read-only; it is not a gate, because a model's verdict is not
+repeatable. See `docs/design/reviewer.md`.
+
 ## Don't let the exemption become the rule
 
 `Tidy-Exempt:` trusts the author's judgment, which erodes under deadline

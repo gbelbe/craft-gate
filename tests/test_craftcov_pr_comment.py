@@ -232,3 +232,18 @@ def test_a_dry_run_names_the_test_gates_the_repo_switched_off(repo, run_main, ca
 
 def test_a_dry_run_has_no_switched_off_section_when_nothing_is_off(repo, run_main, capsys) -> None:
     assert "switched off" not in dry_run(repo, run_main, capsys)
+
+
+def test_a_dry_run_appends_design_review_prompts_for_touched_functions(
+    repo, run_main, capsys
+) -> None:
+    repo.commit("base", mod_py=ONE)
+    repo.branch(FEATURE)
+    repo.commit("more", mod_py="def save(path, force=False):\n    return path\n")
+
+    run_main(pr_comment, *BASE, PATH, str(repo.path), DRY_RUN)
+
+    body = capsys.readouterr().out
+    assert "**Design review (advisory)**" in body
+    assert "flag argument `force`" in body
+    assert "nothing here blocks the PR" in body

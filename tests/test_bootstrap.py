@@ -25,10 +25,13 @@ SHIPPED = [
     "scripts/check_mutation_ratchet.py",
     "scripts/mutation_plan.py",
     "scripts/gate_config.py",
+    "scripts/design_review.py",
     "scripts/gitdiff.py",
     "scripts/astfuncs.py",
     "scripts/local-craft-gate.sh",
     ".claude/skills/tidy-first/SKILL.md",
+    ".claude/skills/craft-review/SKILL.md",
+    ".claude/agents/craft-reviewer.md",
 ]
 NOT_A_REPO = 1
 
@@ -63,6 +66,8 @@ def test_every_shipped_file_lands_in_the_target(target) -> None:
 def _source(rel: str) -> str:
     return {
         ".claude/skills/tidy-first/SKILL.md": "skills/tidy-first/SKILL.md",
+        ".claude/skills/craft-review/SKILL.md": "skills/craft-review/SKILL.md",
+        ".claude/agents/craft-reviewer.md": "agents/craft-reviewer.md",
         "scripts/local-craft-gate.sh": "templates/local-craft-gate.sh",
     }.get(rel, rel)
 

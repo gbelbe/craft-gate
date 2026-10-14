@@ -10,11 +10,30 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** an independent reviewer for Claude Code users. The `craft-reviewer` subagent
+  reviews a branch as a lead developer with no knowledge of how it was written, against the
+  catalog's new-code principles; every finding must quote the code and cite a catalog code. The
+  `craft-review` skill runs it. Advisory and read-only; `bootstrap.sh` installs both, and the
+  local runner now prints the design-review prompts. Also: `tidy-first`'s frontmatter was invalid
+  YAML (an unquoted `: ` in its description); it is now a folded block, and a test parses every
+  shipped skill and agent.
+
+- **Added:** an advisory "Design review" section in the PR comment
+  (`scripts/design_review.py`). For the Python functions a change touched it flags
+  flag arguments, more than two parameters, "and" in a name, a query that changes
+  state, and long functions, as prompts for the reviewer. Nothing blocks. Also a
+  PR checklist template (`templates/PULL_REQUEST_TEMPLATE.md`) for the judgement calls
+  with no smell to flag.
+
+## v0.24.1 — 2026-10-14
+
 - **Fixed:** patch coverage and behaviour coverage counted test files' own changed lines, which
   always run, so they padded the percentage (a trial repo passed at 90% with 71% of the production
   lines covered by scenarios). Both now exclude test files by default (`exclude`, settable in
   `[tool.craft-gate.<gate>]`). Re-copy the jobs from `templates/ci-job.yml` and
   `scripts/local-craft-gate.sh` to get it.
+
+## v0.24.0 — 2026-10-13
 
 - **Breaking:** a `Tidy-Exempt:` trailer no longer skips Refactor First and the
   complexity ratchet outright. It waives only what is about legacy debt (a touched
