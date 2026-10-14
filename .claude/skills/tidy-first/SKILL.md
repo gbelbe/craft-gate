@@ -74,3 +74,10 @@ hides the patch-coverage step. Run the gates on the *committed* range, then push
   become the rule").
 - `catalog.yaml` — machine-readable mirror of the catalog table, for tooling
   that wants to consume it programmatically rather than parse markdown.
+
+## Numbers and exemptions come from the repo's config
+
+The thresholds the gates use, and what a `Tidy-Exempt:` trailer may waive, are in
+`craft-gate.toml` (or `[tool.craft-gate]` in `pyproject.toml`) at the repo root. Read it rather
+than assuming the defaults, and never loosen a value to make a gate pass: fix the code.
+`CRAFTSMANSHIP.md`'s "Configuration" section has the rules.

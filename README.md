@@ -37,7 +37,7 @@ It answers two separate questions, on purpose:
   | `mutation-ratchet` | a touched function's mutants survive: its tests run it but would not notice a change | `mutmut` and a `[tool.mutmut]` section | no |
   | `behaviour-coverage` | the lines this diff changed are not covered by Gherkin scenarios | `pytest-bdd` scenarios under `tests/features` | no |
 
-  The last three are **on by default**. You switch one off in `pyproject.toml`,
+  The last three are **on by default**. You switch one off in `craft-gate.toml`,
   with a written reason that shows in the PR comment; a gate that is on but has
   nothing to check (no suite, no scenarios) fails instead of passing quietly. See
   CRAFTSMANSHIP.md's "Test gates".

@@ -82,6 +82,30 @@ survive" if this repo uses that companion section. Same no-`Tidy-Exempt:`
 rule; a genuinely equivalent mutant gets mutmut's own `# pragma: no
 mutate` instead.
 
+**The numbers live in `craft-gate.toml`** (or `[tool.craft-gate]` in `pyproject.toml`): the
+complexity limits, Refactor First's per-file rule, the design-review limits, the thresholds of the
+test gates, and what a `Tidy-Exempt:` trailer may waive. craft-gate's `templates/craft-gate.toml`
+lists every value with its default. Read the repo's file for the real numbers before you write
+code, and **never loosen a value to make a gate pass**: fix the code. If a change must edit that
+file, say why in the commit message; loosening is shown in review.
+
+**The test gates are on by default.** `patch-coverage`, `mutation-ratchet` and
+`behaviour-coverage` run unless the config switches one off with `enabled = false` and a written
+`reason`. A gate that is on but has nothing to check (no pytest suite, no `[tool.mutmut]`, no
+`.feature` files) fails; it never passes silently. Write the test with the code.
+
+**Behaviour coverage.** Where the repo has Gherkin scenarios (default `tests/features`), every
+line you add or change must be exercised by a scenario, not only by unit tests: add or extend a
+scenario with the change. Test files are left out of the patch and behaviour percentages, so a
+test's own lines never count toward them.
+
+Before you push, read your own design prompts and get an independent review. If the repo has
+`scripts/design_review.py`, run `python3 scripts/design_review.py --base origin/main` and either
+fix each prompt or write one line on why it does not apply. If it has the `craft-review` skill,
+run it: it hands the diff to the `craft-reviewer` subagent, a lead-developer reviewer with no
+knowledge of how the code was written. Give it nothing but the base ref; your reasons are exactly
+what it must not inherit. Both are advisory, and both cover the judgement calls no gate can make.
+
 Before declaring a Python behavior change complete, apply the mutation-quality
 checklist:
 

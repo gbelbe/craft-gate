@@ -1,0 +1,54 @@
+# craft-gate.toml: every number and rule the gates use, in one readable place.
+#
+# Copy to the root of your repo. Every value below is the default, so a repo that adds
+# this file unchanged behaves exactly as one without it. Change a value to move the gate;
+# an unknown section or key, or a value out of range, is an error, not silently ignored.
+# (The same sections work under [tool.craft-gate.<section>] in pyproject.toml; this file wins
+# when both exist.)
+#
+# Loosening a threshold fails no check, so review changes to this file like changes to the
+# gates themselves (templates/CODEOWNERS.snippet).
+
+# -- Test gates: on unless you switch them off, in writing ---------------------------------------
+# To switch one off: enabled = false and a reason (shown in the PR comment).
+
+[patch-coverage]            # the lines a diff changed must be covered by tests
+enabled = true
+reason = ""
+threshold = 90              # percent of changed lines that must be covered
+source = ""                 # package to measure; empty = whatever coverage measures
+exclude = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]   # not counted
+
+[mutation]                  # a touched function's tests must notice a change in its behaviour
+enabled = true
+reason = ""
+threshold = 80              # percent of mutants killed that passes outright
+improvement = 20            # below the threshold, a recorded baseline may improve by this percent
+
+[bdd]                       # the lines a diff changed must be covered by Gherkin scenarios
+enabled = true
+reason = ""
+threshold = 80
+paths = ["tests/features"]  # where the scenarios live
+exclude = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]
+
+# -- Design and complexity ----------------------------------------------------------------------
+
+[complexity]                # the complexity ratchet
+cyclomatic = 15             # a function above this fails if new, or if touched and not lowered
+cognitive = 15
+duplicated-literal-occurrences = 3   # a string literal repeated this many times is a duplicate
+duplicated-literal-min-length = 5    # shorter literals are ignored
+
+[refactor-first]
+per-file = "must-decrease"  # or "must-not-increase": a touched file's findings must fall / not rise
+
+[design-review]             # the advisory prompts in the PR comment (nothing here fails a PR)
+max-parameters = 2
+max-lines = 20
+
+# -- What a Tidy-Exempt: trailer may waive -----------------------------------------------------
+
+[exemptions]
+legacy-debt = true          # waive "a touched file / over-threshold function must improve"
+new-code = false            # waive the checks on code the change adds. Leaving this false is the point.

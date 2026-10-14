@@ -471,6 +471,34 @@ recorded score — new, or never measured — must reach 80% outright; there is 
 first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code").
 
+## Configuration: craft-gate.toml
+
+Every number and rule a gate uses is a value in one file, `craft-gate.toml`, at the repo root
+(or the same sections under `[tool.craft-gate.<section>]` in `pyproject.toml`; when both exist the
+standalone file wins). `templates/craft-gate.toml` lists every value with its default and a
+comment; copying it unchanged changes nothing, because each value there is the default.
+
+| Section | Values |
+|---|---|
+| `[patch-coverage]`, `[mutation]`, `[bdd]` | `enabled` and `reason`, `threshold` (and `improvement` for mutation), `source`, `paths`, `exclude` |
+| `[complexity]` | `cyclomatic`, `cognitive`, `duplicated-literal-occurrences`, `duplicated-literal-min-length` |
+| `[refactor-first]` | `per-file`: `must-decrease` or `must-not-increase` |
+| `[design-review]` | `max-parameters`, `max-lines` |
+| `[exemptions]` | `legacy-debt` (default true) and `new-code` (default false): what a `Tidy-Exempt:` trailer may waive |
+
+Rules the file follows:
+
+- **Strict.** An unknown section or key, or a value out of range, is an error that names it; it is
+  never silently ignored, so a typo cannot leave a gate at its default while looking configured.
+- **Every value is proven.** `tests/features/config_effects.feature` moves each value and shows
+  the verdict move with it, and a test fails if a value in the schema has no scenario. A value
+  that did nothing would be decoration.
+- **Loosening is a decision.** Raising a limit or lowering a threshold fails no check, so review
+  changes to this file like changes to the gates (`templates/CODEOWNERS.snippet`). Never edit a
+  value to make a gate pass; fix the code.
+- **New code stays strict by default.** `exemptions.new-code = true` reopens the loophole that
+  `Tidy-Exempt:` used to be; leave it false.
+
 ## Test gates: on unless declared off — patch coverage, mutation, behaviour coverage
 
 Three gates ask whether a change is *tested*, not whether it is well structured:
@@ -492,14 +520,15 @@ behaviour coverage measure the same suite patch coverage does, so they are skipp
 with that as the reason, when patch coverage is off.
 
 ```toml
-[tool.craft-gate.patch-coverage]
+# craft-gate.toml (or the same tables under [tool.craft-gate.*] in pyproject.toml)
+[patch-coverage]
 threshold = 90            # default; also: source = "your_package"
 
-[tool.craft-gate.mutation]
+[mutation]
 enabled = false
 reason = "suite takes 40 minutes; revisit when it is split"
 
-[tool.craft-gate.bdd]
+[bdd]
 paths = ["tests/features"]  # default
 threshold = 80              # default
 ```

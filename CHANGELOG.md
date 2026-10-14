@@ -10,6 +10,16 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** `craft-gate.toml`, one readable file for every number and rule the gates use: the
+  complexity limits, Refactor First's per-file rule, the design-review limits, the test gates'
+  thresholds, and what a `Tidy-Exempt:` trailer may waive. Copy `templates/craft-gate.toml`; every
+  value in it is the default, so adding it changes nothing. `[tool.craft-gate]` in `pyproject.toml`
+  still works and the standalone file wins. Unknown keys and out-of-range values are errors.
+  Each value has a Gherkin scenario showing it changes a verdict, and a test fails if one does not.
+- **Changed:** the agent guidance (`AGENTS.md`, the paste-in snippet, the `tidy-first` skill) now
+  covers the config file, the default-on test gates, behaviour coverage and "never loosen a value
+  to pass"; a test keeps every gate named in all three.
+
 - **Added:** an independent reviewer for Claude Code users. The `craft-reviewer` subagent
   reviews a branch as a lead developer with no knowledge of how it was written, against the
   catalog's new-code principles; every finding must quote the code and cite a catalog code. The

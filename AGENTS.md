@@ -11,8 +11,8 @@ procedure lives in `CRAFTSMANSHIP.md`, which both point back to.
 
 ```bash
 uv run --extra dev pytest tests                                  # the suite
-uv run --extra dev ruff check scripts tools tests/*.py           # lint (what CI runs)
-uv run --extra dev ruff format --check scripts tools tests/*.py
+uv run --extra dev ruff check scripts tools tests/*.py tests/features/*.py           # lint (what CI runs)
+uv run --extra dev ruff format --check scripts tools tests/*.py tests/features/*.py
 python3 tools/render_catalog.py --check                          # generated docs match catalog.yaml
 bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit range earned its tidy
 ```
@@ -119,6 +119,23 @@ branch tested on its own — see `templates/tdd-bdd-yagni.snippet.md`'s
 matter of course, not just when this gate flags something. No
 `Tidy-Exempt:` bypass here either — a genuinely equivalent mutant gets
 mutmut's own `# pragma: no mutate`.
+
+**The numbers live in `craft-gate.toml`** (or `[tool.craft-gate]` in `pyproject.toml`): the
+complexity limits, Refactor First's per-file rule, the design-review limits, the thresholds of the
+test gates, and what a `Tidy-Exempt:` trailer may waive. craft-gate's `templates/craft-gate.toml`
+lists every value with its default. Read the repo's file for the real numbers before you write
+code, and **never loosen a value to make a gate pass**: fix the code. If a change must edit that
+file, say why in the commit message; loosening is shown in review.
+
+**The test gates are on by default.** `patch-coverage`, `mutation-ratchet` and
+`behaviour-coverage` run unless the config switches one off with `enabled = false` and a written
+`reason`. A gate that is on but has nothing to check (no pytest suite, no `[tool.mutmut]`, no
+`.feature` files) fails; it never passes silently. Write the test with the code.
+
+**Behaviour coverage.** Where the repo has Gherkin scenarios (default `tests/features`), every
+line you add or change must be exercised by a scenario, not only by unit tests: add or extend a
+scenario with the change. Test files are left out of the patch and behaviour percentages, so a
+test's own lines never count toward them.
 
 Mutation-quality rule for new tests:
 

@@ -73,6 +73,14 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
 from astfuncs import walk_functions  # noqa: E402
+from gate_config import (  # noqa: E402
+    COMPLEXITY,
+    ConfigError,
+    Waive,
+    find_root,
+    load_settings,
+    waive_from,
+)
 from gitdiff import has_tidy_exempt, touched_names  # noqa: E402
 
 THRESHOLD = 15
@@ -381,7 +389,7 @@ def compute_duplicate_literals(
 
 
 def _measure_at_ref(
-    ref: str, path: str
+    ref: str, path: str, min_length: int = DUPLICATE_LITERAL_MIN_LENGTH
 ) -> tuple[dict[str, int], dict[str, int], dict[str, str], dict[str, int]]:
     """Every metric for *path* as it exists at git *ref*, via a throwaway worktree.
 
@@ -414,7 +422,7 @@ def _measure_at_ref(
                 compute_complexity(root),
                 compute_cognitive(root),
                 compute_invariant_returns(root),
-                compute_duplicate_literals(root),
+                compute_duplicate_literals(root, min_length),
             )
         finally:
             subprocess.run(
@@ -432,38 +440,87 @@ class Measures(NamedTuple):
     dup: dict[str, int]
 
 
+class Limits(NamedTuple):
+    """The numbers the ratchet holds code to; the defaults are what it always used."""
+
+    cyclomatic: int = THRESHOLD
+    cognitive: int = THRESHOLD
+    literal_occurrences: int = DUPLICATE_LITERAL_THRESHOLD
+    literal_min_length: int = DUPLICATE_LITERAL_MIN_LENGTH
+
+
+def limits_from(settings: dict[str, dict]) -> Limits:
+    section = settings[COMPLEXITY]
+    return Limits(
+        section["cyclomatic"],
+        section["cognitive"],
+        section["duplicated-literal-occurrences"],
+        section["duplicated-literal-min-length"],
+    )
+
+
 def collect_violations(
-    base: Measures, head: Measures, touched: tuple[set[str], set[str]], exempt: bool
+    base: Measures,
+    head: Measures,
+    touched: tuple[set[str], set[str]],
+    waive: Waive,
+    limits: Limits = Limits(),  # noqa: B008
 ) -> list[str]:
-    """Every violation of the ratchet. With *exempt* (a `Tidy-Exempt:` trailer), only those in
-    new code: the debt rules, a touched function coming out lower and a grown literal count,
-    are waived, but a new function over the threshold, a new invariant return and a new
-    duplicated literal still fail."""
+    """Every violation of the ratchet, less what *waive* excuses.
+
+    The debt rules (a touched over-threshold function must come out lower, a literal count must
+    not grow) and the new-code rules (a new function over the threshold, a new invariant return,
+    a new duplicated literal) are waived separately, so a `Tidy-Exempt:` trailer can excuse one
+    without the other.
+    """
 
     def judge(old: dict[str, int], new: dict[str, int], **kwargs) -> list[str]:
-        if exempt:
-            kwargs.pop("touched", None)
-            return find_new_violations(old, new, **kwargs)
-        return find_violations(old, new, **kwargs)
+        everything = find_violations(old, new, **kwargs)
+        kwargs.pop("touched", None)
+        fresh = find_new_violations(old, new, **kwargs)
+        debt = [] if waive.legacy_debt else [v for v in everything if v not in fresh]
+        return debt + ([] if waive.new_code else fresh)
 
     touched_cc, touched_cog = touched
-    violations = judge(base.cc, head.cc, metric="cyclomatic complexity", touched=touched_cc)
-    violations += judge(base.cog, head.cog, metric="cognitive complexity", touched=touched_cog)
+    violations = judge(
+        base.cc,
+        head.cc,
+        threshold=limits.cyclomatic,
+        metric="cyclomatic complexity",
+        touched=touched_cc,
+    )
+    violations += judge(
+        base.cog,
+        head.cog,
+        threshold=limits.cognitive,
+        metric="cognitive complexity",
+        touched=touched_cog,
+    )
     # Grandfathered like the ratchet: an invariant return that was already there
     # is not this change's problem, but a new one is.
-    violations += [
-        f"{name}: every return hands back the same never-rebound {returned!r} "
-        f"(SonarQube S3516) — use one exit, reached by break"
-        for name, returned in sorted(head.inv.items())
-        if name not in base.inv
-    ]
+    if not waive.new_code:
+        violations += [
+            f"{name}: every return hands back the same never-rebound {returned!r} "
+            f"(SonarQube S3516) — use one exit, reached by break"
+            for name, returned in sorted(head.inv.items())
+            if name not in base.inv
+        ]
     violations += judge(
         base.dup,
         head.dup,
-        threshold=DUPLICATE_LITERAL_THRESHOLD - 1,
+        threshold=limits.literal_occurrences - 1,
         metric="duplicated string literal",
     )
     return violations
+
+
+def _waived(waive: Waive) -> str:
+    rules = [
+        name
+        for name, off in (("debt rules", waive.legacy_debt), ("new-code rules", waive.new_code))
+        if off
+    ]
+    return " and ".join(rules)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -472,11 +529,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--path", default=".", help="source directory to scan")
     args = parser.parse_args(argv)
 
-    exempt = has_tidy_exempt(args.base)
-    if exempt:
+    try:
+        settings = load_settings(find_root(Path.cwd()))
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    limits = limits_from(settings)
+    waive = waive_from(settings, has_tidy_exempt(args.base))
+    if waive.legacy_debt or waive.new_code:
         print(
             f"Complexity ratchet: Tidy-Exempt: trailer found in {args.base}..HEAD — "
-            "the debt rules are waived; new code is still checked."
+            f"waiving: {_waived(waive)}."
         )
 
     root = Path(args.path)
@@ -486,10 +549,10 @@ def main(argv: list[str] | None = None) -> int:
         {name: cc for name, (cc, _l, _e) in head_funcs.items()},
         {name: cc for name, (cc, _l, _e) in head_cog_ranges.items()},
         compute_invariant_returns(root),
-        compute_duplicate_literals(root),
+        compute_duplicate_literals(root, limits.literal_min_length),
     )
     try:
-        base = Measures(*_measure_at_ref(args.base, args.path))
+        base = Measures(*_measure_at_ref(args.base, args.path, limits.literal_min_length))
     except subprocess.CalledProcessError as exc:
         print(f"error: could not read base ref {args.base!r}: {exc.stderr or exc}", file=sys.stderr)
         return 2
@@ -504,14 +567,18 @@ def main(argv: list[str] | None = None) -> int:
         touched_names(root, args.base, cog_ranges),
     )
 
-    violations = collect_violations(base, head, touched, exempt)
+    violations = collect_violations(base, head, touched, waive, limits)
     if violations:
         print(f"Complexity ratchet: {len(violations)} violation(s):", file=sys.stderr)
         for v in violations:
             print(f"  - {v}", file=sys.stderr)
         return 1
 
-    print(f"Complexity ratchet: OK (cyclomatic, cognitive ≤ {THRESHOLD}; no S1192 duplication).")
+    print(
+        f"Complexity ratchet: OK (cyclomatic ≤ {limits.cyclomatic}, "
+        f"cognitive ≤ {limits.cognitive}; "
+        f"no literal repeated {limits.literal_occurrences}+ times)."
+    )
     return 0
 
 

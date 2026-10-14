@@ -155,7 +155,7 @@ def test_a_tidy_exempt_trailer_waives_the_per_file_ratchet(project, run_main, ca
     project.commit("fix: nudge\n\nTidy-Exempt: urgent", mod_py=SMELLIER + "# a comment\n")
 
     assert verdict(run_main, project) == 0
-    assert "per-file ratchet is waived" in capsys.readouterr().out
+    assert "waiving: the per-file ratchet" in capsys.readouterr().out
 
 
 def test_a_tidy_exempt_trailer_does_not_waive_a_smell_in_new_code(

@@ -247,3 +247,14 @@ def test_a_dry_run_appends_design_review_prompts_for_touched_functions(
     assert "**Design review (advisory)**" in body
     assert "flag argument `force`" in body
     assert "nothing here blocks the PR" in body
+
+
+def test_a_dry_run_survives_an_unreadable_config_and_just_omits_the_review(
+    repo, run_main, capsys
+) -> None:
+    repo.write("craft-gate.toml", "[design-review]\nmax-lines = 0\n")
+
+    body = dry_run(repo, run_main, capsys)
+
+    assert body.startswith(pr_comment.MARKER)
+    assert "Design review" not in body
