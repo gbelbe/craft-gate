@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** patch coverage and behaviour coverage counted test files' own changed lines, which
+  always run, so they padded the percentage (a trial repo passed at 90% with 71% of the production
+  lines covered by scenarios). Both now exclude test files by default (`exclude`, settable in
+  `[tool.craft-gate.<gate>]`). Re-copy the jobs from `templates/ci-job.yml` and
+  `scripts/local-craft-gate.sh` to get it.
+
 - **Breaking:** a `Tidy-Exempt:` trailer no longer skips Refactor First and the
   complexity ratchet outright. It waives only what is about legacy debt (a touched
   file's total must go down; a touched over-threshold function must come out lower).

@@ -504,6 +504,11 @@ paths = ["tests/features"]  # default
 threshold = 80              # default
 ```
 
+Both coverage gates leave test files out of the measurement (`exclude`, default
+`tests/*`, `test_*.py`, `conftest.py`, and so on): a test's own lines always run, so counting
+them would pad the percentage. A repo that checked this found its behaviour gate passing at
+90% while scenarios covered 71% of the production lines.
+
 A switched-off gate needs a non-empty `reason`; a typo in a section or key is an
 error, not silently ignored. There is no `Tidy-Exempt:` bypass for these gates: the
 way out is the declared opt-out, which stays visible.

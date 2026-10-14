@@ -233,3 +233,48 @@ def test_cli_exits_nonzero_on_misconfiguration(tmp_path, monkeypatch, capsys) ->
 
     assert code == 1
     assert "no pytest suite" in capsys.readouterr().err
+
+
+# -- test files do not pad the measurement ---------------------------------------------------
+
+
+def test_patch_and_behaviour_coverage_exclude_test_files_by_default(tmp_path) -> None:
+    root = project(tmp_path, MUTMUT)
+
+    for gate in (cfg.PATCH, cfg.BDD):
+        excluded = cfg.decide(root, gate).settings[cfg.EXCLUDE]
+        assert "tests/*" in excluded, gate
+        assert "conftest.py" in excluded, gate
+
+
+def test_exclude_can_be_replaced(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.patch-coverage]\nexclude = ["gen/*"]\n')
+
+    assert cfg.decide(root, cfg.PATCH).settings[cfg.EXCLUDE] == ["gen/*"]
+
+
+def test_exclude_can_be_emptied(tmp_path) -> None:
+    root = project(tmp_path, "[tool.craft-gate.patch-coverage]\nexclude = []\n")
+
+    assert cfg.decide(root, cfg.PATCH).settings[cfg.EXCLUDE] == []
+
+
+def test_a_decision_does_not_share_its_exclude_list_with_the_defaults(tmp_path) -> None:
+    root = project(tmp_path, MUTMUT)
+
+    cfg.decide(root, cfg.PATCH).settings[cfg.EXCLUDE].append("x")
+
+    assert "x" not in cfg.decide(root, cfg.PATCH).settings[cfg.EXCLUDE]
+    assert "x" not in cfg.TEST_FILES
+
+
+def test_exclude_is_published_space_separated_for_the_workflow(tmp_path, monkeypatch) -> None:
+    root = project(tmp_path, MUTMUT)
+    out = tmp_path / "gh_output"
+    monkeypatch.setenv(GH_OUTPUT, str(out))
+
+    cfg.main([cfg.PATCH, PATH_FLAG, str(root)])
+
+    assert (
+        "exclude=tests/* */tests/* test_*.py *_test.py conftest.py" in out.read_text().splitlines()
+    )

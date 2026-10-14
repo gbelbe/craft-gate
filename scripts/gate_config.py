@@ -36,13 +36,17 @@ except ModuleNotFoundError:  # Python 3.10
 RUN, SKIP, ERROR = "run", "skip", "error"
 PATCH, MUTATION, BDD = "patch-coverage", "mutation", "bdd"
 GATES = (PATCH, MUTATION, BDD)
-ENABLED, REASON, THRESHOLD, PATHS = "enabled", "reason", "threshold", "paths"
+ENABLED, REASON, THRESHOLD, PATHS, EXCLUDE = "enabled", "reason", "threshold", "paths", "exclude"
 TABLE = "craft-gate"
 
+# Test code is executed by definition, so its own changed lines would pad the percentage; diff-cover
+# is told to leave these globs out and judge production code only.
+TEST_FILES = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]
+
 DEFAULTS: dict[str, dict[str, Any]] = {
-    PATCH: {ENABLED: True, REASON: "", THRESHOLD: 90, "source": ""},
+    PATCH: {ENABLED: True, REASON: "", THRESHOLD: 90, "source": "", EXCLUDE: TEST_FILES},
     MUTATION: {ENABLED: True, REASON: "", THRESHOLD: 80, "improvement": 20},
-    BDD: {ENABLED: True, REASON: "", THRESHOLD: 80, PATHS: ["tests/features"]},
+    BDD: {ENABLED: True, REASON: "", THRESHOLD: 80, PATHS: ["tests/features"], EXCLUDE: TEST_FILES},
 }
 NEEDS_COVERAGE = (MUTATION, BDD)
 _PRUNED_DIRS = {".git", ".venv", "venv", "node_modules", "site-packages", "build", "dist", ".tox"}
@@ -81,7 +85,7 @@ def _check_value(gate: str, key: str, value: Any) -> None:
     ok = isinstance(value, type(default))
     if key in (THRESHOLD, "improvement"):
         ok = isinstance(value, int) and 0 <= value <= _PERCENT_MAX
-    elif key == PATHS:
+    elif key in (PATHS, EXCLUDE):
         ok = isinstance(value, list) and all(isinstance(p, str) for p in value)
     if not ok:
         raise ConfigError(f"{_where(gate)} {key} is not valid: {value!r}")
@@ -94,7 +98,8 @@ def _gate_settings(table: dict[str, Any], gate: str) -> dict[str, Any]:
         raise ConfigError(f"{_where(gate)} has unknown key(s): {', '.join(unknown)}")
     for key, value in given.items():
         _check_value(gate, key, value)
-    return {**DEFAULTS[gate], **given}
+    merged = {**DEFAULTS[gate], **given}
+    return {k: list(v) if isinstance(v, list) else v for k, v in merged.items()}
 
 
 def _load(root: Path) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:

@@ -35,20 +35,35 @@ gate_runs() {
   grep -q '^status=run$' "$GATE_ENV"
 }
 gate_setting() { grep "^$1=" "$GATE_ENV" | cut -d= -f2-; }
+# diff-cover's --exclude takes globs; test files always run, so their lines would pad the number.
+exclude_args() {
+  local globs
+  globs="$(gate_setting exclude)"
+  [[ -z "$globs" ]] && return 0
+  printf -- '--exclude %s' "$globs"
+}
 
 if [[ $FAST -eq 0 ]]; then
   if [[ $FRESH -eq 1 ]]; then
     rm -rf mutants
   fi
   if gate_runs patch-coverage; then
-    uv run diff-cover coverage.xml --compare-branch "$BASE" --fail-under "$(gate_setting threshold)"
+    set -f
+    # shellcheck disable=SC2046,SC2086  # the exclude list is split on purpose, and not globbed
+    uv run diff-cover coverage.xml --compare-branch "$BASE" \
+      --fail-under "$(gate_setting threshold)" $(exclude_args)
+    set +f
   fi
   if gate_runs bdd; then
     paths="$(gate_setting paths)"
     threshold="$(gate_setting threshold)"
     # shellcheck disable=SC2086  # paths is a space-separated list
     uv run pytest $paths --cov --cov-report=xml:coverage-bdd.xml
-    uv run diff-cover coverage-bdd.xml --compare-branch "$BASE" --fail-under "$threshold"
+    set -f
+    # shellcheck disable=SC2046,SC2086  # the exclude list is split on purpose, and not globbed
+    uv run diff-cover coverage-bdd.xml --compare-branch "$BASE" \
+      --fail-under "$threshold" $(exclude_args)
+    set +f
   fi
   changed_python=$(git diff --name-only "$BASE"...HEAD -- \
     'ster/**/*.py' 'src/**/*.py' 'lib/**/*.py' 'tests/**/*.py' '*.py' || true)
