@@ -47,3 +47,11 @@ def test_thresholds_come_from_the_config_not_the_workflow() -> None:
     assert "--fail-under 90" not in text
     assert "--threshold 80" not in text
     assert "steps.gate.outputs.threshold" in text
+
+
+@pytest.mark.parametrize("job", ["patch-coverage", "behaviour-coverage"])
+def test_the_coverage_jobs_leave_test_files_out_of_the_measurement(job) -> None:
+    diff_cover = next(s for s in JOBS[job]["steps"] if "diff-cover" in s.get("run", ""))
+
+    assert "steps.gate.outputs.exclude" in diff_cover["run"]
+    assert "set -f" in diff_cover["run"]  # the globs are diff-cover's, not the shell's

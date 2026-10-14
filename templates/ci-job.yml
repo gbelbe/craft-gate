@@ -99,7 +99,9 @@
 # under-covered (`threshold`, default 90, set in pyproject.toml); a repo that's
 # 40% covered overall still passes as long as every line this PR touches is
 # well-tested — the point is not letting new debt accumulate, not
-# retroactively demanding full coverage of everything that exists. Measure a
+# retroactively demanding full coverage of everything that exists. Test files are
+# excluded from the measurement (`exclude`, default tests/*, test_*.py, conftest.py):
+# a test's own lines always run, and would pad the percentage. Measure a
 # specific package with `source = "your_package"` under [tool.craft-gate.patch-coverage].
 #
 # If you already have a job that runs `pytest --cov ... --cov-report=xml`
@@ -133,9 +135,11 @@
       - name: "Patch coverage: changed lines must be covered"
         if: steps.gate.outputs.status == 'run'
         run: |
+          set -f   # the exclude globs are for diff-cover, not for this shell
           uv run diff-cover coverage.xml \
             --compare-branch "origin/${{ github.base_ref }}" \
-            --fail-under ${{ steps.gate.outputs.threshold }}
+            --fail-under ${{ steps.gate.outputs.threshold }} \
+            ${{ steps.gate.outputs.exclude && format('--exclude {0}', steps.gate.outputs.exclude) || '' }}
 
 # The one gate here that doesn't call a script craft-gate ships either — it
 # wires up mutmut (github.com/boxed/mutmut), third-party, against *your own*
@@ -237,9 +241,11 @@
       - name: "Behaviour coverage: changed lines must be covered by scenarios"
         if: steps.gate.outputs.status == 'run'
         run: |
+          set -f   # the exclude globs are for diff-cover, not for this shell
           uv run diff-cover coverage-bdd.xml \
             --compare-branch "origin/${{ github.base_ref }}" \
-            --fail-under ${{ steps.gate.outputs.threshold }}
+            --fail-under ${{ steps.gate.outputs.threshold }} \
+            ${{ steps.gate.outputs.exclude && format('--exclude {0}', steps.gate.outputs.exclude) || '' }}
 
 # ── Reporting, not enforcement — but still part of the default setup ────────
 # Neither job fails a build; both make what the gates above found visible

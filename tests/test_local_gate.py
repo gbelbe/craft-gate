@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+COVERAGE_CHECKS = 2  # patch coverage and behaviour coverage
 RUNNER = ROOT / "templates" / "local-craft-gate.sh"
 
 
@@ -92,3 +93,10 @@ def test_local_runner_asks_gate_config_before_each_test_gate() -> None:
     for gate in ("patch-coverage", "bdd", "mutation"):
         assert f"gate_runs {gate}" in runner, gate
     assert "scripts/gate_config.py" in runner
+
+
+def test_local_runner_leaves_test_files_out_of_both_coverage_numbers() -> None:
+    runner = RUNNER.read_text()
+
+    assert runner.count("$(exclude_args)") == COVERAGE_CHECKS
+    assert "gate_setting exclude" in runner

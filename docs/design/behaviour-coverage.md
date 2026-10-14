@@ -27,6 +27,10 @@ Cucumber suites that run under pytest, all work. It needs no craft-gate script o
 its own beyond the configuration reader, which is the point; the mechanism is the
 one patch coverage already uses.
 
+4. Test files are left out (`exclude`, default `tests/*`, `test_*.py`, `conftest.py`). Step
+   definitions are changed lines that always run, so counting them pads the percentage:
+   in a trial repo the gate passed at 90% while the scenarios covered 71% of the production lines.
+
 ## What it does not do
 
 - **Order.** It cannot tell whether a scenario was written before the code. A
