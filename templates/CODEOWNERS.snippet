@@ -1,6 +1,9 @@
 # Add to .github/CODEOWNERS (or CODEOWNERS) in the consuming repo, replacing
 # @your-handle with the person or team that should review changes to the gates.
 #
+# `/scripts/` is the whole directory on purpose: gate_config.py holds the defaults and gitdiff.py
+# decides what a change touched, so each one can loosen a gate as much as a threshold can.
+#
 # Why: these files decide what the craftsmanship gates enforce. A change to
 # them can loosen a threshold, add an ignore or switch a detector off without
 # any check failing — and the automated craft-gate sync PR overwrites several
@@ -13,17 +16,11 @@
 /CRAFTSMANSHIP.md                    @your-handle
 /catalog.yaml                        @your-handle
 /.craft-gate-version                 @your-handle
-/scripts/check_tidy_ratchet.sh       @your-handle
-/scripts/check_refactor_first.py     @your-handle
-/scripts/check_complexity_ratchet.py @your-handle
-/scripts/check_mutation_ratchet.py   @your-handle
-/scripts/craftcov.py                 @your-handle
-/scripts/craftcov_pr_comment.py      @your-handle
-/scripts/report_tidy_history.sh      @your-handle
-/scripts/local-craft-gate.sh         @your-handle
 /craft-gate.toml                     @your-handle
 /pyproject.toml                      @your-handle
-/.claude/skills/tidy-first/          @your-handle
+/scripts/                            @your-handle
+/.claude/skills/                     @your-handle
+/.claude/agents/                     @your-handle
 /.github/workflows/ci.yml            @your-handle
 /.github/workflows/craft-gate-*.yml  @your-handle
 /.pre-commit-config.yaml             @your-handle

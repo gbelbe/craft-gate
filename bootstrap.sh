@@ -36,6 +36,7 @@ SHIPPED=(
   scripts/design_review.py
   scripts/config_loosening.py
   # helpers the gate scripts import — they must travel with them
+  scripts/gate-requirements.txt
   scripts/gitdiff.py
   scripts/astfuncs.py
 )

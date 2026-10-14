@@ -29,28 +29,33 @@ patch coverage, the mutation ratchet, behaviour coverage) and two reporting jobs
 and a code-scanning SARIF upload) that show what the gates found without blocking
 a merge themselves.
 
-Each gate needs its own toolchain; skip a gate and you skip its dependency:
+Your repo needs `uv` and nothing else for the tools. ruff, pylint, vulture, radon, mutmut,
+diff-cover and pytest-cov come from `scripts/gate-requirements.txt` (installed by `bootstrap.sh`,
+exact versions), which each job passes to `uv run --with-requirements`; you add no extras for them.
+What a gate needs from *your* repo is its own tests:
 
-| Gate | Needs |
+| Gate | Needs from your repo |
 |---|---|
-| Refactor First | a `craftcov` extra: ruff, pylint, vulture (and pyyaml unless already a dependency) |
-| Complexity ratchet | a `complexity` extra: radon, cognitive-complexity |
-| Patch coverage | `diff-cover` and a coverage runner in your dev deps, and a pytest suite |
-| Mutation ratchet | a `mutation` extra (mutmut), your own test-running deps, and a `[tool.mutmut]` section in `pyproject.toml` |
-| Behaviour coverage | `pytest-bdd` (or any runner that puts scenarios under pytest) and `.feature` files under `tests/features` |
+| Refactor First, complexity ratchet | nothing |
+| Patch coverage | a pytest suite |
+| Mutation ratchet | a pytest suite and a `[tool.mutmut]` section in `pyproject.toml` |
+| Behaviour coverage | `.feature` files under `tests/features` and a runner that puts scenarios under pytest (pytest-bdd) |
+| SARIF upload | a public repo or GitHub Advanced Security. Skip just this job if neither applies |
+
+The three test gates install your test dependencies with `uv sync --all-extras`; narrow that in the
+workflow if your extras conflict.
 
 The last three are on by default and take their settings from `craft-gate.toml` (copy
 `templates/craft-gate.toml`; it lists every value at its default) or `pyproject.toml`'s
 `[tool.craft-gate]`, not from the workflow file. To skip one, set `enabled = false`
 with a `reason` there; a gate that is on but has nothing to check fails and tells you
 so. CRAFTSMANSHIP.md's "Test gates" has the table and an example.
-| SARIF upload | a public repo or GitHub Advanced Security. Skip just this job if neither applies |
 
 The local runner is `scripts/local-craft-gate.sh`. Call it after your test
 command has produced `coverage.xml`; it writes `craftcov-report.md` and
 `craftcov.sarif` and reuses mutmut's `mutants/` cache.
 
-Exact version pins are the extras in this repo's `pyproject.toml` (`craftcov`, `complexity`, `mutation`). The rationale for each
+To move to newer tool versions, update to a newer craft-gate: the pins change with it, tested together. The rationale for each
 gate is in `DESIGN.md`, which indexes the notes under `docs/design/` (craftCov, the complexity ratchet, patch coverage, the
 mutation ratchet, reporting).
 

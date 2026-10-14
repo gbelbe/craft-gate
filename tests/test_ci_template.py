@@ -12,6 +12,7 @@ TEST_GATES = {
     "mutation-ratchet": "mutation",
     "behaviour-coverage": "bdd",
 }
+TOOLS = "uv run --no-project --with-requirements scripts/gate-requirements.txt"
 STATUS_RUN = "steps.gate.outputs.status == 'run'"
 
 
@@ -21,7 +22,7 @@ def test_each_test_gate_asks_gate_config_first(job, gate) -> None:
     asked = [s for s in steps if s.get("id") == "gate"]
 
     assert len(asked) == 1
-    assert asked[0]["run"] == f"python3 scripts/gate_config.py {gate}"
+    assert asked[0]["run"] == f"{TOOLS} python3 scripts/gate_config.py {gate}"
     assert steps.index(asked[0]) < min(
         steps.index(s) for s in steps if "if" in s and STATUS_RUN in s["if"]
     )

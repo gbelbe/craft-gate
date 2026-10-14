@@ -42,8 +42,7 @@ def test_local_runner_documents_focused_mutation_selection() -> None:
     runner = (RUNNER).read_text()
 
     assert "pytest_add_cli_args_test_selection" in runner
-    assert "ster/**/*.py" in runner
-    assert "tests/**/*.py" in runner
+    assert "-- '*.py'" in runner  # any layout: a pathspec '*' crosses directories
 
 
 def test_ci_template_keeps_all_five_gates_and_two_reports() -> None:
@@ -64,7 +63,10 @@ def test_ci_template_keeps_all_five_gates_and_two_reports() -> None:
 def test_ci_template_uses_freshness_aware_mutation_cache() -> None:
     template = (ROOT / "templates" / "ci-job.yml").read_text()
 
-    assert "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock')" in template
+    assert (
+        "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock', 'scripts/gate-requirements.txt')"
+        in template
+    )
     # mutation_plan.py decides what a test change invalidates; mutmut's own reset is turned down
     assert 'on_dependency_change = "warn"' in template
     assert "mutation_plan.py run" in template
