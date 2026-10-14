@@ -395,3 +395,16 @@ def test_a_fingerprint_that_matches_no_known_selection_is_refused() -> None:
     except mp.CacheFormatError:
         return
     raise AssertionError("expected CacheFormatError")
+
+
+def test_the_summary_names_the_new_test_files_it_will_measure() -> None:
+    plan = make(
+        [("A", "tests/unit/test_new.py")],
+        selection=(*SELECTION, "tests/unit/test_new.py"),
+    )
+
+    assert "  new test file(s): tests/unit/test_new.py" in mp.summary(plan).splitlines()
+
+
+def test_the_summary_has_no_new_test_line_without_new_test_files() -> None:
+    assert "new test file(s)" not in mp.summary(make([("M", "tests/integration/test_other.py")]))
