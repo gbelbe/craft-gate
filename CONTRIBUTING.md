@@ -2,7 +2,7 @@
 
 This file is for people. Coding agents working in this repo follow
 [AGENTS.md](AGENTS.md); the two don't repeat each other, so read both if you
-do both. [docs/architecture.md](docs/architecture.md) is the map of the repo.
+do both. Security problems go through [SECURITY.md](SECURITY.md), not an issue. [docs/architecture.md](docs/architecture.md) is the map of the repo.
 
 ## Development setup
 
