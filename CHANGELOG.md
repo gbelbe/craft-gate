@@ -10,6 +10,9 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** the mutation selection check treated any `.py` file mentioning `pytest.mark.mutation` as an
+  orphaned test, including craft-gate's own `scripts/gate_config.py` once vendored, so every repo with
+  craft-gate installed failed it (v0.30.0). It now reads only `test_*.py` and `*_test.py` files.
 - **Added:** `scripts/ci_history.py`, which reads a workflow's recent runs from GitHub (`gh`) and
   reports, per job and per step, the median and p90 duration and its share of the job time, plus
   wall clock and job minutes. `scripts/gate_timing.py` times a gate's own stages (the mutation planner
