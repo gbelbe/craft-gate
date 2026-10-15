@@ -44,6 +44,7 @@ STATS = {
 }
 
 INCREMENTAL = "incremental"
+TWO_PASSES, MUTMUT_FAILED = 2, 3
 SELECTION = (
     "tests/unit/test_files.py",
     "tests/unit/test_ctx.py",
@@ -476,7 +477,7 @@ def test_the_stages_of_a_run_are_timed_in_order(monkeypatch, tmp_path) -> None:
 
     names = [json.loads(line)["name"] for line in timings.read_text().splitlines()]
     assert code == 0
-    assert len(runs) == 2
+    assert len(runs) == TWO_PASSES
     assert names == [
         "mutation plan: read the repo and decide",
         f"mutation plan: prepare the cache ({INCREMENTAL})",
@@ -492,7 +493,7 @@ def test_a_failing_mutmut_run_is_not_repeated(monkeypatch, tmp_path) -> None:
     codes = iter([3, 0])
     monkeypatch.setattr(mp, RUN_MUTMUT, lambda _root: next(codes))
 
-    assert mp.run(tmp_path, "main", tmp_path / MUTANTS) == 3
+    assert mp.run(tmp_path, "main", tmp_path / MUTANTS) == MUTMUT_FAILED
 
 
 def test_a_planning_failure_falls_back_to_a_full_run(monkeypatch, tmp_path, capsys) -> None:

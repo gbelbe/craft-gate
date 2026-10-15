@@ -8,6 +8,7 @@ import time
 import gate_timing as gt
 import pytest
 
+SLEPT = 0.01
 TIMINGS, FAST, SLOW = "t.jsonl", "t::fast", "t::slow"
 STATS = {
     "duration_by_test": {FAST: 0.5, SLOW: 4.0, "t::mid": 1.5},
@@ -33,13 +34,13 @@ def test_a_step_appends_a_json_line_when_the_file_is_named(tmp_path, monkeypatch
     monkeypatch.setenv(gt.ENV_VAR, str(target))
 
     with gt.step("one"):
-        time.sleep(0.01)
+        time.sleep(SLEPT)
     with gt.step("two"):
         pass
 
     records = [json.loads(line) for line in target.read_text().splitlines()]
     assert [r["name"] for r in records] == ["one", "two"]
-    assert records[0][gt.SECONDS] >= 0.01
+    assert records[0][gt.SECONDS] >= SLEPT
 
 
 def test_a_failing_step_is_still_timed_and_the_error_propagates(tmp_path, monkeypatch) -> None:

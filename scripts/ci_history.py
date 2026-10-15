@@ -146,10 +146,9 @@ def _table(headers: tuple[str, ...], rows: list[tuple[str, ...]]) -> str:
     return "\n".join(lines + ["| " + " | ".join(row) + " |" for row in rows])
 
 
-def _row(label: tuple[str, ...], stats: Stats, grand: float, with_count: bool) -> tuple[str, ...]:
-    count = (str(stats.count),) if with_count else ()
-    share = f"{_PERCENT * stats.total / grand:.0f}%"
-    return (*label, *count, _fmt(stats.median), _fmt(stats.p90), share)
+def _cells(stats: Stats, grand: float) -> tuple[str, str, str]:
+    """Median, p90 and share of the job time, as table cells."""
+    return _fmt(stats.median), _fmt(stats.p90), f"{_PERCENT * stats.total / grand:.0f}%"
 
 
 def render(summary: Summary, top: int = 8) -> str:
@@ -158,7 +157,7 @@ def render(summary: Summary, top: int = 8) -> str:
         return "No completed runs to analyse."
     grand = sum(job.stats.total for job in summary.jobs.values()) or 1.0
     ordered = sorted(summary.jobs.items(), key=lambda item: item[1].stats.total, reverse=True)
-    job_rows = [_row((name,), job.stats, grand, True) for name, job in ordered]
+    job_rows = [(name, str(job.stats.count), *_cells(job.stats, grand)) for name, job in ordered]
     jobs = _table(("Job", "Runs", "Median", "p90", "Share of job time"), job_rows)
     return "\n\n".join([_totals(summary), jobs, _heaviest_steps(ordered, top, grand)])
 
@@ -177,7 +176,7 @@ def _totals(summary: Summary) -> str:
 def _heaviest_steps(ordered: list[tuple[str, JobStats]], top: int, grand: float) -> str:
     steps = [(job, name, s) for job, data in ordered for name, s in data.steps.items()]
     heaviest = sorted(steps, key=lambda row: row[2].total, reverse=True)[:top]
-    rows = [_row((job, name), stats, grand, False) for job, name, stats in heaviest]
+    rows = [(job, name, *_cells(stats, grand)) for job, name, stats in heaviest]
     return "**Heaviest steps**\n\n" + _table(
         ("Job", "Step", "Median", "p90", "Share of job time"), rows
     )

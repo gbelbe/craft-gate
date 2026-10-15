@@ -7,6 +7,7 @@ import json
 import ci_history as ch
 
 PYTEST, SETUP = "pytest", "setup"
+TWO_AND_A_HALF_MINUTES, TWO_MINUTES = 150.0, 120.0
 
 
 def at(minute: int, second: int = 0) -> str:
@@ -26,7 +27,7 @@ def entry(jobs, start=None, end=None):
 
 
 def test_seconds_between_two_times() -> None:
-    assert ch.seconds_between(at(0), at(2, 30)) == 150.0
+    assert ch.seconds_between(at(0), at(2, 30)) == TWO_AND_A_HALF_MINUTES
 
 
 def test_a_missing_time_is_no_duration() -> None:
@@ -41,8 +42,7 @@ def test_a_negative_span_is_clamped_to_zero() -> None:
 def test_percentile_is_the_nearest_rank() -> None:
     values = [float(n) for n in range(1, 11)]
 
-    assert ch.percentile(values, 0.9) == 9.0
-    assert ch.percentile([4.0], 0.9) == 4.0
+    assert (ch.percentile(values, 0.9), ch.percentile([4.0], 0.9)) == (9.0, 4.0)
 
 
 def test_a_skipped_job_is_not_counted() -> None:
@@ -73,12 +73,10 @@ def test_the_summary_gives_each_job_and_step_median_and_p90() -> None:
 
     summary = ch.summarize(history)
 
-    assert summary.runs == 2
-    assert summary.wall_clock.median == 540.0
-    assert summary.jobs["test"].stats.median == 480.0
-    assert summary.jobs["test"].steps[PYTEST].p90 == 480.0
-    assert summary.jobs["test"].steps[SETUP].total == 120.0
-    assert summary.job_minutes.median == 8.0
+    tested = summary.jobs["test"]
+    assert (summary.runs, summary.wall_clock.median, summary.job_minutes.median) == (2, 540.0, 8.0)
+    assert (tested.stats.median, tested.steps[PYTEST].p90) == (480.0, 480.0)
+    assert tested.steps[SETUP].total == TWO_MINUTES
 
 
 def test_skipped_steps_are_ignored() -> None:
