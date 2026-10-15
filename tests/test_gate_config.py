@@ -5,6 +5,7 @@ from __future__ import annotations
 import gate_config as cfg
 import pytest
 
+VENV = ".venv"
 PYTEST_FILE = "def test_x():\n    assert True\n"
 MUTMUT = "[tool.mutmut]\nsource_paths = ['src']\n"
 PATH_FLAG, GH_OUTPUT, TESTS = "--path", "GITHUB_OUTPUT", "tests"
@@ -144,8 +145,8 @@ def test_bdd_paths_can_point_elsewhere(tmp_path) -> None:
 
 def test_tests_inside_a_virtualenv_do_not_count_as_a_suite(tmp_path) -> None:
     root = project(tmp_path, "", tests=False, features=False)
-    (root / ".venv" / "lib").mkdir(parents=True)
-    (root / ".venv" / "lib" / "test_vendored.py").write_text(PYTEST_FILE)
+    (root / VENV / "lib").mkdir(parents=True)
+    (root / VENV / "lib" / "test_vendored.py").write_text(PYTEST_FILE)
 
     assert cfg.decide(root, cfg.PATCH).status == cfg.ERROR
 
@@ -297,3 +298,97 @@ def test_a_package_path_is_a_valid_source(tmp_path) -> None:
     root = project(tmp_path, '[tool.craft-gate.patch-coverage]\nsource = "src/my_pkg-2.x"\n')
 
     assert cfg.decide(root, cfg.PATCH).settings["source"] == "src/my_pkg-2.x"
+
+
+# -- the mutation selection and the `mutation` marker agree -------------------------------------
+
+UNIT = "tests/unit"
+SELECTED = f"{UNIT}/test_a.py"
+MARKED = "import pytest\n\n\n@pytest.mark.mutation\ndef test_a():\n    assert True\n"
+REGISTERED = "[tool.pytest.ini_options]\nmarkers = ['mutation: focused tests']\n"
+
+
+def selection(*files: str, marker: bool = True) -> str:
+    args = [*files, "-m", cfg.MARKER] if marker else list(files)
+    return f"[tool.mutmut]\npytest_add_cli_args_test_selection = {args!r}\n{REGISTERED}"
+
+
+def unit_test(root, name: str = "test_a.py", text: str = MARKED) -> None:
+    (root / UNIT).mkdir(parents=True, exist_ok=True)
+    (root / UNIT / name).write_text(text)
+
+
+def test_a_selection_whose_files_exist_and_carry_the_marker_runs(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(root)
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_the_marker_must_be_registered_when_the_selection_uses_it(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED).replace(REGISTERED, ""))
+    unit_test(root)
+
+    decision = cfg.decide(root, cfg.MUTATION)
+
+    assert decision.status == cfg.ERROR
+    assert "-m mutation is selected but the marker is not registered" in decision.reason
+
+
+def test_a_marker_registered_in_pytest_ini_counts(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED).replace(REGISTERED, ""))
+    unit_test(root)
+    (root / "pytest.ini").write_text("[pytest]\nmarkers =\n    mutation: focused tests\n")
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_a_selected_file_that_does_not_exist_is_named(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED, f"{UNIT}/test_gone.py"))
+    unit_test(root)
+
+    decision = cfg.decide(root, cfg.MUTATION)
+
+    assert decision.status == cfg.ERROR
+    assert "names file(s) that do not exist: tests/unit/test_gone.py" in decision.reason
+
+
+def test_a_marked_test_file_missing_from_the_selection_is_named(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(root)
+    unit_test(root, "test_orphan.py")
+
+    decision = cfg.decide(root, cfg.MUTATION)
+
+    assert decision.status == cfg.ERROR
+    assert "missing from pytest_add_cli_args_test_selection: " + f"{UNIT}/test_orphan.py" in (
+        decision.reason
+    )
+
+
+def test_marked_files_are_not_orphans_when_the_selection_does_not_use_the_marker(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED, marker=False))
+    unit_test(root)
+    unit_test(root, "test_other.py")
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_a_marker_inside_a_virtualenv_is_not_an_orphan(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(root)
+    dep = root / VENV / "lib"
+    dep.mkdir(parents=True)
+    (dep / "test_dep.py").write_text(MARKED)
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_no_selection_at_all_is_left_to_mutmut(tmp_path) -> None:
+    assert cfg.decide(project(tmp_path, MUTMUT), cfg.MUTATION).status == cfg.RUN
+
+
+def test_the_problem_can_be_declared_off_with_a_reason(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED) + off(cfg.MUTATION))
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.SKIP

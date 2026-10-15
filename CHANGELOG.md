@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Changed:** the mutation gate now checks that mutmut's test selection and the `mutation` marker agree,
+  and stops with the reason when they do not: `-m mutation` selected but the marker not registered
+  (pyproject, an ini file or a conftest), a file named in `pytest_add_cli_args_test_selection` that does
+  not exist, or a test file carrying `@pytest.mark.mutation` that the selection leaves out (it would never
+  be run against a mutant). A repo with such an orphan fails until it lists the file, drops the marker, or
+  sets `[mutation] enabled = false` with a reason.
 - **Fixed:** `mutation_plan.py` still failed Refactor First in a repo that vendors it without craft-gate's
   tests: `Plan.selection_added` was read only by them, so the dead-code scan flagged it. `plan` and
   `apply` now print the new test files, which is also what a reader of the summary was missing.
