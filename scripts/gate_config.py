@@ -231,6 +231,11 @@ def _registered_markers(root: Path, tool: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def _is_test_file(name: str) -> bool:
+    """pytest's own default: test_*.py or *_test.py. Other files may merely mention the marker."""
+    return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
+
+
 def _marked_files(root: Path) -> set[str]:
     """Test files that carry @pytest.mark.mutation, as repo-relative posix paths."""
     found = set()
@@ -238,7 +243,7 @@ def _marked_files(root: Path) -> set[str]:
         dirs[:] = [d for d in dirs if d not in _PRUNED_DIRS]
         for name in files:
             path = Path(directory) / name
-            if name.endswith(".py") and MARKER_USE in path.read_text(errors="replace"):
+            if _is_test_file(name) and MARKER_USE in path.read_text(errors="replace"):
                 found.add(path.relative_to(root).as_posix())
     return found
 

@@ -392,3 +392,23 @@ def test_the_problem_can_be_declared_off_with_a_reason(tmp_path) -> None:
     root = project(tmp_path, selection(SELECTED) + off(cfg.MUTATION))
 
     assert cfg.decide(root, cfg.MUTATION).status == cfg.SKIP
+
+
+def test_a_script_that_only_mentions_the_marker_is_not_an_orphan(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(root)
+    (root / "scripts").mkdir()
+    (root / "scripts" / "gate_config.py").write_text('MARKER_USE = "pytest.mark.mutation"\n')
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_a_file_named_like_a_test_with_the_suffix_form_is_an_orphan(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(root)
+    unit_test(root, "orphan_test.py")
+
+    decision = cfg.decide(root, cfg.MUTATION)
+
+    assert decision.status == cfg.ERROR
+    assert f"{UNIT}/orphan_test.py" in decision.reason
