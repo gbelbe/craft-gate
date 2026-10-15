@@ -23,7 +23,7 @@ exclude = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]   # 
 enabled = true
 reason = ""
 threshold = 80              # percent of mutants killed that passes outright
-improvement = 20            # below the threshold, a recorded baseline may improve by this percent
+improvement = 20            # below the threshold, a recorded baseline may improve by this percent (never owing more than the threshold)
 
 [bdd]                       # the lines a diff changed must be covered by Gherkin scenarios
 enabled = true

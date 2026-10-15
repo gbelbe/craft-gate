@@ -124,10 +124,10 @@ checklist:
 6. Strengthen a survivor with a behavior-specific test, or use `# pragma: no
    mutate` only when the mutation is genuinely equivalent.
 
-The default ratchet passes per changed function at 80% mutation score, or at
+The ratchet passes per changed function at the threshold (80% by default), or at
 20% improvement over that function's recorded score in
-`.mutation-baseline.json`. A function with no recorded score — new, or never
-measured, including a legacy function you merely edit — must reach 80%
-outright on the first push: there is no grace run. Plan for that while writing
+`.mutation-baseline.json`, which never asks for more than the threshold itself.
+A function with no recorded score — new, or never measured, including a legacy
+function you merely edit — must reach the threshold outright on the first push: there is no grace run. Plan for that while writing
 the tests (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code"), not after the gate refuses the push.

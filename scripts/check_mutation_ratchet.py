@@ -14,7 +14,9 @@ ratchet: mutation testing is too expensive to run twice per PR (it reruns
 the whole test suite once per mutant), so this checks touched functions
 against a floor on the current tree only. The floor is --threshold; a
 function that already has a score in the baseline file may instead improve on
-that score by --improvement percent. A function with *no* recorded baseline
+that score by --improvement percent, and is never asked for more than the
+threshold itself (a function at 78% that reaches the threshold has no further
+to go, whatever 78% + --improvement comes to). A function with *no* recorded baseline
 has no score to improve on, so it must reach --threshold outright: a first
 sighting is not a free pass. A genuinely equivalent mutant belongs behind mutmut's own
 `# pragma: no mutate` (mutmut's answer to this, same idea as coverage.py's
@@ -160,6 +162,14 @@ def _score_violation(name: str, score: float, needs: str) -> str:
     return f"{name}: mutation score {score:.0f}%, {needs}"
 
 
+def required_score(previous: float, improvement: float, threshold: float) -> float:
+    """What a function below the threshold must reach: its improvement, at most the threshold.
+
+    The threshold is the bar for fresh code, so a function that has caught up owes nothing more.
+    """
+    return min(previous * (1.0 + improvement / 100.0), threshold)
+
+
 def evaluate_results(
     results: dict[str, dict[str, int]],
     baseline: dict[str, float],
@@ -169,7 +179,8 @@ def evaluate_results(
     """Apply the absolute floor, or the improvement rule for a function with a recorded baseline.
 
     A function scoring below *threshold* is judged by whether it has a baseline:
-    - recorded: it must improve on it by *improvement* percent;
+    - recorded: it must improve on it by *improvement* percent or reach *threshold*, whichever is
+      less;
     - none (new, or never recorded): refused. The improvement path needs a score
       to improve on, and a first sighting must not be a free pass.
     At or above *threshold* a function always passes.
@@ -188,7 +199,7 @@ def evaluate_results(
             if previous is None:
                 needs = f"a function with no recorded baseline needs >= {threshold:.0f}%"
                 violations.append(_score_violation(name, score, needs))
-            elif score < (required := previous * (1.0 + improvement / 100.0)):
+            elif score < (required := required_score(previous, improvement, threshold)):
                 violations.append(_score_violation(name, score, f"needs >= {required:.0f}%"))
         updated[name] = round(score, 4)
     return violations, updated
