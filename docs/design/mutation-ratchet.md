@@ -22,7 +22,8 @@ uv run $T python3 scripts/check_mutation_ratchet.py --base origin/main --thresho
 default local runner and CI job then run mutation testing on every full/PR run.
 Mark those tests with `@pytest.mark.mutation`. Name the test files explicitly,
 not only `-m mutation`, because mutmut must not collect unrelated test modules
-before applying the marker. The normal test job still runs the full suite. The
+before applying the marker. `gate_config.py` checks the two agree: the marker is registered, every
+selected file exists, and no file carrying the marker is missing from the list. The normal test job still runs the full suite. The
 mutation cache is incremental:
 mutmut regenerates and retests changed functions, while
 `cache_invalidation_files` plus `on_dependency_change = "rerun"` force a full
