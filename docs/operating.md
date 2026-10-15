@@ -46,6 +46,29 @@ value that got weaker, with before and after. It never blocks. `templates/CODEOW
 the last piece: review on changes to the gate files and the config, so a person decides.
 It only blocks merges when branch protection requires Code Owner review.
 
+## Where the CI time goes
+
+A repo with some history can see which jobs and steps cost the most, without instrumenting anything:
+
+```bash
+python3 scripts/ci_history.py --repo OWNER/NAME --workflow ci.yml --runs 30 --branch main
+```
+
+It needs the `gh` CLI and prints, per job and per step, the median and 90th percentile across the
+runs and each one's share of the total job time, plus the workflow's wall clock and its job minutes
+(each job rounded up to a minute, as GitHub bills it). `--save history.json` keeps the fetched data
+and `--from-json history.json` analyses it later with no network.
+
+Inside the mutation job the planner times its own stages (`mutation plan: ...`, `mutmut run (pass N)`)
+through `scripts/gate_timing.py`: each line goes to the job log, and when `CRAFT_GATE_TIMINGS` names
+a file it is appended there. The CI template renders that file, and the slowest tests and the
+functions whose mutants cost the most (from the durations mutmut recorded), into the job's step
+summary. `python3 scripts/gate_timing.py mutants` prints the second one locally after a `mutmut run`.
+
+What to look at first: a standard `ubuntu-latest` runner has 4 vCPU in a public repo and 2 in a private
+one, and mutmut runs one process per CPU. A mutation job that dominates the job time is usually made
+of a few slow tests; `gate_timing.py mutants` names them.
+
 ## Badge
 
 A static claim that the gates are wired in, the same pattern

@@ -39,6 +39,8 @@ SHIPPED=(
   scripts/gate-requirements.txt
   scripts/gitdiff.py
   scripts/astfuncs.py
+  scripts/gate_timing.py
+  scripts/ci_history.py
 )
 # ...except these, which live elsewhere in the source: "source:target".
 RELOCATED=(

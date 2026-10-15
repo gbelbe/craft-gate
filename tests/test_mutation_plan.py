@@ -8,6 +8,7 @@ cached verdicts to drop so a normal `mutmut run` re-tests exactly those.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -42,6 +43,8 @@ STATS = {
     },
 }
 
+INCREMENTAL = "incremental"
+TWO_PASSES, MUTMUT_FAILED = 2, 3
 SELECTION = (
     "tests/unit/test_files.py",
     "tests/unit/test_ctx.py",
@@ -95,7 +98,7 @@ def test_a_dependency_section_change_means_a_full_rerun() -> None:
 def test_a_pyproject_change_outside_the_watched_sections_costs_nothing() -> None:
     plan = make([("M", "pyproject.toml")], sections=[])
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == ()
 
 
@@ -111,7 +114,7 @@ def test_a_root_conftest_change_affects_every_test() -> None:
 def test_a_changed_test_file_resets_only_the_functions_it_covers() -> None:
     plan = make([("M", "tests/unit/test_promote.py")])
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == (PROMOTE,)
     assert set(plan.stale_tests) == {
         "tests/unit/test_promote.py::test_p1",
@@ -143,7 +146,7 @@ def test_a_new_test_file_is_unknown_to_the_stats_so_nothing_is_reset_yet() -> No
         selection=(*SELECTION, "tests/unit/test_new.py"),
     )
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == ()
     assert plan.selection_added == ("tests/unit/test_new.py",)
     assert plan.needs_second_pass is True
@@ -226,7 +229,7 @@ def test_a_data_file_nobody_names_falls_back_to_the_tests_beside_it() -> None:
 def test_a_production_function_in_a_mutated_file_is_left_to_mutmut() -> None:
     plan = make([("M", "ster/store/_load_save.py")])
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == ()
 
 
@@ -254,7 +257,7 @@ def test_documentation_and_workflow_changes_cost_nothing() -> None:
         [("M", "README.md"), ("M", ".github/workflows/ci.yml"), ("M", ".mutation-baseline.json")]
     )
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == ()
 
 
@@ -268,7 +271,7 @@ def test_adding_files_to_the_selection_is_not_a_cache_wide_change() -> None:
         sections=["tool.mutmut.pytest_add_cli_args_test_selection"],
     )
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
 
 
 def test_removing_files_from_the_selection_resets_what_they_covered() -> None:
@@ -278,7 +281,7 @@ def test_removing_files_from_the_selection_resets_what_they_covered() -> None:
         sections=["tool.mutmut.pytest_add_cli_args_test_selection"],
     )
 
-    assert plan.mode == "incremental"
+    assert plan.mode == INCREMENTAL
     assert plan.reset_functions == (PROMOTE,)
 
 
@@ -408,3 +411,98 @@ def test_the_summary_names_the_new_test_files_it_will_measure() -> None:
 
 def test_the_summary_has_no_new_test_line_without_new_test_files() -> None:
     assert "new test file(s)" not in mp.summary(make([("M", "tests/integration/test_other.py")]))
+
+
+# -- preparing the cache and running mutmut, with the stages timed -------------------------------
+
+MUTANTS = "mutants"
+RUN_MUTMUT, APPLY, RECORD = "_mutmut_run", "apply", "record"
+
+
+def stub_planning(monkeypatch, tmp_path, decided):
+    """collect_inputs/plan/apply/record_domain replaced; returns the calls apply and record saw."""
+    seen = {APPLY: 0, RECORD: []}
+    monkeypatch.setattr(mp, "collect_inputs", lambda *_: (None, ["old"], ["new"]))
+    monkeypatch.setattr(mp, "plan", lambda _inputs: decided)
+
+    def fake_apply(*_args):
+        seen[APPLY] += 1
+        return 3
+
+    monkeypatch.setattr(mp, APPLY, fake_apply)
+    monkeypatch.setattr(
+        mp, "record_domain", lambda _dir, functions, *, fresh: seen[RECORD].append(fresh)
+    )
+    (tmp_path / MUTANTS).mkdir()
+    return seen
+
+
+def test_a_full_plan_clears_the_cache(monkeypatch, tmp_path) -> None:
+    stub_planning(monkeypatch, tmp_path, mp.Plan(mode="full"))
+
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
+
+    assert not (tmp_path / MUTANTS).exists()
+
+
+def test_an_initial_plan_leaves_the_cache_alone(monkeypatch, tmp_path) -> None:
+    seen = stub_planning(monkeypatch, tmp_path, mp.Plan(mode="init"))
+
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
+
+    assert (tmp_path / MUTANTS).exists()
+    assert seen == {APPLY: 0, RECORD: []}
+
+
+def test_an_incremental_plan_drops_verdicts_and_records_the_domain(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    seen = stub_planning(monkeypatch, tmp_path, mp.Plan(mode=INCREMENTAL))
+
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 2)
+
+    assert seen == {APPLY: 2, RECORD: [True, False]}
+    assert "dropped 3 cached verdict(s)" in capsys.readouterr().out
+
+
+def test_the_stages_of_a_run_are_timed_in_order(monkeypatch, tmp_path) -> None:
+    timings = tmp_path / "timings.jsonl"
+    monkeypatch.setenv("CRAFT_GATE_TIMINGS", str(timings))
+    stub_planning(monkeypatch, tmp_path, mp.Plan(mode=INCREMENTAL, needs_second_pass=True))
+    runs = []
+    monkeypatch.setattr(mp, RUN_MUTMUT, lambda root: runs.append(root) or 0)
+
+    code = mp.run(tmp_path, "main", tmp_path / MUTANTS)
+
+    names = [json.loads(line)["name"] for line in timings.read_text().splitlines()]
+    assert code == 0
+    assert len(runs) == TWO_PASSES
+    assert names == [
+        "mutation plan: read the repo and decide",
+        f"mutation plan: prepare the cache ({INCREMENTAL})",
+        "mutmut run (pass 1)",
+        "mutation plan: read the repo and decide",
+        f"mutation plan: prepare the cache ({INCREMENTAL})",
+        "mutmut run (pass 2)",
+    ]
+
+
+def test_a_failing_mutmut_run_is_not_repeated(monkeypatch, tmp_path) -> None:
+    stub_planning(monkeypatch, tmp_path, mp.Plan(mode=INCREMENTAL, needs_second_pass=True))
+    codes = iter([3, 0])
+    monkeypatch.setattr(mp, RUN_MUTMUT, lambda _root: next(codes))
+
+    assert mp.run(tmp_path, "main", tmp_path / MUTANTS) == MUTMUT_FAILED
+
+
+def test_a_planning_failure_falls_back_to_a_full_run(monkeypatch, tmp_path, capsys) -> None:
+    stub_planning(monkeypatch, tmp_path, mp.Plan(mode=INCREMENTAL))
+    monkeypatch.setattr(mp, "collect_inputs", lambda *_: 1 / 0)
+    runs = []
+    monkeypatch.setattr(mp, RUN_MUTMUT, lambda root: runs.append(root) or 0)
+
+    assert mp.run(tmp_path, "main", tmp_path / MUTANTS) == 0
+    assert len(runs) == 1
+    assert not (tmp_path / MUTANTS).exists()
+    assert "running in full" in capsys.readouterr().err

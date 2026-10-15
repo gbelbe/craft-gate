@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** `scripts/ci_history.py`, which reads a workflow's recent runs from GitHub (`gh`) and
+  reports, per job and per step, the median and p90 duration and its share of the job time, plus
+  wall clock and job minutes. `scripts/gate_timing.py` times a gate's own stages (the mutation planner
+  now times its plan, cache preparation and each `mutmut run` pass), and ranks the slowest tests and
+  costliest functions from mutmut's recorded durations. The mutation job in `templates/ci-job.yml`
+  writes both into the job's step summary. Re-copy the job and re-run `bootstrap.sh`.
 - **Changed:** the mutation gate now checks that mutmut's test selection and the `mutation` marker agree,
   and stops with the reason when they do not: `-m mutation` selected but the marker not registered
   (pyproject, an ini file or a conftest), a file named in `pytest_add_cli_args_test_selection` that does
