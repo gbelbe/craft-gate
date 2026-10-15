@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** `scripts/ci_history.py`, which reads a workflow's recent runs from GitHub (`gh`) and
+  reports, per job and per step, the median and p90 duration and its share of the job time, plus
+  wall clock and job minutes. `scripts/gate_timing.py` times a gate's own stages (the mutation planner
+  now times its plan, cache preparation and each `mutmut run` pass), and ranks the slowest tests and
+  costliest functions from mutmut's recorded durations. The mutation job in `templates/ci-job.yml`
+  writes both into the job's step summary. Re-copy the job and re-run `bootstrap.sh`.
 - **Fixed:** `mutation_plan.py` still failed Refactor First in a repo that vendors it without craft-gate's
   tests: `Plan.selection_added` was read only by them, so the dead-code scan flagged it. `plan` and
   `apply` now print the new test files, which is also what a reader of the summary was missing.

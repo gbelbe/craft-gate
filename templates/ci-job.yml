@@ -169,6 +169,8 @@
     name: Mutation ratchet
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    env:
+      CRAFT_GATE_TIMINGS: gate-timings.jsonl   # scripts/gate_timing.py appends each stage's duration here
     steps:
       - uses: actions/checkout@v7
         with:
@@ -206,6 +208,14 @@
             --base "origin/${{ github.base_ref || 'main' }}" \
             --threshold ${{ steps.gate.outputs.threshold }} \
             --improvement ${{ steps.gate.outputs.improvement }}
+
+      # Where the time went: the planner's stages, then the tests that make every mutant slow.
+      - name: Where the mutation time went
+        if: always() && steps.gate.outputs.status == 'run'
+        run: |
+          { python3 scripts/gate_timing.py report "$CRAFT_GATE_TIMINGS"
+            echo
+            python3 scripts/gate_timing.py mutants; } >> "$GITHUB_STEP_SUMMARY"
 
 # Behaviour (Gherkin) coverage: the same question as patch-coverage, asked of the
 # scenarios alone. It runs only the behaviour tests (`paths`, default
