@@ -158,8 +158,28 @@ def find_violations(results: dict[str, dict[str, int]], threshold: float) -> lis
     return violations
 
 
+SCORE_DIGITS = 4  # the precision a score is stored with in .mutation-baseline.json
+
+
+def mutation_score(killed: int, tested: int) -> float:
+    """Percent of mutants killed, at the precision the baseline file stores.
+
+    Judging an exact ratio against a stored, rounded one refuses a function whose counts did not
+    change: 38 of 39 is 97.435897..., stored as 97.4359, and 97.435897 < 97.4359.
+    """
+    return round(100.0 * killed / tested, SCORE_DIGITS)
+
+
+def _pct(score: float) -> str:
+    """A percentage with the decimals it needs and no more: 60 -> '60%', 97.4359 -> '97.44%'.
+
+    Whole numbers hid the difference between two scores a gate had just told apart ("97% to 97%").
+    """
+    return f"{score:.2f}".rstrip("0").rstrip(".") + "%"
+
+
 def _score_violation(name: str, score: float, needs: str) -> str:
-    return f"{name}: mutation score {score:.0f}%, {needs}"
+    return f"{name}: mutation score {_pct(score)}, {needs}"
 
 
 def required_score(previous: float, improvement: float, threshold: float) -> float:
@@ -193,15 +213,15 @@ def evaluate_results(
             if counts["no_tests"]:
                 violations.append(f"{name}: no covering tests")
             continue
-        score = 100.0 * counts["killed"] / tested
+        score = mutation_score(counts["killed"], tested)
         previous = baseline.get(name)
         if score < threshold:
             if previous is None:
-                needs = f"a function with no recorded baseline needs >= {threshold:.0f}%"
+                needs = f"a function with no recorded baseline needs >= {_pct(threshold)}"
                 violations.append(_score_violation(name, score, needs))
             elif score < (required := required_score(previous, improvement, threshold)):
-                violations.append(_score_violation(name, score, f"needs >= {required:.0f}%"))
-        updated[name] = round(score, 4)
+                violations.append(_score_violation(name, score, f"needs >= {_pct(required)}"))
+        updated[name] = score
     return violations, updated
 
 
@@ -229,15 +249,15 @@ def evaluate_domain(
         tested = counts["killed"] + counts["survived"]
         if not tested:
             continue
-        score = 100.0 * counts["killed"] / tested
+        score = mutation_score(counts["killed"], tested)
         previous = baseline.get(name)
         if previous is not None and score < previous - tolerance:
-            was, now = f"{previous:.0f}%", f"{score:.0f}%"
+            was, now = _pct(previous), _pct(score)
             violations.append(
                 f"{name}: a test change lowered its mutation score from {was} to {now}"
             )
             continue
-        updated[name] = round(max(score, previous or 0.0), 4)
+        updated[name] = max(score, previous or 0.0)
     return violations, updated
 
 

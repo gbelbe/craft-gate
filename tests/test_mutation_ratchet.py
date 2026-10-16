@@ -206,3 +206,47 @@ def test_the_required_score_is_the_improvement_capped_at_the_threshold() -> None
         FRESH_CODE_BAR,
         CHOSEN_THRESHOLD,
     )
+
+
+# -- a stored score and a fresh one are compared at the same precision -------------
+
+MOST_KILLED = 80
+MOST_SURVIVING = 5
+STORED_AT_97 = 97.4359  # 38 of 39 killed, as the baseline file stores it
+ONE_MORE_SURVIVOR = counts(35, 1)  # 35 of 36: 97.2222, genuinely lower
+
+
+def test_a_re_tested_function_with_the_counts_it_was_recorded_with_is_never_refused() -> None:
+    refused = []
+    for killed in range(1, MOST_KILLED):
+        for survived in range(1, MOST_SURVIVING):
+            results = {"f": counts(killed, survived)}
+            _, recorded = evaluate_domain(results, {})
+            violations, _ = evaluate_domain(results, recorded)
+            if violations:
+                refused.append((killed, survived))
+
+    assert refused == []
+
+
+def test_the_rounding_that_used_to_refuse_38_of_39_no_longer_does() -> None:
+    # 100 * 38 / 39 = 97.43589743..., stored as 97.4359, which is above it
+    violations, updated = evaluate_domain({"f": counts(38, 1)}, {"f": STORED_AT_97})
+
+    assert violations == []
+    assert updated == {"f": STORED_AT_97}
+
+
+def test_a_drop_that_is_real_is_still_refused_and_the_message_shows_the_decimals() -> None:
+    violations, _ = evaluate_domain({"f": ONE_MORE_SURVIVOR}, {"f": STORED_AT_97})
+
+    assert len(violations) == 1
+    assert "from 97.44% to 97.22%" in violations[0]
+
+
+def test_a_percentage_is_shown_with_the_decimals_it_needs_and_no_more() -> None:
+    assert [ratchet._pct(60.0), ratchet._pct(STORED_AT_97), ratchet._pct(97.0)] == [
+        "60%",
+        "97.44%",
+        "97%",
+    ]
