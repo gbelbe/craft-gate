@@ -151,10 +151,11 @@ Mutation-quality rule for new tests:
   truthiness.
 - Add boundary, empty, and error cases for changed branches.
 - Use focused mutmut and inspect survivors before declaring the change complete.
-- The default ratchet passes at 80% mutation score, or after a 20% improvement
-  over the function's recorded baseline. A function with no recorded baseline
-  (new, or never measured) has no second chance: it must reach 80% on the
-  first push. Design the tests for that before writing them.
+- The ratchet passes at the threshold (80% by default, `craft-gate.toml`), or
+  after a 20% improvement over the function's recorded baseline, which never
+  asks for more than the threshold itself. A function with no recorded baseline
+  (new, or never measured) has no second chance: it must reach the threshold on
+  the first push. Design the tests for that before writing them.
 
 ## Editing this repo specifically
 

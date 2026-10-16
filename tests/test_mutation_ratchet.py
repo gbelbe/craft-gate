@@ -164,3 +164,45 @@ def test_a_function_whose_mutants_were_not_all_re_tested_is_flagged() -> None:
     violations, _ = evaluate_domain(results, {"f": 50.0})
 
     assert violations == ["f: 3 mutant(s) were not re-tested after the plan reset them"]
+
+
+# -- the improvement never asks for more than the threshold ------------------------
+
+BASELINE = 78.0
+CHOSEN_THRESHOLD = 90.0
+FRESH_CODE_BAR = 80.0
+IMPROVEMENT = 20.0
+LOW_BASELINE = 50.0
+LOW_BASELINE_PLUS_IMPROVEMENT = 60.0
+
+
+def test_a_known_function_that_reaches_the_threshold_owes_no_further_improvement() -> None:
+    # 78% + 20% would be 94%, but the bar for fresh code is the threshold
+    assert evaluate({"f": counts(80, 20)}, {"f": BASELINE})[0] == []
+
+
+def test_a_known_function_just_short_of_the_threshold_is_told_the_threshold() -> None:
+    violations, _ = evaluate({"f": counts(79, 21)}, {"f": BASELINE})
+
+    assert len(violations) == 1
+    assert "needs >= 80%" in violations[0]
+
+
+def test_the_cap_follows_the_threshold_the_caller_chose() -> None:
+    refused, _ = evaluate({"f": counts(89, 11)}, {"f": BASELINE}, threshold=CHOSEN_THRESHOLD)
+    passed, _ = evaluate({"f": counts(90, 10)}, {"f": BASELINE}, threshold=CHOSEN_THRESHOLD)
+
+    assert "needs >= 90%" in refused[0]
+    assert passed == []
+
+
+def test_the_required_score_is_the_improvement_capped_at_the_threshold() -> None:
+    low = ratchet.required_score(LOW_BASELINE, IMPROVEMENT, FRESH_CODE_BAR)
+    caught_up = ratchet.required_score(BASELINE, IMPROVEMENT, FRESH_CODE_BAR)
+    capped = ratchet.required_score(BASELINE, IMPROVEMENT, CHOSEN_THRESHOLD)
+
+    assert (low, caught_up, capped) == (
+        LOW_BASELINE_PLUS_IMPROVEMENT,
+        FRESH_CODE_BAR,
+        CHOSEN_THRESHOLD,
+    )

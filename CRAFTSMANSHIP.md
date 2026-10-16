@@ -463,12 +463,13 @@ gate entirely on a PR where that's the right call.
 **Test-quality rule.** A new or changed behavioral test should be designed to
 kill a meaningful mutation: assert the observable result, cover the relevant
 boundary/error branch, and avoid merely executing the line. Mutation selection
-is diff-scoped and per function. A changed function passes at 80% mutation
-score, or, below 80%, only when it already has a recorded score in
-`.mutation-baseline.json` and improves on it by at least 20%. A function with no
-recorded score — new, or never measured — must reach 80% outright; there is no
-"first run records the baseline" grace. Design its tests for 80% before the
-first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
+is diff-scoped and per function. A changed function passes at the threshold
+(80% by default), or, below it, only when it already has a recorded score in
+`.mutation-baseline.json` and improves on it by at least 20% — never asked for
+more than the threshold itself, so a function at 78% that reaches the threshold
+passes. A function with no recorded score — new, or never measured — must reach
+the threshold outright; there is no "first run records the baseline" grace.
+Design its tests for the threshold before the first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code").
 
 ## Configuration: craft-gate.toml
