@@ -143,3 +143,9 @@ characters; `dataclasses.replace()` behind one typed helper; no exception listed
 beside its base class; no `http://` literal; a parameter an interface imposes is
 marked `# NOSONAR - <why>`. A rewritten comment on an untested line is a changed
 line for diff-cover and the mutation ratchet: fix the lines you add, leave the rest.
+
+After you fix a finding SonarQube raised, close the loop in the same PR: add the ruff rule that would
+have caught it if one exists and adds no violation to the repo, otherwise a diff-aware check in the
+project's parity script (`CRAFTSMANSHIP.md`, "Close the loop"). Never raise a shared setting such as
+`max-args` to match Sonar: craftCov reads it. A false positive gets its documented suppression, not a rule.
+Repositories without SonarQube ignore this section entirely.

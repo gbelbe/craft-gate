@@ -712,6 +712,34 @@ it is ignored; a plural built with a ternary inside a string is a nested-ternary
 - **Cheap local check before pushing:** `grep -nE "noqa: [A-Z]+[0-9]+ +[-—:]" $(git diff --name-only
   origin/main...HEAD)` finds the first trap; for the others, read the list above against the diff.
 
+### Close the loop: a Sonar finding, once fixed, becomes a lint rule
+
+*Only for a repository that gates on SonarQube (a `sonar-project.properties`, or a SonarQube check on its
+PRs). A repository without Sonar needs none of this and nothing in craft-gate depends on it: no gate,
+script or `craft-gate.toml` value here refers to Sonar.*
+
+A Sonar finding costs a push and a wait, so each kind should cost it **once**. After fixing a finding the
+server raised, and before the PR is considered done, a coding agent does the following, in this order,
+and puts it in the same PR as the fix (a `chore(lint):` commit of its own is fine):
+
+1. **Is there a ruff rule for it?** (`ruff rule --all`, or the rule list's name for the Sonar rule.) If yes,
+   add its code to `select` in the project's ruff configuration, run `ruff check` on the whole repo, and
+   keep it only if it adds **no** new violation (ruff cannot limit a rule to new code). If it would
+   flag old code, do not turn it on: use step 2.
+2. **Otherwise add a diff-aware check** to the project's own parity script (`scripts/check_sonar_parity.py`
+   in the repository that has one; create it from the same shape — judge only the lines the change added,
+   one small function per trap, a unit test per trap that fails without the fix). Wire it where the
+   complexity ratchet is wired (the local gate script, the CI job, a manual pre-commit hook).
+3. **Never loosen a shared setting to make Sonar and a linter agree.** Check who else reads the setting:
+   `craftcov` runs `ruff check --select PLR0913` with the project's configuration, so raising
+   `max-args` to Sonar's limit would silently weaken the stricter gate.
+4. **Write the trap down** in the section above if it is a new kind; the next agent reads that, not the
+   history.
+
+If a finding is a false positive for this project (an RDF namespace read as a clear-text URL, a
+parameter an interface imposes), the fix is the documented suppression with its reason, and **no** lint
+rule is added: the point is to prevent real recurrences, not to encode Sonar's mistakes.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible
