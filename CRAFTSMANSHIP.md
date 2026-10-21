@@ -668,10 +668,20 @@ interface. Mark the `def` line `# NOSONAR - the <Interface> passes it`. Do not m
 `Protocol` to silence it when the class is a dataclass: the protocol's properties become read-only
 attributes and construction fails. Do not delete the parameter either: the caller passes it.
 
-**5. Parameter count: ruff and Sonar disagree (S107).** `# noqa: PLR0913` silences ruff only. Sonar's limit is
-13 on a function; a Typer/Click command with one parameter per option goes over it. A parameter object
-removes the finding for an internal helper (`_pick(state)` instead of seven arguments); for a command whose
-signature *is* the option list, `# NOSONAR - every CLI option is a parameter` on the `def` line.
+**5. Parameter count: ruff, craftCov and Sonar use three limits (S107).** craftCov's CG018 flags more than 5
+(it runs `ruff check --select PLR0913` with the *project's* ruff configuration); Sonar's limit here is 13.
+`# noqa: PLR0913` silences ruff, not Sonar, so a function over 13 needs both comments. Do **not** set
+`[tool.ruff.lint.pylint] max-args = 13` to "match" Sonar: craftCov reads that setting, so the stricter
+gate would silently drop to 13. Any new function over 5 already fails Refactor First long before Sonar's
+13, so the Sonar finding only appears on a legacy function you touch. A parameter object removes the
+finding for an internal helper (`_pick(state)` instead of seven arguments); for a command whose signature
+*is* the option list, `# NOSONAR - every CLI option is a parameter` on the `def` line.
+
+**Ruff rules that mirror Sonar and cost nothing to turn on:** `PGH004` (a bare `# noqa`) and `B014` (a
+handler naming the same exception twice). `ARG` (unused arguments, S1172) and `RUF100` (unused `noqa`) would
+help too but ruff cannot limit them to new code: enable them only in a repo with few existing violations.
+No ruff rule reproduces S7632 (the `# noqa` reason syntax), S5852 (backtracking) or S5655 (types): those
+stay a reading of the diff.
 
 **6. Do not list an exception beside its base (S5713).** `except (OSError, URLError)`, `except
 (HTTPError, OSError)`, `except (FileNotFoundError, OSError)`: the subclass is already caught. Name the base
