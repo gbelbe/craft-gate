@@ -54,6 +54,11 @@ Feature: A pull request cannot loosen craft-gate.toml unnoticed
       | refactor-first.per-file   | "must-decrease"   | "must-not-increase" | is reported   |
       | refactor-first.per-file   | "must-not-increase" | "must-decrease" | is not reported |
 
+    Examples: mutation cache across a dependency change
+      | key                          | before   | after    | verdict         |
+      | mutation.dependency-change   | "rerun"  | "keep"   | is reported     |
+      | mutation.dependency-change   | "keep"   | "rerun"  | is not reported |
+
     Examples: lists of what is counted
       | key                       | before            | after             | verdict         |
       | patch-coverage.exclude    | ["tests/*"]       | ["tests/*", "src/gen/*"] | is reported |

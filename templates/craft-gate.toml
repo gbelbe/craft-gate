@@ -24,6 +24,7 @@ enabled = true
 reason = ""
 threshold = 80              # percent of mutants killed that passes outright
 improvement = 20            # below the threshold, a recorded baseline may improve by this percent (never owing more than the threshold)
+dependency-change = "rerun" # a lock file or dependency list changed: "rerun" every mutant (sound), or "keep" the cached verdicts (the nightly campaign rebuilds them)
 
 [bdd]                       # the lines a diff changed must be covered by Gherkin scenarios
 enabled = true

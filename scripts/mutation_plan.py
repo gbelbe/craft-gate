@@ -18,6 +18,10 @@ This script turns the diff into the narrowest set of cached verdicts to drop, th
 The first initialisation of a repo (no `mutants/` cache), and the few causes that really are
 cache-wide
 (a lock file, the dependency list, pytest's own arguments, the root conftest), still run in full.
+A repo may set `[mutation] dependency-change = "keep"` in craft-gate.toml: a lock file or dependency
+list change then keeps the cached verdicts (the nightly campaign starts from nothing and rebuilds
+them), instead of re-running every mutant for a bump that touches no function. Test setup
+(`pytest.ini`, `tool.pytest`, the root conftest) still runs in full.
 Pair it with `on_dependency_change = "warn"` and no `tests/**/*.py` in
 `cache_invalidation_files`, or
 mutmut's own invalidation resets everything before this script has a say.
@@ -52,6 +56,7 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
+from gate_config import load_settings  # noqa: E402
 from gate_timing import step  # noqa: E402
 
 try:  # Python 3.11+; older interpreters fall back to a full run rather than guessing
@@ -70,6 +75,7 @@ FULL_RERUN_FILES = (
     "tox.ini",
     "pytest.ini",
 )
+LOCK_FILES = ("uv.lock", "poetry.lock", "Pipfile.lock", "requirements*.txt")
 FULL_RERUN_SECTIONS = (
     "project.dependencies",
     "project.optional-dependencies",
@@ -77,7 +83,10 @@ FULL_RERUN_SECTIONS = (
     "tool.pytest",
     "tool.mutmut.pytest_add_cli_args",
 )
+# What `dependency-change = "keep"` stops treating as cache-wide: dependency lists, not test setup.
+DEPENDENCY_SECTIONS = ("project.dependencies", "project.optional-dependencies", "build-system")
 _RENAME_PATHS = 2  # `git diff --name-status` names a rename as old<TAB>new
+MUTATION_GATE = "mutation"
 _PASSES = 2  # plan and run once, and once more when new tests had to be measured first
 _SELECTION_KEY = "tool.mutmut.pytest_add_cli_args_test_selection"
 
@@ -109,6 +118,7 @@ class Inputs:
     sources: dict[str, str] = field(default_factory=dict)  # path -> text, tests and mutated files
     changed_sections: tuple[str, ...] = ()  # pyproject sections that differ from the base
     graph: ImportGraph = field(default_factory=ImportGraph)
+    keep_on_dependency_change: bool = False  # dependency-change = "keep": cached verdicts survive
 
 
 @dataclass(frozen=True)
@@ -139,7 +149,9 @@ def _full_rerun_reasons(inputs: Inputs) -> list[str]:
     reasons = []
     for _status, path in inputs.changes:
         name = path.rsplit("/", 1)[-1]
-        if any(fnmatch.fnmatch(name, pattern) for pattern in FULL_RERUN_FILES):
+        if _matches(name, FULL_RERUN_FILES) and not (
+            inputs.keep_on_dependency_change and _matches(name, LOCK_FILES)
+        ):
             reasons.append(f"{path} changed: it can alter any verdict")
         if path in ("conftest.py", "tests/conftest.py"):
             reasons.append(f"{path} changed: it applies to every test")
@@ -147,8 +159,13 @@ def _full_rerun_reasons(inputs: Inputs) -> list[str]:
         f"{section} changed in pyproject.toml: it can alter any verdict"
         for section in inputs.changed_sections
         if section in FULL_RERUN_SECTIONS
+        and not (inputs.keep_on_dependency_change and section in DEPENDENCY_SECTIONS)
     ]
     return reasons
+
+
+def _matches(name: str, patterns: tuple[str, ...]) -> bool:
+    return any(fnmatch.fnmatch(name, pattern) for pattern in patterns)
 
 
 @dataclass
@@ -474,6 +491,14 @@ def import_graph(root: Path, files: list[str]) -> tuple[dict[str, set[str]], dic
     return graph, by_file
 
 
+def _keeps_on_dependency_change(root: Path) -> bool:
+    """The repo's `dependency-change = "keep"` for the mutation gate; unreadable means rerun."""
+    try:
+        return load_settings(root)[MUTATION_GATE]["dependency-change"] == "keep"
+    except Exception:  # noqa: BLE001  # a config that cannot be read must not weaken the plan
+        return False
+
+
 def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, list[str], list[str]]:
     new_doc = _pyproject(
         (root / "pyproject.toml").read_text() if (root / "pyproject.toml").exists() else ""
@@ -497,6 +522,7 @@ def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, li
         stats = None
     graph, by_file = import_graph(root, files)
     inputs = Inputs(
+        keep_on_dependency_change=_keeps_on_dependency_change(root),
         changes=read_changes(root, base),
         mutated_files=mutated,
         selection=Selection(selection, selection_files(old_doc) if old_doc else selection),
@@ -519,14 +545,17 @@ class CacheFormatError(Exception):
     """The cache does not look like the mutmut version this script was written against."""
 
 
-def resign_selection(stats: dict, old_args: list[str], new_args: list[str]) -> None:
+def resign_selection(
+    stats: dict, old_args: list[str], new_args: list[str], built_args: list[str] | None = None
+) -> None:
     """Make mutmut see the test selection as unchanged when the files it adds have simply not been
     measured yet; it would otherwise reset every verdict.
 
     The cache was built from some earlier selection, which is not necessarily the base ref's.
-    Two candidates are tried: the base ref's, and the current one without the files the cache has
-    no test from. The stored fingerprint must match one of them exactly, or the format is not what
-    this script knows and the caller runs in full.
+    Three candidates are tried: the base ref's, the current one without the files the cache has no
+    test from, and the selection at the commit the cache was built from (a cache restored from an
+    older main predates any selection edit merged since). The stored fingerprint must match one of
+    them exactly, or the format is not what this script knows and the caller runs in full.
     """
     fingerprint = stats.setdefault("config_fingerprint", {})
     stored = fingerprint.get("test_selection")
@@ -535,17 +564,23 @@ def resign_selection(stats: dict, old_args: list[str], new_args: list[str]) -> N
         return
     measured = {test.split("::", 1)[0] for test in stats.get("duration_by_test", {})}
     unmeasured = {a for a in new_args if a.endswith(".py") and a not in measured}
-    candidates = (old_args, [a for a in new_args if a not in unmeasured])
+    candidates = (old_args, [a for a in new_args if a not in unmeasured], built_args or [])
     if not any(selection_fingerprint(candidate) == stored for candidate in candidates):
         raise CacheFormatError("the stored test-selection fingerprint matches no known selection")
     fingerprint["test_selection"] = wanted
 
 
-def apply(plan_: Plan, mutants_dir: Path, old_args: list[str], new_args: list[str]) -> int:
+def apply(
+    plan_: Plan,
+    mutants_dir: Path,
+    old_args: list[str],
+    new_args: list[str],
+    built_args: list[str] | None = None,
+) -> int:
     """Drop the planned verdicts and stale tests; returns how many mutant verdicts were dropped."""
     stats_path = mutants_dir / "mutmut-stats.json"
     stats = json.loads(stats_path.read_text())
-    resign_selection(stats, old_args, new_args)
+    resign_selection(stats, old_args, new_args, built_args)
     drop_tests(stats, set(plan_.stale_tests))
     stats_path.write_text(json.dumps(stats, indent=4))
 
@@ -584,6 +619,16 @@ def record_domain(mutants_dir: Path, functions: tuple[str, ...], *, fresh: bool)
     path.write_text(json.dumps({"reset_functions": sorted({*previous, *functions})}, indent=2))
 
 
+def built_selection(root: Path, mutants_dir: Path) -> list[str]:
+    """The test selection at the commit the cache was built from; empty when it cannot be told."""
+    try:
+        commit = json.loads((mutants_dir / "mutmut-stats.json").read_text())["git_commit"]
+        doc = _pyproject(_git(root, "show", f"{commit}:pyproject.toml"))
+    except (OSError, KeyError, json.JSONDecodeError, subprocess.CalledProcessError):
+        return []
+    return list(_lookup(doc, _SELECTION_KEY) or [])
+
+
 def _mutmut_run(root: Path) -> int:
     return subprocess.run([sys.executable, "-m", "mutmut", "run"], cwd=root, check=False).returncode
 
@@ -609,7 +654,8 @@ def _prepare(
         if decided.mode == "full" and mutants_dir.exists():
             shutil.rmtree(mutants_dir)
         elif decided.mode == "incremental":
-            dropped = apply(decided, mutants_dir, old_args, new_args)
+            built = built_selection(root, mutants_dir)
+            dropped = apply(decided, mutants_dir, old_args, new_args, built)
             print(f"dropped {dropped} cached verdict(s)")
             record_domain(mutants_dir, decided.reset_functions, fresh=attempt == 1)
     return decided
@@ -675,7 +721,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     print(summary(decided))
     if decided.mode == "incremental":
-        print(f"dropped {apply(decided, mutants_dir, old_args, new_args)} cached verdict(s)")
+        built = built_selection(root, mutants_dir)
+        print(f"dropped {apply(decided, mutants_dir, old_args, new_args, built)} cached verdict(s)")
         record_domain(mutants_dir, decided.reset_functions, fresh=True)
     return 0
 
