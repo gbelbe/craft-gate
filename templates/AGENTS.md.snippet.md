@@ -131,3 +131,15 @@ A function with no recorded score — new, or never measured, including a legacy
 function you merely edit — must reach the threshold outright on the first push: there is no grace run. Plan for that while writing
 the tests (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code"), not after the gate refuses the push.
+
+## SonarQube (when the project gates on it)
+
+Sonar judges new code on the server and reports one failed condition at a time, and
+nothing local reproduces most of its rules. Before pushing, read the diff against
+`CRAFTSMANSHIP.md` "SonarQube — what it rejects that the other gates do not":
+the reason of a `# noqa` / `# NOSONAR` goes after a **second** `#` (never after a
+dash); no regular expression whose adjacent quantified groups can match the same
+characters; `dataclasses.replace()` behind one typed helper; no exception listed
+beside its base class; no `http://` literal; a parameter an interface imposes is
+marked `# NOSONAR - <why>`. A rewritten comment on an untested line is a changed
+line for diff-cover and the mutation ratchet: fix the lines you add, leave the rest.

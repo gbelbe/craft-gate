@@ -621,6 +621,87 @@ a person or a coding agent. Know these in advance and the first push is the last
 - GitHub sometimes answers a push with `Internal Server Error`. Retry after a minute or two before
   suspecting the branch.
 
+## SonarQube — what it rejects that the other gates do not
+
+SonarQube judges **new code** only, runs on the server, and reports **one failed condition at a time**, so
+a finding you could have avoided costs a push and a wait each. Nothing local reproduces it (the complexity
+ratchet covers S3776, S3516 and S1192; the rest is below). Everything here was learned from findings Sonar
+raised on real pull requests — read it before writing the code, not after the check fails. When a PR's
+"SonarQube Code Analysis" check is red, the list of issues is at
+`<server>/project/issues?id=<project>&pullRequest=<n>&resolved=false`; fix **all** of them in one push.
+
+**1. A suppression comment has its reason after a second `#` (S7632).** Sonar parses `# noqa: CODE` and
+treats whatever follows on the same comment as part of the syntax. A dash, an em dash or a colon before the
+reason is a finding on its own:
+
+```python
+except Exception:  # noqa: BLE001 - an unreadable file falls back     # flagged
+except Exception:  # noqa: BLE001  # an unreadable file falls back     # accepted
+```
+
+The same goes for every code (`PLR0913`, `V103`, `PLC0415`, `ARG001` …) and for `# NOSONAR - reason`, which
+is how a finding Sonar raises but that does not apply gets dismissed (a parameter an interface imposes, an
+RDF namespace that is an identifier, not an address). A suppression must say *why*; one without a reason
+is a reviewer's first question.
+
+**2. A regular expression must not backtrack (S5852, S5869, S5843).**
+- Adjacent quantified groups that can match the same characters (`\s*=?\s*["']?\s*`) can split a long run
+  of them in many ways: polynomial time on input an attacker or a served page controls. Make the
+  quantifiers possessive (`\s*+`, `=?+`, Python 3.11+) when nothing after a run can match what the run
+  matched, or merge the runs (`[\s=]*`), or stop using a regular expression for it.
+- A repeated range under `re.IGNORECASE` (`[A-Za-z]`) is a finding: `[a-z]` already covers both.
+- A single expression over about 20 in Sonar's regex complexity (several alternations of strings, IRIs and
+  comments) is a finding: build it from named pieces and join them.
+- Write a regression test that feeds a long run of the repeating character (50 000 spaces) and asserts it
+  finishes within a budget. Without the fix it does not finish.
+
+**3. Sonar types `dataclasses.replace()` as a bare `DataclassInstance` (S5655).** mypy is satisfied, Sonar
+then reports the caller as passing, returning or receiving "a different type" — four findings from one
+line. Give the copy its type once: build it with its constructor, or put `replace` behind one helper whose
+return annotation names the class (`def _changed(source: Src, **changes: Any) -> Src: return cast(Src,
+replace(source, **changes))`) and use the helper everywhere. A `cast` repeated at each call site works but
+spreads the workaround.
+
+**4. A parameter an interface imposes is not "unused" (S1172) — say so.** A method that implements a
+`Protocol`, a callback signature or a framework hook keeps parameters it does not read; Sonar cannot see the
+interface. Mark the `def` line `# NOSONAR - the <Interface> passes it`. Do not make the class inherit from a
+`Protocol` to silence it when the class is a dataclass: the protocol's properties become read-only
+attributes and construction fails. Do not delete the parameter either: the caller passes it.
+
+**5. Parameter count: ruff and Sonar disagree (S107).** `# noqa: PLR0913` silences ruff only. Sonar's limit is
+13 on a function; a Typer/Click command with one parameter per option goes over it. A parameter object
+removes the finding for an internal helper (`_pick(state)` instead of seven arguments); for a command whose
+signature *is* the option list, `# NOSONAR - every CLI option is a parameter` on the `def` line.
+
+**6. Do not list an exception beside its base (S5713).** `except (OSError, URLError)`, `except
+(HTTPError, OSError)`, `except (FileNotFoundError, OSError)`: the subclass is already caught. Name the base
+once; a test pins that the subclass is still handled.
+
+**7. No clear-text `http://` in a literal (S5332).** In tests, build an unreachable or local address from a
+scheme variable in the shared helper rather than writing `http://127.0.0.1:1/`. For an RDF namespace the
+advice is *wrong* (`http://…` and `https://…` are different IRIs): take it from `rdflib.namespace` where it
+exists, or mark the line `# NOSONAR - RDF namespace IRI`, never switch it to `https`.
+
+**8. Repeated string literal (S1192), cognitive complexity (S3776), invariant return (S3516)** are checked
+locally by `scripts/check_complexity_ratchet.py`; user-interface labels, menu texts and selectors repeated
+in a view module are the usual source — name each once at the top of the module.
+
+**9. Browser JavaScript has its own rules.** What Sonar asked of `graph_app.js`: `globalThis`, not `window`;
+`for…of`, not an index loop or `forEach` with a side effect; `Math.trunc` and `codePointAt`; an optional
+catch binding (`catch {` , not `catch(_){}`) and never an empty `catch` — log at `console.debug` or say why
+it is ignored; a plural built with a ternary inside a string is a nested-ternary finding, use a helper.
+
+**Process traps**
+- **A comment is a changed line.** Sonar counts a line you only touched as new code, but so do diff-cover and
+  the mutation ratchet: rewriting a suppression comment on an `except` branch no test runs, or on a line
+  inside a function with no mutation baseline, fails *those* gates (a sweep of four such comments failed
+  on coverage and on a 29 % mutation score, and was closed). Fix the syntax **in the lines your change
+  adds**; leave older lines alone unless you are testing them.
+- **Test code is code.** Every rule above applies to `tests/` too (S5332 and S5852 were raised on test
+  helpers and test files).
+- **Cheap local check before pushing:** `grep -nE "noqa: [A-Z]+[0-9]+ +[-—:]" $(git diff --name-only
+  origin/main...HEAD)` finds the first trap; for the others, read the list above against the diff.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible
