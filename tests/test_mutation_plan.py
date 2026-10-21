@@ -68,6 +68,7 @@ def make(changes, **overrides):
             stats=given["stats"],
             sources=given["sources"] or {},
             changed_sections=tuple(given["sections"]),
+            keep_on_dependency_change=bool(overrides.get("keep")),
         )
     )
 
@@ -94,6 +95,25 @@ def test_a_dependency_section_change_means_a_full_rerun() -> None:
 
     assert plan.mode == "full"
     assert "project.dependencies" in plan.reasons[0]
+
+
+def test_a_lock_file_change_keeps_the_cache_when_the_repo_says_so() -> None:
+    plan = make([("M", "uv.lock")], keep=True)
+
+    assert plan.mode == INCREMENTAL
+    assert plan.reset_functions == ()
+
+
+def test_a_dependency_section_change_keeps_the_cache_when_the_repo_says_so() -> None:
+    plan = make([("M", "pyproject.toml")], sections=["project.dependencies"], keep=True)
+
+    assert plan.mode == INCREMENTAL
+
+
+def test_keeping_the_cache_on_a_dependency_change_does_not_hide_a_test_setup_change() -> None:
+    assert make([("M", "pytest.ini")], keep=True).mode == "full"
+    assert make([("M", "tests/conftest.py")], keep=True).mode == "full"
+    assert make([("M", "pyproject.toml")], sections=["tool.pytest"], keep=True).mode == "full"
 
 
 def test_a_pyproject_change_outside_the_watched_sections_costs_nothing() -> None:
@@ -425,6 +445,47 @@ def test_a_cache_built_before_the_base_selection_is_re_signed_when_the_gap_is_un
     mp.resign_selection(stats, old_args=ARGS, new_args=ARGS)
 
     assert stats["config_fingerprint"]["test_selection"] == mp.selection_fingerprint(ARGS)
+
+
+def test_a_cache_built_from_an_older_selection_than_the_base_is_re_signed() -> None:
+    built = ["tests/unit/test_a.py", "-m", "mutation"]
+    base = ["tests/unit/test_a.py", "tests/unit/test_c.py", "-m", "mutation"]
+    stats = stats_with(mp.selection_fingerprint(built), ["tests/unit/test_a.py::t"])
+
+    mp.resign_selection(stats, old_args=base, new_args=ARGS, built_args=built)
+
+    assert stats["config_fingerprint"]["test_selection"] == mp.selection_fingerprint(ARGS)
+
+
+def test_the_selection_the_cache_was_built_from_is_read_at_its_commit(tmp_path) -> None:
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=tmp_path, check=True, capture_output=True, text=True,
+        ).stdout.strip()  # fmt: skip
+
+    git("init", "-q", "-b", "main")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.mutmut]\npytest_add_cli_args_test_selection = ["tests/a.py", "-m", "mutation"]\n'
+    )
+    git("add", "pyproject.toml")
+    git("commit", "-q", "-m", "built here")
+    (tmp_path / "pyproject.toml").write_text("[tool.mutmut]\n")
+    mutants = tmp_path / MUTANTS
+    mutants.mkdir()
+    (mutants / "mutmut-stats.json").write_text(json.dumps({"git_commit": git("rev-parse", "HEAD")}))
+
+    assert mp.built_selection(tmp_path, mutants) == ["tests/a.py", "-m", "mutation"]
+
+
+def test_a_cache_with_no_known_commit_has_no_built_selection(tmp_path) -> None:
+    (tmp_path / MUTANTS).mkdir()
+
+    assert mp.built_selection(tmp_path, tmp_path / MUTANTS) == []
+    (tmp_path / MUTANTS / "mutmut-stats.json").write_text(json.dumps({"git_commit": "0" * 40}))
+    assert mp.built_selection(tmp_path, tmp_path / MUTANTS) == []
 
 
 def test_a_fingerprint_that_matches_no_known_selection_is_refused() -> None:
