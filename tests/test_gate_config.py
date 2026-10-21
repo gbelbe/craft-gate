@@ -366,6 +366,38 @@ def test_a_marked_test_file_missing_from_the_selection_is_named(tmp_path) -> Non
     )
 
 
+def test_a_selected_file_without_the_marker_is_named(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED, f"{UNIT}/test_plain.py"))
+    unit_test(root)
+    unit_test(root, "test_plain.py", "def test_plain():\n    assert True\n")
+
+    decision = cfg.decide(root, cfg.MUTATION)
+
+    assert decision.status == cfg.ERROR
+    assert "no @pytest.mark.mutation" in decision.reason
+    assert "never measures them: tests/unit/test_plain.py" in decision.reason
+    assert "test_a.py" not in decision.reason.split("never measures them:")[1]
+
+
+def test_a_module_level_marker_counts_as_marked(tmp_path) -> None:
+    root = project(tmp_path, selection(SELECTED))
+    unit_test(
+        root,
+        text="import pytest\n\npytestmark = pytest.mark.mutation\n\n\ndef test_a():\n    pass\n",
+    )
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
+def test_an_unmarked_selected_file_is_fine_when_the_selection_does_not_use_the_marker(
+    tmp_path,
+) -> None:
+    root = project(tmp_path, selection(SELECTED, marker=False))
+    unit_test(root, text="def test_a():\n    pass\n")
+
+    assert cfg.decide(root, cfg.MUTATION).status == cfg.RUN
+
+
 def test_marked_files_are_not_orphans_when_the_selection_does_not_use_the_marker(tmp_path) -> None:
     root = project(tmp_path, selection(SELECTED, marker=False))
     unit_test(root)
@@ -412,3 +444,20 @@ def test_a_file_named_like_a_test_with_the_suffix_form_is_an_orphan(tmp_path) ->
 
     assert decision.status == cfg.ERROR
     assert f"{UNIT}/orphan_test.py" in decision.reason
+
+
+def test_a_mutation_cache_may_be_kept_on_a_dependency_change(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.mutation]\ndependency-change = "keep"\n')
+
+    assert cfg.load_settings(root)[cfg.MUTATION]["dependency-change"] == "keep"
+
+
+def test_a_dependency_change_reruns_every_mutant_unless_the_repo_says_otherwise(tmp_path) -> None:
+    assert cfg.load_settings(project(tmp_path))[cfg.MUTATION]["dependency-change"] == "rerun"
+
+
+def test_any_other_dependency_change_policy_is_refused(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.mutation]\ndependency-change = "ignore"\n')
+
+    with pytest.raises(cfg.ConfigError, match="dependency-change is not valid"):
+        cfg.load_settings(root)

@@ -47,6 +47,7 @@ _WEAKER = {
     "wider": lambda before, after: bool(set(after) - set(before)),
     "narrower": lambda before, after: bool(set(before) - set(after)),
     "later": lambda before, after: PER_FILE.index(after) > PER_FILE.index(before),
+    "kept": lambda before, after: after == "keep" and before != "keep",
 }
 DIRECTION = {
     **dict.fromkeys(
@@ -66,6 +67,7 @@ DIRECTION = {
     "exclude": "wider",
     "paths": "narrower",
     "per-file": "later",
+    "dependency-change": "kept",  # "keep" trusts cached verdicts across a dependency change
 }
 NEUTRAL = frozenset({"reason", "source"})  # words and a path: neither makes a gate weaker
 

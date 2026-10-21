@@ -54,7 +54,13 @@ TEST_FILES = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]
 # Every value a repo can set, with the default each gate used when these were hard-coded.
 DEFAULTS: dict[str, dict[str, Any]] = {
     PATCH: {ENABLED: True, REASON: "", THRESHOLD: 90, "source": "", EXCLUDE: TEST_FILES},
-    MUTATION: {ENABLED: True, REASON: "", THRESHOLD: 80, "improvement": 20},
+    MUTATION: {
+        ENABLED: True,
+        REASON: "",
+        THRESHOLD: 80,
+        "improvement": 20,
+        "dependency-change": "rerun",
+    },
     BDD: {ENABLED: True, REASON: "", THRESHOLD: 80, PATHS: ["tests/features"], EXCLUDE: TEST_FILES},
     COMPLEXITY: {
         "cyclomatic": 15,
@@ -66,7 +72,10 @@ DEFAULTS: dict[str, dict[str, Any]] = {
     DESIGN_REVIEW: {"max-parameters": 2, "max-lines": 20},
     EXEMPTIONS: {"legacy-debt": True, "new-code": False},
 }
-CHOICES = {(REFACTOR_FIRST, "per-file"): ("must-decrease", "must-not-increase")}
+CHOICES = {
+    (REFACTOR_FIRST, "per-file"): ("must-decrease", "must-not-increase"),
+    (MUTATION, "dependency-change"): ("rerun", "keep"),
+}
 PERCENT_KEYS = (THRESHOLD, "improvement")
 MINIMUMS = {  # the smallest sensible value of each count; below it the gate would flag everything
     "cyclomatic": 1,
@@ -258,10 +267,17 @@ def _selection_problem(root: Path, tool: dict[str, Any]) -> str | None:
     gone = sorted(f for f in files if not (root / f).is_file())
     if gone:
         return f"{SELECTION_KEY} names file(s) that do not exist: {', '.join(gone)}"
-    orphans = sorted(_marked_files(root) - files) if uses_marker else []
+    marked = _marked_files(root) if uses_marker else set()
+    orphans = sorted(marked - files)
     if orphans:
         return (
             f"@pytest.mark.{MARKER} in file(s) missing from {SELECTION_KEY}: {', '.join(orphans)}"
+        )
+    unmarked = sorted(files - marked) if uses_marker else []
+    if unmarked:
+        return (
+            f"{SELECTION_KEY} names file(s) with no @pytest.mark.{MARKER}, so `-m {MARKER}` "
+            f"deselects every test in them and mutmut never measures them: {', '.join(unmarked)}"
         )
     return None
 
