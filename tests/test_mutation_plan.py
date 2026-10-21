@@ -52,6 +52,7 @@ SELECTION = (
     "tests/unit/test_server.py",
 )
 RESET_VERDICTS = 2
+MAP_FEATURE = "tests/features/viz/map.feature"
 MUTATED = ("ster/store/_load_save.py", "ster/mcp_context.py", "ster/mcp_server.py")
 
 
@@ -221,6 +222,42 @@ def test_a_data_file_nobody_names_falls_back_to_the_tests_beside_it() -> None:
 
     assert set(plan.reset_functions) == {LOAD, PROMOTE, CTX, SERVER}
     assert any("zoo.ttl" in r for r in plan.reasons)
+
+
+def test_a_scenario_no_selected_test_names_resets_nothing() -> None:
+    plan = make(
+        [("M", "tests/features/core/degraded_inputs.feature")],
+        sources={"tests/unit/test_server.py": "x = 1\n"},
+    )
+
+    assert plan.reset_functions == ()
+
+
+def test_a_scenario_is_read_by_the_test_that_names_its_file() -> None:
+    plan = make(
+        [("M", MAP_FEATURE)],
+        sources={"tests/unit/test_promote.py": 'scenarios("../features/viz/map.feature")\n'},
+    )
+
+    assert plan.reset_functions == (PROMOTE,)
+
+
+def test_a_scenario_is_read_by_the_test_that_names_its_folder() -> None:
+    plan = make(
+        [("M", MAP_FEATURE)],
+        sources={"tests/unit/test_server.py": 'scenarios("../features/viz")\n'},
+    )
+
+    assert plan.reset_functions == (SERVER,)
+
+
+def test_a_test_that_binds_the_whole_feature_tree_reads_every_scenario() -> None:
+    plan = make(
+        [("M", MAP_FEATURE)],
+        sources={"tests/unit/test_ctx.py": 'scenarios("../features")\n'},
+    )
+
+    assert set(plan.reset_functions) == {LOAD, CTX}
 
 
 # -- production code mutmut cannot see ---------------------------------------------
@@ -506,3 +543,62 @@ def test_a_planning_failure_falls_back_to_a_full_run(monkeypatch, tmp_path, caps
     assert len(runs) == 1
     assert not (tmp_path / MUTANTS).exists()
     assert "running in full" in capsys.readouterr().err
+
+
+# -- the second pass only measures what the first could not ------------------------------------
+
+
+def test_the_second_pass_looks_only_at_the_test_files_just_measured() -> None:
+    inputs = mp.Inputs(
+        changes=(("M", "ster/api.py"), ("A", "tests/unit/test_new.py")),
+        mutated_files=frozenset(MUTATED),
+        selection=mp.Selection(SELECTION, SELECTION),
+        stats=STATS,
+    )
+
+    narrowed = mp._measured_now(inputs, ("tests/unit/test_new.py",))
+
+    assert narrowed.changes == (("A", "tests/unit/test_new.py"),)
+    assert narrowed.stats is STATS
+
+
+def test_the_second_pass_does_not_drop_again_what_the_first_one_re_tested(
+    monkeypatch, tmp_path
+) -> None:
+    seen = []
+    first = mp.Plan(
+        mode=INCREMENTAL, selection_added=("tests/unit/test_new.py",), needs_second_pass=True
+    )
+    inputs = mp.Inputs(
+        changes=(("M", "ster/api.py"), ("A", "tests/unit/test_new.py")),
+        mutated_files=frozenset(MUTATED),
+        selection=mp.Selection(SELECTION, SELECTION),
+        stats=STATS,
+    )
+    monkeypatch.setattr(mp, "collect_inputs", lambda *_: (inputs, [], []))
+    monkeypatch.setattr(mp, "plan", lambda given: seen.append(given.changes) or first)
+    monkeypatch.setattr(mp, "apply", lambda *_: 0)
+    monkeypatch.setattr(mp, "record_domain", lambda *_a, **_k: None)
+    (tmp_path / MUTANTS).mkdir()
+
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
+    mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 2, ("tests/unit/test_new.py",))
+
+    assert seen == [inputs.changes, (("A", "tests/unit/test_new.py"),)]
+
+
+def test_a_run_hands_the_second_pass_the_files_the_first_one_added(monkeypatch, tmp_path) -> None:
+    passes = []
+    first = mp.Plan(
+        mode=INCREMENTAL, selection_added=("tests/unit/test_new.py",), needs_second_pass=True
+    )
+    monkeypatch.setattr(
+        mp,
+        "_prepare",
+        lambda _r, _b, _d, attempt, measured=(): passes.append((attempt, measured)) or first,
+    )
+    monkeypatch.setattr(mp, RUN_MUTMUT, lambda _root: 0)
+
+    mp.run(tmp_path, "main", tmp_path / MUTANTS)
+
+    assert passes == [(1, ()), (2, ("tests/unit/test_new.py",))]

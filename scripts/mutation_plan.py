@@ -41,11 +41,12 @@ import ast
 import fnmatch
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 sys.path.insert(
@@ -237,10 +238,32 @@ def _support_tests(inputs: Inputs, path: str, known_tests: set[str]) -> set[str]
         return {t for t in known_tests if t.startswith(f"{directory}/")}
     if name.endswith(".py"):
         files = _files_importing(inputs, path)
+    elif name.endswith(".feature"):
+        files = _feature_readers(
+            inputs, path
+        )  # a scenario nobody selected is read by no selected test
     else:
         files = {f for f in inputs.selection.now if name in inputs.sources.get(f, "")}
         files = files or _nearest_test_files(inputs, directory)
     return {t for t in known_tests if t.split("::", 1)[0] in files}
+
+
+def _feature_readers(inputs: Inputs, path: str) -> set[str]:
+    """The selected test files that bind this scenario file: by its name, or by a folder above it.
+
+    pytest-bdd reads a feature only where a test names it (``scenarios("../features/viz")`` or
+    ``scenarios("x.feature")``); with no selected test naming it, it cannot change a verdict.
+    """
+    parts = path.split("/")
+    folders = ["/".join(parts[i:-1]) for i in range(len(parts) - 1)]
+    markers = {parts[-1], *(folder for folder in folders if "/" in folder)}
+    whole_tree = re.compile(r"features/?['\"]")
+    return {
+        f
+        for f in inputs.selection.now
+        if any(m in inputs.sources.get(f, "") for m in markers)
+        or whole_tree.search(inputs.sources.get(f, ""))
+    }
 
 
 def _files_importing(inputs: Inputs, path: str) -> set[str]:
@@ -565,11 +588,22 @@ def _mutmut_run(root: Path) -> int:
     return subprocess.run([sys.executable, "-m", "mutmut", "run"], cwd=root, check=False).returncode
 
 
-def _prepare(root: Path, base: str, mutants_dir: Path, attempt: int) -> Plan:
+def _measured_now(inputs: Inputs, files: tuple[str, ...]) -> Inputs:
+    """The second pass's view of the diff: the test files whose coverage has just been measured.
+
+    Every other change was handled by the first pass, whose verdicts are fresh; deciding again from
+    the whole diff would drop them a second time and run the same mutants twice.
+    """
+    return replace(inputs, changes=tuple(("A", f) for f in files))
+
+
+def _prepare(
+    root: Path, base: str, mutants_dir: Path, attempt: int, measured: tuple[str, ...] = ()
+) -> Plan:
     """Decide, then leave the cache ready for a plain `mutmut run`."""
     with step("mutation plan: read the repo and decide"):
         inputs, old_args, new_args = collect_inputs(root, base, mutants_dir)
-        decided = plan(inputs)
+        decided = plan(_measured_now(inputs, measured) if attempt > 1 and measured else inputs)
     print(summary(decided))
     with step(f"mutation plan: prepare the cache ({decided.mode})"):
         if decided.mode == "full" and mutants_dir.exists():
@@ -587,9 +621,10 @@ def run(root: Path, base: str, mutants_dir: Path) -> int:
     Anything unexpected in planning falls back to the campaign mutmut would have run anyway: a
     wrong plan must cost time, never a wrong verdict.
     """
+    measured: tuple[str, ...] = ()
     for attempt in range(1, _PASSES + 1):
         try:
-            decided = _prepare(root, base, mutants_dir, attempt)
+            decided = _prepare(root, base, mutants_dir, attempt, measured)
         except Exception as exc:  # noqa: BLE001 - any failure here means "run in full"
             print(f"mutation plan failed ({exc!r}): running in full", file=sys.stderr)
             shutil.rmtree(mutants_dir, ignore_errors=True)
@@ -598,6 +633,7 @@ def run(root: Path, base: str, mutants_dir: Path) -> int:
             code = _mutmut_run(root)
         if code != 0 or not decided.needs_second_pass or attempt == _PASSES:
             return code
+        measured = decided.selection_added
     return 0
 
 
