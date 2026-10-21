@@ -621,6 +621,125 @@ a person or a coding agent. Know these in advance and the first push is the last
 - GitHub sometimes answers a push with `Internal Server Error`. Retry after a minute or two before
   suspecting the branch.
 
+## SonarQube — what it rejects that the other gates do not
+
+SonarQube judges **new code** only, runs on the server, and reports **one failed condition at a time**, so
+a finding you could have avoided costs a push and a wait each. Nothing local reproduces it (the complexity
+ratchet covers S3776, S3516 and S1192; the rest is below). Everything here was learned from findings Sonar
+raised on real pull requests — read it before writing the code, not after the check fails. When a PR's
+"SonarQube Code Analysis" check is red, the list of issues is at
+`<server>/project/issues?id=<project>&pullRequest=<n>&resolved=false`; fix **all** of them in one push.
+
+**1. A suppression comment has its reason after a second `#` (S7632).** Sonar parses `# noqa: CODE` and
+treats whatever follows on the same comment as part of the syntax. A dash, an em dash or a colon before the
+reason is a finding on its own:
+
+```python
+except Exception:  # noqa: BLE001 - an unreadable file falls back     # flagged
+except Exception:  # noqa: BLE001  # an unreadable file falls back     # accepted
+```
+
+The same goes for every code (`PLR0913`, `V103`, `PLC0415`, `ARG001` …) and for `# NOSONAR - reason`, which
+is how a finding Sonar raises but that does not apply gets dismissed (a parameter an interface imposes, an
+RDF namespace that is an identifier, not an address). A suppression must say *why*; one without a reason
+is a reviewer's first question.
+
+**2. A regular expression must not backtrack (S5852, S5869, S5843).**
+- Adjacent quantified groups that can match the same characters (`\s*=?\s*["']?\s*`) can split a long run
+  of them in many ways: polynomial time on input an attacker or a served page controls. Make the
+  quantifiers possessive (`\s*+`, `=?+`, Python 3.11+) when nothing after a run can match what the run
+  matched, or merge the runs (`[\s=]*`), or stop using a regular expression for it.
+- A repeated range under `re.IGNORECASE` (`[A-Za-z]`) is a finding: `[a-z]` already covers both.
+- A single expression over about 20 in Sonar's regex complexity (several alternations of strings, IRIs and
+  comments) is a finding: build it from named pieces and join them.
+- Write a regression test that feeds a long run of the repeating character (50 000 spaces) and asserts it
+  finishes within a budget. Without the fix it does not finish.
+
+**3. Sonar types `dataclasses.replace()` as a bare `DataclassInstance` (S5655).** mypy is satisfied, Sonar
+then reports the caller as passing, returning or receiving "a different type" — four findings from one
+line. Give the copy its type once: build it with its constructor, or put `replace` behind one helper whose
+return annotation names the class (`def _changed(source: Src, **changes: Any) -> Src: return cast(Src,
+replace(source, **changes))`) and use the helper everywhere. A `cast` repeated at each call site works but
+spreads the workaround.
+
+**4. A parameter an interface imposes is not "unused" (S1172) — say so.** A method that implements a
+`Protocol`, a callback signature or a framework hook keeps parameters it does not read; Sonar cannot see the
+interface. Mark the `def` line `# NOSONAR - the <Interface> passes it`. Do not make the class inherit from a
+`Protocol` to silence it when the class is a dataclass: the protocol's properties become read-only
+attributes and construction fails. Do not delete the parameter either: the caller passes it.
+
+**5. Parameter count: ruff, craftCov and Sonar use three limits (S107).** craftCov's CG018 flags more than 5
+(it runs `ruff check --select PLR0913` with the *project's* ruff configuration); Sonar's limit here is 13.
+`# noqa: PLR0913` silences ruff, not Sonar, so a function over 13 needs both comments. Do **not** set
+`[tool.ruff.lint.pylint] max-args = 13` to "match" Sonar: craftCov reads that setting, so the stricter
+gate would silently drop to 13. Any new function over 5 already fails Refactor First long before Sonar's
+13, so the Sonar finding only appears on a legacy function you touch. A parameter object removes the
+finding for an internal helper (`_pick(state)` instead of seven arguments); for a command whose signature
+*is* the option list, `# NOSONAR - every CLI option is a parameter` on the `def` line.
+
+**Ruff rules that mirror Sonar and cost nothing to turn on:** `PGH004` (a bare `# noqa`) and `B014` (a
+handler naming the same exception twice). `ARG` (unused arguments, S1172) and `RUF100` (unused `noqa`) would
+help too but ruff cannot limit them to new code: enable them only in a repo with few existing violations.
+No ruff rule reproduces S7632 (the `# noqa` reason syntax), S5852 (backtracking) or S5655 (types): those
+stay a reading of the diff.
+
+**6. Do not list an exception beside its base (S5713).** `except (OSError, URLError)`, `except
+(HTTPError, OSError)`, `except (FileNotFoundError, OSError)`: the subclass is already caught. Name the base
+once; a test pins that the subclass is still handled.
+
+**7. No clear-text `http://` in a literal (S5332).** In tests, build an unreachable or local address from a
+scheme variable in the shared helper rather than writing `http://127.0.0.1:1/`. For an RDF namespace the
+advice is *wrong* (`http://…` and `https://…` are different IRIs): take it from `rdflib.namespace` where it
+exists, or mark the line `# NOSONAR - RDF namespace IRI`, never switch it to `https`.
+
+**8. Repeated string literal (S1192), cognitive complexity (S3776), invariant return (S3516)** are checked
+locally by `scripts/check_complexity_ratchet.py`; user-interface labels, menu texts and selectors repeated
+in a view module are the usual source — name each once at the top of the module.
+
+**9. Browser JavaScript has its own rules.** What Sonar asked of `graph_app.js`: `globalThis`, not `window`;
+`for…of`, not an index loop or `forEach` with a side effect; `Math.trunc` and `codePointAt`; an optional
+catch binding (`catch {` , not `catch(_){}`) and never an empty `catch` — log at `console.debug` or say why
+it is ignored; a plural built with a ternary inside a string is a nested-ternary finding, use a helper.
+
+**Process traps**
+- **A comment is a changed line.** Sonar counts a line you only touched as new code, but so do diff-cover and
+  the mutation ratchet: rewriting a suppression comment on an `except` branch no test runs, or on a line
+  inside a function with no mutation baseline, fails *those* gates (a sweep of four such comments failed
+  on coverage and on a 29 % mutation score, and was closed). Fix the syntax **in the lines your change
+  adds**; leave older lines alone unless you are testing them.
+- **Test code is code.** Every rule above applies to `tests/` too (S5332 and S5852 were raised on test
+  helpers and test files).
+- **Cheap local check before pushing:** `grep -nE "noqa: [A-Z]+[0-9]+ +[-—:]" $(git diff --name-only
+  origin/main...HEAD)` finds the first trap; for the others, read the list above against the diff.
+
+### Close the loop: a Sonar finding, once fixed, becomes a lint rule
+
+*Only for a repository that gates on SonarQube (a `sonar-project.properties`, or a SonarQube check on its
+PRs). A repository without Sonar needs none of this and nothing in craft-gate depends on it: no gate,
+script or `craft-gate.toml` value here refers to Sonar.*
+
+A Sonar finding costs a push and a wait, so each kind should cost it **once**. After fixing a finding the
+server raised, and before the PR is considered done, a coding agent does the following, in this order,
+and puts it in the same PR as the fix (a `chore(lint):` commit of its own is fine):
+
+1. **Is there a ruff rule for it?** (`ruff rule --all`, or the rule list's name for the Sonar rule.) If yes,
+   add its code to `select` in the project's ruff configuration, run `ruff check` on the whole repo, and
+   keep it only if it adds **no** new violation (ruff cannot limit a rule to new code). If it would
+   flag old code, do not turn it on: use step 2.
+2. **Otherwise add a diff-aware check** to the project's own parity script (`scripts/check_sonar_parity.py`
+   in the repository that has one; create it from the same shape — judge only the lines the change added,
+   one small function per trap, a unit test per trap that fails without the fix). Wire it where the
+   complexity ratchet is wired (the local gate script, the CI job, a manual pre-commit hook).
+3. **Never loosen a shared setting to make Sonar and a linter agree.** Check who else reads the setting:
+   `craftcov` runs `ruff check --select PLR0913` with the project's configuration, so raising
+   `max-args` to Sonar's limit would silently weaken the stricter gate.
+4. **Write the trap down** in the section above if it is a new kind; the next agent reads that, not the
+   history.
+
+If a finding is a false positive for this project (an RDF namespace read as a clear-text URL, a
+parameter an interface imposes), the fix is the documented suppression with its reason, and **no** lint
+rule is added: the point is to prevent real recurrences, not to encode Sonar's mistakes.
+
 ## Reporting — visible, not just enforced
 
 Two default, non-blocking mechanisms make craftCov's findings visible

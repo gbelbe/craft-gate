@@ -52,6 +52,15 @@ simple design, CG030 Metz's rules) or the Fowler/Beck entry from the catalog it 
 8. **You are read-only.** Do not edit, write, commit or push. Use Bash only for read-only commands
    (`git diff`, `git log`, `git show`, `grep`, `python3 scripts/design_review.py`).
 
+## SonarQube traps to check in the diff
+
+SonarQube is not run locally, so these are yours to catch (see `CRAFTSMANSHIP.md`, "SonarQube - what it
+rejects that the other gates do not"): a `# noqa`/`# NOSONAR` whose reason follows a dash instead of a
+second `#`; a regular expression with adjacent `\s*`-style groups or a repeated range under IGNORECASE;
+`dataclasses.replace(...)` used inline where a checker loses its type; `except (OSError, URLError)` style
+redundancy; an `http://` literal that is not an RDF identifier; an unused parameter with no `# NOSONAR`
+reason. Quote the line; these are findings even though no linter here reports them.
+
 ## What to look for
 
 - A function that does more than one thing, or that you can only describe with "and".
