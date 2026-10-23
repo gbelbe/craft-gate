@@ -550,6 +550,25 @@ def _waived(waive: Waive) -> str:
     return " and ".join(rules)
 
 
+def _touched(
+    root: Path,
+    base_ref: str,
+    renames: dict[str, str],
+    *measured: dict[str, tuple[int, int, int]],
+) -> tuple[set[str], set[str]]:
+    """The names this change's diff actually reaches, for each of the *measured* maps
+    (``name`` → (score, first line, last line)): cyclomatic, then cognitive.
+
+    Not merely the names in a file with unrelated edits: touched and still over the threshold
+    must decrease, not just not increase. A moved file is read against the path it moved from.
+    """
+    moved_from = {new: old for old, new in renames.items()}
+    return tuple(  # type: ignore[return-value]
+        touched_names(root, base_ref, {n: (v[1], v[2]) for n, v in funcs.items()}, moved_from)
+        for funcs in measured
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
@@ -587,16 +606,7 @@ def main(argv: list[str] | None = None) -> int:
     renames = renamed_files(args.base, root)
     base = follow_renames(base, renames)
 
-    # A name this change's diff actually reaches — vs. numerically unchanged
-    # because it merely happens to sit in a file with unrelated edits.
-    # Touched-and-still-over-threshold must decrease, not just not increase.
-    cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
-    cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
-    moved_from = {new: old for old, new in renames.items()}
-    touched = (
-        touched_names(root, args.base, cc_ranges, moved_from),
-        touched_names(root, args.base, cog_ranges, moved_from),
-    )
+    touched = _touched(root, args.base, renames, head_funcs, head_cog_ranges)
 
     violations = collect_violations(base, head, touched, waive, limits)
     if violations:

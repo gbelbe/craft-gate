@@ -11,6 +11,8 @@ import astfuncs
 import gitdiff
 import pytest
 
+MOVED = "pkg/f.py"
+
 
 def _run(repo: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
@@ -128,33 +130,33 @@ def test_renamed_files_maps_each_old_path_to_its_new_one_and_ignores_other_chang
         _run(repo, "add", ".")
         _commit(repo, "second file")
         (repo / "pkg").mkdir()
-        _run(repo, "mv", "f.py", "pkg/f.py")
+        _run(repo, "mv", "f.py", MOVED)
         (repo / "g.py").write_text("x = 2\n")
         _run(repo, "add", "-A")
         _commit(repo, "move one, edit the other")
 
-        assert gitdiff.renamed_files("HEAD~1", repo) == {"f.py": "pkg/f.py"}
+        assert gitdiff.renamed_files("HEAD~1", repo) == {"f.py": MOVED}
 
 
 def test_a_file_that_only_moved_has_no_changed_lines_when_its_old_path_is_given() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         repo = _repo(tmp, "a\nb\n")
         (repo / "pkg").mkdir()
-        _run(repo, "mv", "f.py", "pkg/f.py")
+        _run(repo, "mv", "f.py", MOVED)
         _run(repo, "add", "-A")
         _commit(repo, "move")
 
-        assert gitdiff.changed_lines("HEAD~1", repo, "pkg/f.py", "f.py") == set()
-        assert gitdiff.changed_lines("HEAD~1", repo, "pkg/f.py") == {1, 2}
+        assert gitdiff.changed_lines("HEAD~1", repo, MOVED, "f.py") == set()
+        assert gitdiff.changed_lines("HEAD~1", repo, MOVED) == {1, 2}
 
 
 def test_a_line_added_while_the_file_moves_is_the_only_one_changed() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         repo = _repo(tmp, "a\nb\nc\nd\n")
         (repo / "pkg").mkdir()
-        _run(repo, "mv", "f.py", "pkg/f.py")
+        _run(repo, "mv", "f.py", MOVED)
         (repo / "pkg" / "f.py").write_text("a\nb\nc\nd\ne\n")
         _run(repo, "add", "-A")
         _commit(repo, "move and extend")
 
-        assert gitdiff.changed_lines("HEAD~1", repo, "pkg/f.py", "f.py") == {5}
+        assert gitdiff.changed_lines("HEAD~1", repo, MOVED, "f.py") == {5}

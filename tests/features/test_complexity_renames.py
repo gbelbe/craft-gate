@@ -14,13 +14,14 @@ OVER_THE_LIMIT = LIMIT + 2
 OLD = "mod.py"
 NEW = "pkg/mod.py"
 MAIN = "main"
+RETURN = "    return r"
 PATH_FLAG = "--path"
 MODULE = "\n".join(
     [
         "def long(x):",
         "    r = 0",
         *[f"    if x == {i}:\n        r += {i}" for i in range(OVER_THE_LIMIT)],
-        "    return r",
+        RETURN,
         "",
         "",
         'FIRST = "the same text"',
@@ -58,7 +59,7 @@ def _moved(world) -> None:
 
 @when("the module moves to another folder and its long function gains a branch")
 def _moved_and_worse(world) -> None:
-    move(world, MODULE.replace("    return r", "    if x == 99:\n        r += 99\n    return r", 1))
+    move(world, MODULE.replace(RETURN, "    if x == 99:\n        r += 99\n    return r", 1))
 
 
 @when("the module moves to another folder and gains a new function over the limit")
@@ -68,7 +69,7 @@ def _moved_and_extended(world) -> None:
             "def added(x):",
             "    r = 0",
             *[f"    if x == {i}:\n        r += {i}" for i in range(OVER_THE_LIMIT)],
-            "    return r",
+            RETURN,
             "",
         ]
     )
