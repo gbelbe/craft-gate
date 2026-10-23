@@ -44,12 +44,15 @@ def _base(world) -> None:
     world.repo.branch("feature")
 
 
-def move(world, content: str, keep_original: bool = False) -> None:
-    if not keep_original:
-        world.repo.git("rm", "-q", OLD)
+def copy(world, content: str) -> None:
     world.repo.write(NEW, content)
     world.repo.git("add", "-A")
-    world.repo.commit_staged("move the module")
+    world.repo.commit_staged("add the module in another folder")
+
+
+def move(world, content: str) -> None:
+    world.repo.git("rm", "-q", OLD)
+    copy(world, content)
 
 
 @when("the module moves to another folder unchanged")
@@ -78,7 +81,7 @@ def _moved_and_extended(world) -> None:
 
 @when("the module is copied to another folder and the original kept")
 def _copied(world) -> None:
-    move(world, MODULE, keep_original=True)
+    copy(world, MODULE)
 
 
 @then(parsers.re(r"the complexity ratchet (?P<verdict>passes|fails)"))
@@ -95,6 +98,6 @@ def _untouched(world) -> None:
     import gitdiff
 
     ranges = {f"{NEW}::long": (1, OVER_THE_LIMIT * 2 + 3)}
-    moved_from = {NEW: OLD}
+    renames = {OLD: NEW}
 
-    assert gitdiff.touched_names(world.repo.path, MAIN, ranges, moved_from) == set()
+    assert gitdiff.touched_names(world.repo.path, MAIN, ranges, renames) == set()

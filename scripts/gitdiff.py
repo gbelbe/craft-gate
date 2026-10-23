@@ -56,7 +56,7 @@ def changed_lines(
     touched, since deleting the last statement in a function is a change
     *to* that function even though nothing was added.
     """
-    paths = [rel_path] if renamed_from is None else [renamed_from, rel_path]
+    paths = {rel_path, renamed_from or rel_path}
     out = git(["diff", "--no-color", "-U0", "-M", base_ref, "--", *paths], cwd=root, check=False)
     lines: set[int] = set()
     for m in _HUNK_HEADER.finditer(out):
@@ -130,13 +130,13 @@ def touched_names(
     root: Path,
     base_ref: str,
     ranges: dict[str, tuple[int, int]],
-    renamed_from: dict[str, str] | None = None,
+    renames: dict[str, str] | None = None,
 ) -> set[str]:
     """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
     whose line range overlaps a line this change touched in that file.
 
-    *renamed_from* maps a file's new path to the path it moved from, so a file that only
-    moved is not taken for a file written from scratch.
+    *renames* is ``renamed_files``' ``{old path: new path}``: a file that only moved is read
+    against the path it moved from, not taken for a file written from scratch.
 
     One `git diff` per file, not per function — cheap enough, and a file
     with no diff at all skips straight past without running git per name.
@@ -145,9 +145,10 @@ def touched_names(
     for name in ranges:
         by_file.setdefault(name.split("::", 1)[0], []).append(name)
 
+    moved_from = {new: old for old, new in (renames or {}).items()}
     touched: set[str] = set()
     for file_rel, names in by_file.items():
-        changed = changed_lines(base_ref, root, file_rel, (renamed_from or {}).get(file_rel))
+        changed = changed_lines(base_ref, root, file_rel, moved_from.get(file_rel))
         if not changed:
             continue
         for name in names:

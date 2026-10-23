@@ -66,7 +66,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import NamedTuple, TypeVar
+from typing import Any, NamedTuple
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
@@ -83,7 +83,6 @@ from gate_config import (  # noqa: E402
 from gitdiff import has_tidy_exempt, renamed_files, touched_names  # noqa: E402
 
 THRESHOLD = 15
-T = TypeVar("T")
 
 
 def _new_function_message(name: str, cc: int, threshold: int, metric: str) -> str:
@@ -448,23 +447,22 @@ class Measures(NamedTuple):
     dup: dict[str, int]
 
 
+def _rekey(by_name: dict[str, Any], renames: dict[str, str]) -> dict[str, Any]:
+    """*by_name*, keyed ``<path>::<name>``, with the keys of a moved file under its new path."""
+    moved = {}
+    for key, value in by_name.items():
+        path, sep, name = key.partition("::")
+        moved[f"{renames.get(path, path)}{sep}{name}"] = value
+    return moved
+
+
 def follow_renames(measures: Measures, renames: dict[str, str]) -> Measures:
     """*measures* with every ``<path>::<name>`` key under a moved file filed under its new path.
 
     The base is measured where the files were; the head where they are. Without this a file that
     only moved is "new" code: every function and literal in it is judged as if written today.
     """
-
-    def rekey(by_name: dict[str, T]) -> dict[str, T]:
-        moved = {}
-        for key, value in by_name.items():
-            path, sep, name = key.partition("::")
-            moved[f"{renames.get(path, path)}{sep}{name}"] = value
-        return moved
-
-    return Measures(
-        rekey(measures.cc), rekey(measures.cog), rekey(measures.inv), rekey(measures.dup)
-    )
+    return Measures(*(_rekey(each, renames) for each in measures))
 
 
 class Limits(NamedTuple):
@@ -550,23 +548,9 @@ def _waived(waive: Waive) -> str:
     return " and ".join(rules)
 
 
-def _touched(
-    root: Path,
-    base_ref: str,
-    renames: dict[str, str],
-    *measured: dict[str, tuple[int, int, int]],
-) -> tuple[set[str], set[str]]:
-    """The names this change's diff actually reaches, for each of the *measured* maps
-    (``name`` → (score, first line, last line)): cyclomatic, then cognitive.
-
-    Not merely the names in a file with unrelated edits: touched and still over the threshold
-    must decrease, not just not increase. A moved file is read against the path it moved from.
-    """
-    moved_from = {new: old for old, new in renames.items()}
-    return tuple(  # type: ignore[return-value]
-        touched_names(root, base_ref, {n: (v[1], v[2]) for n, v in funcs.items()}, moved_from)
-        for funcs in measured
-    )
+def _ranges(measured: dict[str, tuple[int, int, int]]) -> dict[str, tuple[int, int]]:
+    """``name`` → (first line, last line), from ``name`` → (score, first line, last line)."""
+    return {name: (first, last) for name, (_score, first, last) in measured.items()}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -606,7 +590,12 @@ def main(argv: list[str] | None = None) -> int:
     renames = renamed_files(args.base, root)
     base = follow_renames(base, renames)
 
-    touched = _touched(root, args.base, renames, head_funcs, head_cog_ranges)
+    # A name this change's diff actually reaches, not one that merely sits in a file with
+    # unrelated edits: touched and still over the threshold must decrease.
+    touched = (
+        touched_names(root, args.base, _ranges(head_funcs), renames),
+        touched_names(root, args.base, _ranges(head_cog_ranges), renames),
+    )
 
     violations = collect_violations(base, head, touched, waive, limits)
     if violations:
