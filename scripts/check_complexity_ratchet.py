@@ -41,11 +41,10 @@ they fail here rather than after a push:
     literal (5+ characters) repeated 3+ times in one file should be a named
     constant instead.
 
-A file move counts as a change to everything it carries — there is no
-rename-awareness here. A function or literal that only moved to a new file
-is evaluated exactly like new code and must meet the threshold on its own,
-not compared against an identically-named entry that happened to live
-somewhere else in the base ref.
+A file git sees as moved (``git diff -M``) is followed: its functions and literals
+are compared with what they were at the old path, and a move that changes nothing
+touches nothing. A function or literal that appears in a file that was not moved
+from anywhere is new code and must meet the threshold on its own.
 
 A `Tidy-Exempt:` trailer in the commit range waives the debt rules above (a touched
 function must come out lower; a literal count must not grow), since an exempt change
@@ -67,7 +66,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, TypeVar
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
@@ -81,9 +80,10 @@ from gate_config import (  # noqa: E402
     load_settings,
     waive_from,
 )
-from gitdiff import has_tidy_exempt, touched_names  # noqa: E402
+from gitdiff import has_tidy_exempt, renamed_files, touched_names  # noqa: E402
 
 THRESHOLD = 15
+T = TypeVar("T")
 
 
 def _new_function_message(name: str, cc: int, threshold: int, metric: str) -> str:
@@ -448,6 +448,25 @@ class Measures(NamedTuple):
     dup: dict[str, int]
 
 
+def follow_renames(measures: Measures, renames: dict[str, str]) -> Measures:
+    """*measures* with every ``<path>::<name>`` key under a moved file filed under its new path.
+
+    The base is measured where the files were; the head where they are. Without this a file that
+    only moved is "new" code: every function and literal in it is judged as if written today.
+    """
+
+    def rekey(by_name: dict[str, T]) -> dict[str, T]:
+        moved = {}
+        for key, value in by_name.items():
+            path, sep, name = key.partition("::")
+            moved[f"{renames.get(path, path)}{sep}{name}"] = value
+        return moved
+
+    return Measures(
+        rekey(measures.cc), rekey(measures.cog), rekey(measures.inv), rekey(measures.dup)
+    )
+
+
 class Limits(NamedTuple):
     """The numbers the ratchet holds code to; the defaults are what it always used."""
 
@@ -565,14 +584,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: could not read base ref {args.base!r}: {exc.stderr or exc}", file=sys.stderr)
         return 2
 
+    renames = renamed_files(args.base, root)
+    base = follow_renames(base, renames)
+
     # A name this change's diff actually reaches — vs. numerically unchanged
     # because it merely happens to sit in a file with unrelated edits.
     # Touched-and-still-over-threshold must decrease, not just not increase.
     cc_ranges = {n: (v[1], v[2]) for n, v in head_funcs.items()}
     cog_ranges = {n: (v[1], v[2]) for n, v in head_cog_ranges.items()}
+    moved_from = {new: old for old, new in renames.items()}
     touched = (
-        touched_names(root, args.base, cc_ranges),
-        touched_names(root, args.base, cog_ranges),
+        touched_names(root, args.base, cc_ranges, moved_from),
+        touched_names(root, args.base, cog_ranges, moved_from),
     )
 
     violations = collect_violations(base, head, touched, waive, limits)

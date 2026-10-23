@@ -44,8 +44,12 @@ complexity to fix in code nobody's touching.
 `check_refactor_first.py`: one worktree checkout of the base ref computes
 all four metrics at once, compared against the current tree. Touch
 detection is a second, separate `git diff` (unified-zero, against the same
-base ref) read for its changed-line ranges, not the worktree. A file move
-counts as a change to everything it carries — there's no rename-awareness.
+base ref) read for its changed-line ranges, not the worktree. A file git sees as
+moved (`git diff -M`) is **followed**: what it carries is compared with what it was at the old
+path, and a move that changes nothing touches nothing, so a legacy function is grandfathered
+exactly as it was before the move. Without that, moving a few hundred test files into folders read
+as writing them from scratch (nearly two thousand repeated literals at once). Only the file that
+git can pair with an old one is followed: a copy that leaves the original in place is new code.
 
 **Ported from a real, load-bearing script, not written from scratch for
 this repo.** Originated in a project that hit SonarQube's cognitive-

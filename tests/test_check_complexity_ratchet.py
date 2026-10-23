@@ -296,3 +296,28 @@ def test_an_unknown_base_ref_is_an_error(project, run_main, capsys) -> None:
 
     assert code == ERROR_EXIT
     assert "could not read base ref 'no-such-ref'" in capsys.readouterr().err
+
+
+# -- follow_renames: a moved file keeps what it carried --------------------------------
+
+
+def test_every_metric_of_a_moved_file_is_filed_under_its_new_path() -> None:
+    base = ratchet.Measures(
+        {"old.py::f": 20, "same.py::g": 3},
+        {"old.py::f": 22},
+        {"old.py::f": "result"},
+        {"old.py::'some text'": 4},
+    )
+
+    moved = ratchet.follow_renames(base, {"old.py": "pkg/new.py"})
+
+    assert moved.cc == {"pkg/new.py::f": 20, "same.py::g": 3}
+    assert moved.cog == {"pkg/new.py::f": 22}
+    assert moved.inv == {"pkg/new.py::f": "result"}
+    assert moved.dup == {"pkg/new.py::'some text'": 4}
+
+
+def test_without_renames_the_measures_are_unchanged() -> None:
+    base = ratchet.Measures({"a.py::f": 1}, {}, {}, {})
+
+    assert ratchet.follow_renames(base, {}) == base

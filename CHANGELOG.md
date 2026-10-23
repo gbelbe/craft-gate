@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Changed:** the complexity ratchet follows a file git sees as moved (`git diff -M`). Its functions,
+  its invariant returns and its repeated literals are compared with what they were at the old path, and
+  a move that changes nothing is not a touch, so moving a module into a folder no longer reads as
+  writing it from scratch. A copy that keeps the original, and anything added while moving, are still
+  new code. Before, a change that only moved files could fail with a violation for every repeated
+  literal and every over-threshold function they carried.
 - **Fixed:** the mutation selection check treated any `.py` file mentioning `pytest.mark.mutation` as an
   orphaned test, including craft-gate's own `scripts/gate_config.py` once vendored, so every repo with
   craft-gate installed failed it (v0.30.0). It now reads only `test_*.py` and `*_test.py` files.

@@ -40,10 +40,15 @@ def base_ref_parser(description: str | None) -> argparse.ArgumentParser:
     return parser
 
 
-def changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
+def changed_lines(
+    base_ref: str, root: Path, rel_path: str, renamed_from: str | None = None
+) -> set[int]:
     """Line numbers in *rel_path*'s current working-tree content that this
     change added, modified, or deleted at, versus *base_ref* — via
     `git diff -U0`.
+
+    A file moved from *renamed_from* is compared with what it was there, so a move that
+    changes nothing touches nothing; without it the whole file would read as added.
 
     Zero context means every hunk's "+" side is exactly the lines that
     changed, nothing surrounding. A pure-deletion hunk reports a new-side
@@ -51,7 +56,8 @@ def changed_lines(base_ref: str, root: Path, rel_path: str) -> set[int]:
     touched, since deleting the last statement in a function is a change
     *to* that function even though nothing was added.
     """
-    out = git(["diff", "--no-color", "-U0", base_ref, "--", rel_path], cwd=root, check=False)
+    paths = [rel_path] if renamed_from is None else [renamed_from, rel_path]
+    out = git(["diff", "--no-color", "-U0", "-M", base_ref, "--", *paths], cwd=root, check=False)
     lines: set[int] = set()
     for m in _HUNK_HEADER.finditer(out):
         start = int(m.group(1))
@@ -100,9 +106,37 @@ def touched_python_files(repo: Path, base_sha: str, head_ref: str) -> list[tuple
     return pairs
 
 
-def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]]) -> set[str]:
+def renamed_files(base_ref: str, root: Path) -> dict[str, str]:
+    """``{old path: new path}`` for every .py file moved since *base_ref*, relative to *root*.
+
+    Git's own rename detection (``-M``): a file moved with edits is still followed, and one
+    moved unchanged is a rename with no hunks. Paths outside *root* are left out.
+    """
+    out = git(
+        ["diff", "--name-status", "-M", "--relative", "--diff-filter=R", base_ref, "--", "*.py"],
+        cwd=root,
+        check=False,
+    )
+    moved: dict[str, str] = {}
+    for line in out.splitlines():
+        status, _tab, paths = line.partition("\t")
+        if status.startswith("R"):
+            old, _tab, new = paths.partition("\t")
+            moved[old] = new
+    return moved
+
+
+def touched_names(
+    root: Path,
+    base_ref: str,
+    ranges: dict[str, tuple[int, int]],
+    renamed_from: dict[str, str] | None = None,
+) -> set[str]:
     """Names from *ranges* (``<relpath>::<qualified name>`` → (lineno, endline))
     whose line range overlaps a line this change touched in that file.
+
+    *renamed_from* maps a file's new path to the path it moved from, so a file that only
+    moved is not taken for a file written from scratch.
 
     One `git diff` per file, not per function — cheap enough, and a file
     with no diff at all skips straight past without running git per name.
@@ -113,7 +147,7 @@ def touched_names(root: Path, base_ref: str, ranges: dict[str, tuple[int, int]])
 
     touched: set[str] = set()
     for file_rel, names in by_file.items():
-        changed = changed_lines(base_ref, root, file_rel)
+        changed = changed_lines(base_ref, root, file_rel, (renamed_from or {}).get(file_rel))
         if not changed:
             continue
         for name in names:
