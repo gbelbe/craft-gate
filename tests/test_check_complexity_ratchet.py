@@ -9,6 +9,8 @@ THRESHOLD = ratchet.THRESHOLD
 THREE_BRANCHES = 3
 FLAT_COST, NESTED_COST = 2, 3  # two flat ifs; the inner of two nested ifs pays a nesting level
 ERROR_EXIT = 2
+MOVED = "pkg/new.py"
+OLD_F = "old.py::f"
 
 
 def branchy(name: str, branches: int) -> str:
@@ -296,3 +298,28 @@ def test_an_unknown_base_ref_is_an_error(project, run_main, capsys) -> None:
 
     assert code == ERROR_EXIT
     assert "could not read base ref 'no-such-ref'" in capsys.readouterr().err
+
+
+# -- follow_renames: a moved file keeps what it carried --------------------------------
+
+
+def test_every_metric_of_a_moved_file_is_filed_under_its_new_path() -> None:
+    base = ratchet.Measures(
+        {OLD_F: 20, "same.py::g": 3},
+        {OLD_F: 22},
+        {OLD_F: "result"},
+        {"old.py::'some text'": 4},
+    )
+
+    moved = ratchet.follow_renames(base, {"old.py": MOVED})
+
+    assert moved.cc == {f"{MOVED}::f": 20, "same.py::g": 3}
+    assert moved.cog == {f"{MOVED}::f": 22}
+    assert moved.inv == {f"{MOVED}::f": "result"}
+    assert moved.dup == {f"{MOVED}::'some text'": 4}
+
+
+def test_without_renames_the_measures_are_unchanged() -> None:
+    base = ratchet.Measures({"a.py::f": 1}, {}, {}, {})
+
+    assert ratchet.follow_renames(base, {}) == base
