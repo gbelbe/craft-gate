@@ -158,6 +158,32 @@ def test_a_drop_inside_the_tolerance_passes_and_keeps_the_better_baseline() -> N
     assert updated == {"f": 90.0}
 
 
+def test_a_drop_that_stays_at_or_above_the_floor_passes_and_keeps_the_better_baseline() -> None:
+    violations, updated = evaluate_domain({"f": counts(95, 5)}, {"f": 100.0}, floor=90.0)
+
+    assert violations == []
+    assert updated == {"f": 100.0}
+
+
+def test_a_drop_to_exactly_the_floor_passes() -> None:
+    violations, _ = evaluate_domain({"f": counts(9, 1)}, {"f": 100.0}, floor=90.0)
+
+    assert violations == []
+
+
+def test_a_drop_below_the_floor_is_refused_whatever_the_baseline() -> None:
+    violations, _ = evaluate_domain({"f": counts(89, 11)}, {"f": 100.0}, floor=90.0)
+
+    assert len(violations) == 1
+    assert "lowered" in violations[0]
+
+
+def test_without_a_floor_any_drop_is_refused() -> None:
+    violations, _ = evaluate_domain({"f": counts(95, 5)}, {"f": 100.0})
+
+    assert len(violations) == 1
+
+
 def test_a_function_whose_mutants_were_not_all_re_tested_is_flagged() -> None:
     results = {"f": {"killed": 5, "survived": 0, "no_tests": 0, "other": 0, "pending": 3}}
 

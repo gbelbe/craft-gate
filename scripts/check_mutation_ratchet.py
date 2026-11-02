@@ -55,6 +55,7 @@ from astfuncs import walk_functions  # noqa: E402
 from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
+DEFAULT_REGRESSION_FLOOR = 100.0  # no excuse: any drop below the recorded score is refused
 
 # mutmut's own exit-code -> outcome mapping (mutmut.stats.status_by_exit_code,
 # mirrored rather than imported: that module pulls in mutmut's full click/UI
@@ -229,13 +230,15 @@ def evaluate_domain(
     results: dict[str, dict[str, int]],
     baseline: dict[str, float],
     tolerance: float = 0.0,
+    floor: float = DEFAULT_REGRESSION_FLOOR,
 ) -> tuple[list[str], dict[str, float]]:
     """Judge functions re-tested because their *tests* changed, not the function itself.
 
     They are not held to the threshold (the diff did not touch them), but a test change must
-    not leave one weaker than its recorded score by more than *tolerance* points. A stronger
-    score raises the baseline; a function with no baseline is recorded. The baseline never goes
-    down, so a weakened score is refused rather than quietly accepted.
+    not leave one weaker than its recorded score by more than *tolerance* points, unless it still
+    scores at least *floor*: a function recorded at 100% may then settle at 95% without failing a
+    change that did not touch it. A stronger score raises the baseline; a function with no
+    baseline is recorded. The baseline never goes down, so a weakened score is never recorded.
     """
     violations: list[str] = []
     updated = dict(baseline)
@@ -251,7 +254,7 @@ def evaluate_domain(
             continue
         score = mutation_score(counts["killed"], tested)
         previous = baseline.get(name)
-        if previous is not None and score < previous - tolerance:
+        if previous is not None and score < previous - tolerance and score < floor:
             was, now = _pct(previous), _pct(score)
             violations.append(
                 f"{name}: a test change lowered its mutation score from {was} to {now}"
@@ -320,6 +323,12 @@ def main(argv: list[str] | None = None) -> int:
         default=0.0,
         help="points a re-tested function (tests changed, function untouched) may lose",
     )
+    parser.add_argument(
+        "--regression-floor",
+        type=float,
+        default=DEFAULT_REGRESSION_FLOOR,
+        help="a re-tested function may drop below its recorded score while at or above this",
+    )
     args = parser.parse_args(argv)
 
     root = Path(args.path)
@@ -352,7 +361,9 @@ def main(argv: list[str] | None = None) -> int:
         results = collect_touched_results(root, mutants_dir, group_by_file(touched))
         violations, updated = evaluate_results(results, baseline, args.threshold, args.improvement)
         domain = collect_touched_results(root, mutants_dir, group_by_file(retested))
-        weaker, raised = evaluate_domain(domain, baseline, args.regression_tolerance)
+        weaker, raised = evaluate_domain(
+            domain, baseline, args.regression_tolerance, args.regression_floor
+        )
         violations += weaker
         updated.update({k: v for k, v in raised.items() if k in domain})
         updated["__meta__"] = {"diff_fingerprint": fingerprint}

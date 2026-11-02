@@ -174,6 +174,13 @@ Feature: Every value in craft-gate.toml changes what a gate does
     When the workflow asks for the mutation gate
     Then the workflow is told improvement=35
 
+  @key:mutation.regression-floor
+  Scenario: the mutation ratchet publishes how low a test change may leave a recorded score
+    Given a [tool.mutmut] section exists
+    And the config sets mutation.regression-floor to 90
+    When the workflow asks for the mutation gate
+    Then the workflow is told regression-floor=90
+
   @key:mutation.dependency-change
   Scenario: the mutation ratchet publishes whether a dependency change keeps its cache
     Given a [tool.mutmut] section exists
