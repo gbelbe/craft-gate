@@ -58,6 +58,8 @@ Feature: A pull request cannot loosen craft-gate.toml unnoticed
       | key                          | before   | after    | verdict         |
       | mutation.dependency-change   | "rerun"  | "keep"   | is reported     |
       | mutation.dependency-change   | "keep"   | "rerun"  | is not reported |
+      | mutation.unmutated-change    | "retest" | "defer"  | is reported     |
+      | mutation.unmutated-change    | "defer"  | "retest" | is not reported |
 
     Examples: lists of what is counted
       | key                       | before            | after             | verdict         |

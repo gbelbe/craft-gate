@@ -290,10 +290,11 @@ def test_a_production_function_in_a_mutated_file_is_left_to_mutmut() -> None:
     assert plan.reset_functions == ()
 
 
-def test_an_unmutated_module_resets_what_the_tests_importing_it_cover() -> None:
-    plan = mp.plan(
+def plan_for_util_change(*extra_changes, defer: bool = False):
+    """The plan when ster/util.py (unmutated, imported by the server's tests) changes too."""
+    return mp.plan(
         mp.Inputs(
-            changes=(("M", "ster/util.py"),),
+            changes=(("M", "ster/util.py"), *extra_changes),
             mutated_files=frozenset(MUTATED),
             selection=mp.Selection(SELECTION, SELECTION),
             stats=STATS,
@@ -303,10 +304,27 @@ def test_an_unmutated_module_resets_what_the_tests_importing_it_cover() -> None:
                 imports={"ster.mcp_server": {"ster.util"}, "ster.util": set()},
                 tests={"tests/unit/test_server.py": {"ster.mcp_server"}},
             ),
+            defer_unmutated_change=defer,
         )
     )
 
-    assert plan.reset_functions == (SERVER,)
+
+def test_an_unmutated_module_resets_what_the_tests_importing_it_cover() -> None:
+    assert plan_for_util_change().reset_functions == (SERVER,)
+
+
+def test_an_unmutated_module_change_is_left_to_the_nightly_run_when_the_repo_says_so() -> None:
+    plan = plan_for_util_change(defer=True)
+
+    assert plan.mode == INCREMENTAL
+    assert (plan.reset_functions, plan.stale_tests) == ((), ())
+    assert plan.reasons == ("ster/util.py changed (unmutated module): left to the nightly run",)
+
+
+def test_deferring_an_unmutated_module_does_not_hide_a_changed_test() -> None:
+    plan = plan_for_util_change(("M", SELECTION[1]), defer=True)  # test_ctx.py
+
+    assert plan.reset_functions == (CTX, LOAD)  # what test_ctx.py covers; not the server's
 
 
 def test_documentation_and_workflow_changes_cost_nothing() -> None:
