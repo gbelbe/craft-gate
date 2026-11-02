@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -56,6 +57,18 @@ MAP_FEATURE = "tests/features/viz/map.feature"
 MUTATED = ("ster/store/_load_save.py", "ster/mcp_context.py", "ster/mcp_server.py")
 
 
+def git_in(folder):
+    """A function running git in *folder* as a throwaway author."""
+
+    def git(*args):
+        return subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            cwd=folder, check=True, capture_output=True, text=True,
+        ).stdout.strip()  # fmt: skip
+
+    return git
+
+
 def make(changes, **overrides):
     """Plan for `changes`; `overrides` replace any of the defaults below."""
     given = {"stats": STATS, "sources": None, "sections": (), "selection": SELECTION, **overrides}
@@ -69,6 +82,7 @@ def make(changes, **overrides):
             sources=given["sources"] or {},
             changed_sections=tuple(given["sections"]),
             keep_on_dependency_change=bool(overrides.get("keep")),
+            renamed=tuple(overrides.get("renamed", ())),
         )
     )
 
@@ -364,6 +378,113 @@ def test_changing_pytest_arguments_is_a_cache_wide_change() -> None:
     plan = make([("M", "pyproject.toml")], sections=["tool.mutmut.pytest_add_cli_args"])
 
     assert plan.mode == "full"
+
+
+# -- a renamed test file keeps its verdicts ----------------------------------------
+
+MOVED_FROM, MOVED_TO = "tests/unit/test_promote.py", "tests/taxonomy_store/test_promote.py"
+MOVED_SELECTION = tuple(MOVED_TO if f == MOVED_FROM else f for f in SELECTION)
+P1, P2 = "::test_p1", "::test_p2"
+A_PY, MOVED_A_PY, MOVED_B_PY = "a.py", "moved_a.py", "moved_b.py"
+PRODUCTION = ("M", "ster/x.py")
+
+
+def moved(*extra_changes, **overrides):
+    """The plan for test_promote.py moving to another folder, with whatever else changed."""
+    return make(
+        [*extra_changes],
+        renamed=((MOVED_FROM, MOVED_TO),),
+        selection=MOVED_SELECTION,
+        old_selection=SELECTION,
+        **overrides,
+    )
+
+
+def test_a_renamed_test_file_resets_nothing_and_measures_nothing() -> None:
+    plan = moved()
+
+    assert plan.mode == INCREMENTAL
+    assert plan.reset_functions == ()
+    assert plan.stale_tests == ()
+    assert plan.selection_added == ()
+    assert plan.needs_second_pass is False
+
+
+def test_the_plan_names_the_renames_it_followed() -> None:
+    assert moved().renamed == ((MOVED_FROM, MOVED_TO),)
+
+
+def test_a_renamed_test_file_is_still_a_test_file_a_later_change_resets() -> None:
+    plan = moved(("M", MOVED_TO))
+
+    assert plan.reset_functions == (PROMOTE,)
+    assert set(plan.stale_tests) == {f"{MOVED_TO}{P1}", f"{MOVED_TO}{P2}"}
+
+
+def test_a_conftest_added_where_tests_arrived_by_rename_resets_nothing() -> None:
+    plan = moved(("A", "tests/taxonomy_store/conftest.py"))
+
+    assert plan.reset_functions == ()
+
+
+def test_a_conftest_added_beside_tests_that_were_already_there_still_resets_them() -> None:
+    plan = moved(("A", "tests/unit/conftest.py"))
+
+    assert plan.reset_functions == tuple(sorted((CTX, LOAD, SERVER)))
+
+
+def test_only_pure_renames_of_selected_test_files_are_followed(tmp_path) -> None:
+    git = git_in(tmp_path)
+    git("init", "-q", "-b", "main")
+    for name, body in (
+        ("a.py", "x = 1\n" * 30),
+        ("b.py", "y = 2\n" * 30),
+        ("c.py", "z = 3\n" * 30),
+    ):
+        (tmp_path / name).write_text(body)
+    git("add", ".")
+    git("commit", "-q", "-m", "base")
+    git("mv", A_PY, MOVED_A_PY)
+    git("mv", "b.py", MOVED_B_PY)
+    (tmp_path / MOVED_B_PY).write_text("y = 2\n" * 29 + "changed = True\n")
+    git("mv", "c.py", "moved_c.py")
+    git("add", ".")
+    selection = mp.Selection((MOVED_A_PY, MOVED_B_PY), (A_PY, "b.py"))
+
+    found = mp.pure_renames(mp.diff_rows(tmp_path, "HEAD"))
+
+    assert found == ((A_PY, MOVED_A_PY), ("c.py", "moved_c.py"))
+    assert mp.followed_renames(found, selection) == ((A_PY, MOVED_A_PY),)
+
+
+def test_a_followed_rename_is_no_longer_a_deletion_and_an_addition() -> None:
+    changes = (("D", MOVED_FROM), ("A", MOVED_TO), PRODUCTION)
+
+    assert mp.without_renames(changes, ((MOVED_FROM, MOVED_TO),)) == (PRODUCTION,)
+
+
+def test_renaming_the_tests_in_the_stats_keeps_their_durations_and_coverage() -> None:
+    renamed = mp.renamed_stats(STATS, ((MOVED_FROM, MOVED_TO),))
+
+    durations = renamed["duration_by_test"]
+    assert durations[f"{MOVED_TO}{P1}"] == STATS["duration_by_test"][f"{MOVED_FROM}{P1}"]
+    assert f"{MOVED_FROM}{P1}" not in durations
+    assert renamed["tests_by_mangled_function_name"][PROMOTE] == [
+        f"{MOVED_TO}{P1}",
+        f"{MOVED_TO}{P2}",
+    ]
+    assert (
+        renamed["tests_by_mangled_function_name"][SERVER]
+        == STATS["tests_by_mangled_function_name"][SERVER]
+    )
+
+
+def test_renaming_the_tests_leaves_the_cache_it_was_given_alone() -> None:
+    before = json.dumps(STATS, sort_keys=True)
+
+    mp.renamed_stats(STATS, ((MOVED_FROM, MOVED_TO),))
+
+    assert json.dumps(STATS, sort_keys=True) == before
 
 
 # -- applying a plan to the cache -----------------------------------------------------

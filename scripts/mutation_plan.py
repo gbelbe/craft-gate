@@ -26,6 +26,10 @@ Likewise `unmutated-change = "defer"`: a change to a module mutmut does not muta
 nothing in a pull request (the nightly campaign re-tests what it reaches), instead of every function
 covered by a test that imports it, however indirectly. The functions the diff touches, and those
 whose tests it changes, are still re-tested and judged.
+A test file git sees renamed with its content unchanged (a folder of tests moved into bricks) is
+the same tests: the cache follows it to its new path, nothing it covered is reset, and nothing is
+measured again. A rename that also edits the file is a changed test, as ever; a conftest or helper
+added where tests arrived by rename resets nothing for them.
 Pair it with `on_dependency_change = "warn"` and no `tests/**/*.py` in
 `cache_invalidation_files`, or
 mutmut's own invalidation resets everything before this script has a say.
@@ -126,6 +130,7 @@ class Inputs:  # pylint: disable=too-many-instance-attributes  # a record: one f
     defer_unmutated_change: bool = (
         False  # unmutated-change = "defer": the nightly run re-tests them
     )
+    renamed: tuple[tuple[str, str], ...] = ()  # (old, new) test files moved with no change
 
 
 @dataclass(frozen=True)
@@ -138,6 +143,7 @@ class Plan:
     needs_second_pass: bool = (
         False  # new tests: their coverage is only known after one `mutmut run`
     )
+    renamed: tuple[tuple[str, str], ...] = ()  # test files moved: their cached tests follow them
 
 
 # ── the decision ────────────────────────────────────────────────────────────────────────────────
@@ -199,19 +205,33 @@ class _Context:
     known_tests: set[str]
     selected: set[str]
     removed: set[str]
+    arrived: frozenset[str] = frozenset()  # tests that came by rename: nothing about them is new
 
     def tests_in(self, prefixes: tuple[str, ...]) -> set[str]:
         return {t for t in self.known_tests if t.startswith(prefixes)}
 
 
+def _selection_after_moves(inputs: Inputs) -> tuple[set[str], set[str], tuple[str, ...], set[str]]:
+    """(selected, left, joined, landed): the selection now, the files that left it, those that
+    joined it, and those that only arrived by a move, which is neither leaving nor joining."""
+    before, selected = set(inputs.selection.before), set(inputs.selection.now)
+    left_paths = {old for old, _new in inputs.renamed}
+    landed = {new for _old, new in inputs.renamed}
+    return (
+        selected,
+        before - selected - left_paths,
+        tuple(sorted(selected - before - landed)),
+        landed,
+    )
+
+
 def _incremental(inputs: Inputs) -> Plan:
-    stats = inputs.stats or {}
+    stats = renamed_stats(inputs.stats or {}, inputs.renamed)
     by_function: dict[str, list[str]] = stats.get("tests_by_mangled_function_name", {})
     known = set(stats.get("duration_by_test", {})).union(*map(set, by_function.values()))
-    selected = set(inputs.selection.now)
-    removed = set(inputs.selection.before) - selected
-    added = tuple(sorted(selected - set(inputs.selection.before)))
-    ctx = _Context(inputs, known, selected, removed)
+    selected, removed, added, landed = _selection_after_moves(inputs)
+    arrived = frozenset(t for t in known if t.split("::", 1)[0] in landed)
+    ctx = _Context(inputs, known, selected, removed, arrived)
 
     domain = _Domain()
     domain.add(ctx.tests_in(tuple(f"{f}::" for f in removed)), "left the mutation selection")
@@ -227,6 +247,7 @@ def _incremental(inputs: Inputs) -> Plan:
         tuple(sorted(domain.stale)),
         added,
         domain.second_pass or bool(added),
+        inputs.renamed,
     )
 
 
@@ -240,9 +261,7 @@ def _classify(ctx: _Context, status: str, path: str, domain: _Domain) -> None:
         else:
             domain.add(tests, f"{path} {_verb(status)}")
     elif path.startswith("tests/"):
-        domain.add(
-            _support_tests(ctx.inputs, path, ctx.known_tests), f"{path} changed (test support)"
-        )
+        domain.add(_support_tests_for(ctx, status, path), f"{path} changed (test support)")
     elif path.endswith(".py") and path not in ctx.inputs.mutated_files:
         if ctx.inputs.defer_unmutated_change:
             domain.note(f"{path} changed (unmutated module): left to the nightly run")
@@ -258,6 +277,16 @@ def _verb(status: str) -> str:
 
 def _functions_covered_by(by_function: dict[str, list[str]], tests: set[str]) -> set[str]:
     return {fn for fn, covering in by_function.items() if tests.intersection(covering)}
+
+
+def _support_tests_for(ctx: _Context, status: str, path: str) -> set[str]:
+    """What a changed file under tests/ stales; a file *added* does not stale tests that moved in.
+
+    Those tests were not there before, so nothing about them can have changed: a conftest created
+    in the brick they moved to is part of the move.
+    """
+    tests = _support_tests(ctx.inputs, path, ctx.known_tests)
+    return tests - ctx.arrived if status == "A" else tests
 
 
 def _support_tests(inputs: Inputs, path: str, known_tests: set[str]) -> set[str]:
@@ -401,6 +430,33 @@ def drop_tests(stats: dict, tests: set[str]) -> None:
         by_function[function] = [t for t in covering if t not in tests]
 
 
+def renamed_stats(stats: dict, renames: tuple[tuple[str, str], ...]) -> dict:
+    """*stats* with the tests of each moved test file under its new path (*stats* itself when
+    nothing moved; otherwise a copy, and the argument is left alone).
+
+    A moved test file is the same tests: what they covered and how long they took still holds, so
+    the cache follows them instead of forgetting them and measuring them as new. The planner
+    calls this to decide, and ``apply`` to rewrite the file on disk: the same mapping, one function.
+    """
+    if not renames:
+        return stats
+    moves = dict(renames)
+
+    def rename(test: str) -> str:
+        file, separator, rest = test.partition("::")
+        return f"{moves[file]}{separator}{rest}" if file in moves else test
+
+    renamed = dict(stats)
+    renamed["duration_by_test"] = {
+        rename(t): d for t, d in stats.get("duration_by_test", {}).items()
+    }
+    renamed["tests_by_mangled_function_name"] = {
+        fn: [rename(t) for t in tests]
+        for fn, tests in stats.get("tests_by_mangled_function_name", {}).items()
+    }
+    return renamed
+
+
 def selection_fingerprint(values: list[str] | tuple[str, ...]) -> str:
     """mutmut 3.8's fingerprint of the test-selection arguments (configuration.py, `_hash`)."""
     return hashlib.sha256(repr(tuple(values)).encode()).hexdigest()[:12]
@@ -420,10 +476,20 @@ def _git(root: Path, *args: str) -> str:
     return out.stdout if out.returncode == 0 else ""
 
 
-def read_changes(root: Path, base: str) -> tuple[tuple[str, str], ...]:
-    changes = []
+def diff_rows(root: Path, base: str) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """The rows of ``git diff --name-status -M``: (status, paths), read once for everyone."""
+    rows = []
     for line in _git(root, "diff", "--name-status", "-M", base, "--").splitlines():
         status, *paths = line.split("\t")
+        rows.append((status, tuple(paths)))
+    return tuple(rows)
+
+
+def read_changes(
+    root: Path, base: str, rows: tuple[tuple[str, tuple[str, ...]], ...] | None = None
+) -> tuple[tuple[str, str], ...]:
+    changes = []
+    for status, paths in diff_rows(root, base) if rows is None else rows:
         if status.startswith("R") and len(paths) == _RENAME_PATHS:
             changes += [("D", paths[0]), ("A", paths[1])]
         elif paths:
@@ -436,6 +502,34 @@ def read_changes(root: Path, base: str) -> tuple[tuple[str, str], ...]:
         if p not in seen
     ]
     return tuple(changes)
+
+
+def pure_renames(
+    rows: tuple[tuple[str, tuple[str, ...]], ...],
+) -> tuple[tuple[str, str], ...]:
+    """(old, new) of each file git sees renamed with its content unchanged (a 100% rename)."""
+    return tuple(
+        (paths[0], paths[1])
+        for status, paths in rows
+        if status == "R100" and len(paths) == _RENAME_PATHS
+    )
+
+
+def followed_renames(
+    renames: tuple[tuple[str, str], ...], selection: Selection
+) -> tuple[tuple[str, str], ...]:
+    """The moves of test files that stay in the mutation selection."""
+    return tuple(
+        (old, new) for old, new in renames if old in selection.before and new in selection.now
+    )
+
+
+def without_renames(
+    changes: tuple[tuple[str, str], ...], renames: tuple[tuple[str, str], ...]
+) -> tuple[tuple[str, str], ...]:
+    """*changes* minus the deletion and the addition a followed rename shows up as."""
+    moved = {path for pair in renames for path in pair}
+    return tuple(change for change in changes if change[1] not in moved)
 
 
 def _pyproject(text: str) -> dict:
@@ -536,12 +630,16 @@ def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, li
         stats = None
     graph, by_file = import_graph(root, files)
     settings = _mutation_settings(root)
+    chosen = Selection(selection, selection_files(old_doc) if old_doc else selection)
+    rows = diff_rows(root, base)
+    renames = followed_renames(pure_renames(rows), chosen)
     inputs = Inputs(
         keep_on_dependency_change=settings.get("dependency-change") == "keep",
         defer_unmutated_change=settings.get("unmutated-change") == "defer",
-        changes=read_changes(root, base),
+        changes=without_renames(read_changes(root, base, rows), renames),
+        renamed=renames,
         mutated_files=mutated,
-        selection=Selection(selection, selection_files(old_doc) if old_doc else selection),
+        selection=chosen,
         stats=stats,
         sources=sources,
         changed_sections=changed_sections(old_doc, new_doc) if old_doc else (),
@@ -596,6 +694,7 @@ def apply(
     """Drop the planned verdicts and stale tests; returns how many mutant verdicts were dropped."""
     stats_path = mutants_dir / "mutmut-stats.json"
     stats = json.loads(stats_path.read_text())
+    stats = renamed_stats(stats, plan_.renamed)
     resign_selection(stats, old_args, new_args, built_args)
     drop_tests(stats, set(plan_.stale_tests))
     stats_path.write_text(json.dumps(stats, indent=4))
@@ -709,6 +808,8 @@ def summary(decided: Plan) -> str:
         )
         if decided.selection_added:
             lines.append(f"  new test file(s): {', '.join(decided.selection_added)}")
+        if decided.renamed:
+            lines.append(f"  {len(decided.renamed)} test file(s) moved: their verdicts follow them")
     return "\n".join(lines)
 
 
