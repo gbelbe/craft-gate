@@ -188,6 +188,10 @@ class _Domain:
             self.stale.update(tests)
             self.reasons.append(why)
 
+    def note(self, why: str) -> None:
+        """A reason that stales nothing: the change was seen and deliberately left alone."""
+        self.reasons.append(why)
+
 
 @dataclass(frozen=True)
 class _Context:
@@ -241,7 +245,7 @@ def _classify(ctx: _Context, status: str, path: str, domain: _Domain) -> None:
         )
     elif path.endswith(".py") and path not in ctx.inputs.mutated_files:
         if ctx.inputs.defer_unmutated_change:
-            domain.reasons.append(f"{path} changed (unmutated module): left to the nightly run")
+            domain.note(f"{path} changed (unmutated module): left to the nightly run")
             return
         stale = _dependent_tests(ctx.inputs, path, ctx.known_tests)
         domain.add(stale, f"{path} changed (unmutated module)")
@@ -501,12 +505,12 @@ def import_graph(root: Path, files: list[str]) -> tuple[dict[str, set[str]], dic
     return graph, by_file
 
 
-def _mutation_setting_is(root: Path, key: str, value: str) -> bool:
-    """Whether the repo sets `key` of the mutation gate to `value`; unreadable means it does not."""
+def _mutation_settings(root: Path) -> dict:
+    """The repo's settings for the mutation gate; unreadable means none, so no policy is relaxed."""
     try:
-        return load_settings(root)[MUTATION_GATE][key] == value
+        return load_settings(root)[MUTATION_GATE]
     except Exception:  # noqa: BLE001  # a config that cannot be read must not weaken the plan
-        return False
+        return {}
 
 
 def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, list[str], list[str]]:
@@ -531,9 +535,10 @@ def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, li
     except (OSError, json.JSONDecodeError):
         stats = None
     graph, by_file = import_graph(root, files)
+    settings = _mutation_settings(root)
     inputs = Inputs(
-        keep_on_dependency_change=_mutation_setting_is(root, "dependency-change", "keep"),
-        defer_unmutated_change=_mutation_setting_is(root, "unmutated-change", "defer"),
+        keep_on_dependency_change=settings.get("dependency-change") == "keep",
+        defer_unmutated_change=settings.get("unmutated-change") == "defer",
         changes=read_changes(root, base),
         mutated_files=mutated,
         selection=Selection(selection, selection_files(old_doc) if old_doc else selection),
