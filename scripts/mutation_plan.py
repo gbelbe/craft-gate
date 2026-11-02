@@ -108,7 +108,7 @@ class ImportGraph:
 
 
 @dataclass(frozen=True)
-class Inputs:
+class Inputs:  # pylint: disable=too-many-instance-attributes  # a record: one field per fact the decision reads
     """Everything the decision needs, gathered up front so the decision itself does no I/O."""
 
     changes: tuple[tuple[str, str], ...]  # (status A/M/D, repo-relative path)
