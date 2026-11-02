@@ -22,6 +22,10 @@ A repo may set `[mutation] dependency-change = "keep"` in craft-gate.toml: a loc
 list change then keeps the cached verdicts (the nightly campaign starts from nothing and rebuilds
 them), instead of re-running every mutant for a bump that touches no function. Test setup
 (`pytest.ini`, `tool.pytest`, the root conftest) still runs in full.
+Likewise `unmutated-change = "defer"`: a change to a module mutmut does not mutate then resets
+nothing in a pull request (the nightly campaign re-tests what it reaches), instead of every function
+covered by a test that imports it, however indirectly. The functions the diff touches, and those
+whose tests it changes, are still re-tested and judged.
 Pair it with `on_dependency_change = "warn"` and no `tests/**/*.py` in
 `cache_invalidation_files`, or
 mutmut's own invalidation resets everything before this script has a say.
@@ -119,6 +123,9 @@ class Inputs:  # pylint: disable=too-many-instance-attributes  # a record: one f
     changed_sections: tuple[str, ...] = ()  # pyproject sections that differ from the base
     graph: ImportGraph = field(default_factory=ImportGraph)
     keep_on_dependency_change: bool = False  # dependency-change = "keep": cached verdicts survive
+    defer_unmutated_change: bool = (
+        False  # unmutated-change = "defer": the nightly run re-tests them
+    )
 
 
 @dataclass(frozen=True)
@@ -233,6 +240,9 @@ def _classify(ctx: _Context, status: str, path: str, domain: _Domain) -> None:
             _support_tests(ctx.inputs, path, ctx.known_tests), f"{path} changed (test support)"
         )
     elif path.endswith(".py") and path not in ctx.inputs.mutated_files:
+        if ctx.inputs.defer_unmutated_change:
+            domain.reasons.append(f"{path} changed (unmutated module): left to the nightly run")
+            return
         stale = _dependent_tests(ctx.inputs, path, ctx.known_tests)
         domain.add(stale, f"{path} changed (unmutated module)")
     # a mutated file is left to mutmut, which hashes its functions itself
@@ -491,10 +501,10 @@ def import_graph(root: Path, files: list[str]) -> tuple[dict[str, set[str]], dic
     return graph, by_file
 
 
-def _keeps_on_dependency_change(root: Path) -> bool:
-    """The repo's `dependency-change = "keep"` for the mutation gate; unreadable means rerun."""
+def _mutation_setting_is(root: Path, key: str, value: str) -> bool:
+    """Whether the repo sets `key` of the mutation gate to `value`; unreadable means it does not."""
     try:
-        return load_settings(root)[MUTATION_GATE]["dependency-change"] == "keep"
+        return load_settings(root)[MUTATION_GATE][key] == value
     except Exception:  # noqa: BLE001  # a config that cannot be read must not weaken the plan
         return False
 
@@ -522,7 +532,8 @@ def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, li
         stats = None
     graph, by_file = import_graph(root, files)
     inputs = Inputs(
-        keep_on_dependency_change=_keeps_on_dependency_change(root),
+        keep_on_dependency_change=_mutation_setting_is(root, "dependency-change", "keep"),
+        defer_unmutated_change=_mutation_setting_is(root, "unmutated-change", "defer"),
         changes=read_changes(root, base),
         mutated_files=mutated,
         selection=Selection(selection, selection_files(old_doc) if old_doc else selection),

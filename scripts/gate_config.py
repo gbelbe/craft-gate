@@ -60,6 +60,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         THRESHOLD: 80,
         "improvement": 20,
         "dependency-change": "rerun",
+        "unmutated-change": "retest",
     },
     BDD: {ENABLED: True, REASON: "", THRESHOLD: 80, PATHS: ["tests/features"], EXCLUDE: TEST_FILES},
     COMPLEXITY: {
@@ -75,6 +76,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
 CHOICES = {
     (REFACTOR_FIRST, "per-file"): ("must-decrease", "must-not-increase"),
     (MUTATION, "dependency-change"): ("rerun", "keep"),
+    (MUTATION, "unmutated-change"): ("retest", "defer"),
 }
 PERCENT_KEYS = (THRESHOLD, "improvement")
 MINIMUMS = {  # the smallest sensible value of each count; below it the gate would flag everything

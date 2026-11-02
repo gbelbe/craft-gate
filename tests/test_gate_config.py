@@ -461,3 +461,22 @@ def test_any_other_dependency_change_policy_is_refused(tmp_path) -> None:
 
     with pytest.raises(cfg.ConfigError, match="dependency-change is not valid"):
         cfg.load_settings(root)
+
+
+def test_a_change_to_an_unmutated_module_is_retested_unless_the_repo_says_otherwise(
+    tmp_path,
+) -> None:
+    assert cfg.load_settings(project(tmp_path))[cfg.MUTATION]["unmutated-change"] == "retest"
+
+
+def test_a_change_to_an_unmutated_module_may_be_left_to_the_nightly_run(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.mutation]\nunmutated-change = "defer"\n')
+
+    assert cfg.load_settings(root)[cfg.MUTATION]["unmutated-change"] == "defer"
+
+
+def test_any_other_unmutated_change_policy_is_refused(tmp_path) -> None:
+    root = project(tmp_path, '[tool.craft-gate.mutation]\nunmutated-change = "skip"\n')
+
+    with pytest.raises(cfg.ConfigError, match="unmutated-change is not valid"):
+        cfg.load_settings(root)
