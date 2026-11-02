@@ -475,6 +475,23 @@ def test_a_change_to_an_unmutated_module_may_be_left_to_the_nightly_run(tmp_path
     assert cfg.load_settings(root)[cfg.MUTATION]["unmutated-change"] == "defer"
 
 
+def test_a_test_change_may_lower_a_score_only_when_the_repo_says_how_far(tmp_path) -> None:
+    assert cfg.load_settings(project(tmp_path))[cfg.MUTATION]["regression-floor"] == 100
+
+
+def test_the_floor_a_lowered_score_may_stay_above_is_read(tmp_path) -> None:
+    root = project(tmp_path, "[tool.craft-gate.mutation]\nregression-floor = 90\n")
+
+    assert cfg.load_settings(root)[cfg.MUTATION]["regression-floor"] == 90
+
+
+def test_a_floor_over_a_hundred_percent_is_refused(tmp_path) -> None:
+    root = project(tmp_path, "[tool.craft-gate.mutation]\nregression-floor = 101\n")
+
+    with pytest.raises(cfg.ConfigError, match="regression-floor"):
+        cfg.load_settings(root)
+
+
 def test_any_other_unmutated_change_policy_is_refused(tmp_path) -> None:
     root = project(tmp_path, '[tool.craft-gate.mutation]\nunmutated-change = "skip"\n')
 

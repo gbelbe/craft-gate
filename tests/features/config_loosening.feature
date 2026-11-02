@@ -33,6 +33,8 @@ Feature: A pull request cannot loosen craft-gate.toml unnoticed
       | mutation.threshold        | 80     | 90    | is not reported  |
       | mutation.improvement      | 20     | 5     | is reported      |
       | mutation.improvement      | 20     | 30    | is not reported  |
+      | mutation.regression-floor | 100    | 90    | is reported      |
+      | mutation.regression-floor | 90     | 100   | is not reported  |
       | bdd.threshold             | 80     | 50    | is reported      |
       | bdd.threshold             | 80     | 90    | is not reported  |
 

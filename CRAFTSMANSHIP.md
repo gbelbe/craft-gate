@@ -451,7 +451,9 @@ helper reaches — then runs `mutmut run`, which re-tests exactly those and any 
 changed. A full campaign happens on the first initialisation of a repo and on cache-wide causes
 only. Test files you add are measured on a first pass and their functions re-tested on a second.
 A test change that *lowers* the score of a function it covers fails the ratchet, even though the
-function itself was not touched. A repo may set `[mutation] unmutated-change = "defer"` so that a change to a
+function itself was not touched, unless the function still scores at least `[mutation] regression-floor`
+(100 by default: no excuse; a repo that sets 90 lets a function recorded at 100% settle at 95%, and the
+value is reported as loosened). A repo may set `[mutation] unmutated-change = "defer"` so that a change to a
 module mutmut does not mutate resets nothing in a pull request (the nightly campaign re-tests what it reaches);
 it is reported as a loosened value. DESIGN.md's "Diff-scoped mutation runs" has the details and limits.
 
