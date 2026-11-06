@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -62,8 +63,8 @@ def repo(tmp_path, monkeypatch):
 
 
 def select(repo: Path, changed: set[int]) -> list[str]:
-    ranges = mr.function_ranges(repo, MODULE_FILE)
-    return mr.mutants_on_lines(MODULE_FILE, SOURCE, ranges, changed)
+    file = mr.SourceFile(MODULE_FILE, SOURCE, mr.function_ranges(repo, MODULE_FILE))
+    return mr.mutants_on_lines(file, changed)
 
 
 # -- the pieces -----------------------------------------------------------------------------
@@ -124,10 +125,16 @@ def test_a_method_is_selected_by_the_line_inside_it(repo) -> None:
     assert all(n.startswith("pkg.mod.xǁBoxǁsize__mutmut_") for n in names)
 
 
-def test_the_chosen_names_are_the_ones_mutmut_runs(repo) -> None:
+def test_the_chosen_names_are_in_the_form_mutmut_runs_and_are_not_repeated(repo) -> None:
     names = select(repo, set(FIRST_LINES))
 
-    assert names == sorted(names, key=lambda n: int(n.rsplit("_", 1)[1])) or names
+    assert names
+    assert len(names) == len(set(names))
+    assert all(re.fullmatch(r"pkg\.mod\.x_first__mutmut_\d+", name) for name in names)
+
+
+def test_a_line_added_to_a_function_selects_the_mutants_that_land_on_it(repo) -> None:
+    assert select(repo, {3}) != select(repo, {4})  # two different lines, two different mutant sets
 
 
 # -- which files are looked at ----------------------------------------------------------------

@@ -7,6 +7,7 @@ There is one bar and nothing stored: the rule has no memory of an earlier score.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -107,3 +108,86 @@ def test_the_ratchet_takes_no_baseline_or_improvement_option() -> None:
 
     for option in ("--improvement", "--baseline", "--regression-floor", "--regression-tolerance"):
         assert option not in source
+
+
+# -- judging the mutants mutation_run.py chose --------------------------------------------
+
+MODULE = "pkg/mod.py"
+MUTANTS = "mutants"
+ERROR_STATUS = 2
+SELECTION_KEY = "mutants"
+KILLED, SURVIVED = 1, 0
+CHOSEN = "pkg.mod.x_f__mutmut_1"
+LEFT_OUT = "pkg.mod.x_f__mutmut_2"
+SELECTION = "mutation-selection.json"
+
+
+def record(mutants_dir: Path, outcomes: dict[str, int | None]) -> None:
+    """What mutmut keeps for a file: the exit code of each of its mutants."""
+    target = mutants_dir / f"{MODULE}.meta"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps({"exit_code_by_key": outcomes}))
+
+
+def test_only_the_chosen_mutants_are_judged(tmp_path) -> None:
+    record(tmp_path, {CHOSEN: KILLED, LEFT_OUT: SURVIVED})
+
+    results = ratchet.collect_selected_results(tmp_path, {CHOSEN})
+
+    assert results == {f"{MODULE}::f": {**ratchet._no_outcomes(), "killed": 1}}
+
+
+def test_a_survivor_that_was_not_chosen_does_not_fail_the_function(tmp_path) -> None:
+    record(tmp_path, {CHOSEN: KILLED, LEFT_OUT: SURVIVED})
+
+    results = ratchet.collect_selected_results(tmp_path, {CHOSEN})
+
+    assert evaluate(results) == []
+
+
+def test_a_chosen_mutant_that_was_never_tested_refuses_its_function(tmp_path) -> None:
+    record(tmp_path, {CHOSEN: None, LEFT_OUT: KILLED})
+
+    results = ratchet.collect_selected_results(tmp_path, {CHOSEN})
+
+    assert "1 mutant(s) have no verdict" in evaluate(results)[0]
+
+
+def test_no_selection_file_means_a_plain_mutmut_run(tmp_path) -> None:
+    assert ratchet.load_selection(tmp_path) is None
+
+
+def test_the_selection_file_names_the_chosen_mutants(tmp_path) -> None:
+    (tmp_path / SELECTION).write_text(json.dumps({SELECTION_KEY: [CHOSEN]}))
+
+    assert ratchet.load_selection(tmp_path) == {CHOSEN}
+
+
+@pytest.mark.parametrize("content", ["not json", "{}", f'{{"{SELECTION_KEY}": 3}}'])
+def test_a_selection_file_that_cannot_be_read_is_an_error_not_a_fallback(tmp_path, content) -> None:
+    (tmp_path / SELECTION).write_text(content)
+
+    with pytest.raises(ratchet.SelectionError, match="run scripts/mutation_run.py again"):
+        ratchet.load_selection(tmp_path)
+
+
+def test_the_ratchet_stops_with_an_error_status_on_an_unreadable_selection(
+    tmp_path, capsys
+) -> None:
+    (tmp_path / MUTANTS).mkdir()
+    (tmp_path / MUTANTS / SELECTION).write_text("not json")
+
+    status = ratchet.main(["--base", "HEAD", "--path", str(tmp_path)])
+
+    assert status == ERROR_STATUS
+    assert "not a mutation selection" in capsys.readouterr().err
+
+
+def test_an_empty_selection_has_nothing_to_judge(tmp_path, capsys) -> None:
+    (tmp_path / MUTANTS).mkdir()
+    (tmp_path / MUTANTS / SELECTION).write_text(json.dumps({SELECTION_KEY: []}))
+
+    status = ratchet.main(["--base", "HEAD", "--path", str(tmp_path)])
+
+    assert status == 0
+    assert "nothing to judge" in capsys.readouterr().out

@@ -26,13 +26,14 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import difflib
 import fnmatch
 import json
-import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import tomllib
@@ -40,13 +41,27 @@ import tomllib
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
-from check_mutation_ratchet import SELECTION_FILE, function_ranges  # noqa: E402
+from check_mutation_ratchet import (  # noqa: E402
+    MUTANTS_DIR,
+    SELECTION_FILE,
+    SELECTION_KEY,
+    function_ranges,
+)
 from gate_timing import step  # noqa: E402
 from gitdiff import changed_lines, git  # noqa: E402
-from mutmut.mutation.file_mutation import mutate_file_contents  # noqa: E402
+from mutmut.mutation.file_mutation import MutatedFile, mutate_file_contents  # noqa: E402
 
 _ORIGINAL = "__mutmut_orig"
 _MUTANT = "__mutmut_"
+
+
+def generate_mutants(rel: str, source: str) -> MutatedFile:
+    """Every mutant of *source*, as mutmut would write them, without running any test.
+
+    The one call into mutmut's internals; it needs the repo's configuration, read from the working
+    directory. No line is known to be covered or excluded, so nothing is left out.
+    """
+    return mutate_file_contents(rel, source, covered_lines=None, coverage_excluded_lines=None)
 
 
 def mutated_files(root: Path) -> list[str]:
@@ -91,35 +106,51 @@ def function_bodies(code: str) -> dict[str, list[str]]:
 def differing_offsets(original: list[str], mutant: list[str]) -> set[int]:
     """The offsets, from the `def` line, of the lines the mutant changed.
 
-    The `def` line itself is left out of the comparison: it differs by the function's name alone.
+    The mutant's `def` line is read as the original's: it differs by the function's name alone.
+    A replaced or deleted line is its own offset; an inserted line is the line it precedes.
     """
+    mutant = [original[0], *mutant[1:]]
     offsets: set[int] = set()
-    matcher = difflib.SequenceMatcher(None, original[1:], mutant[1:], autojunk=False)
-    for tag, start, end, _mutant_start, _mutant_end in matcher.get_opcodes():
-        if tag != "equal":
-            offsets.update(range(start + 1, max(end, start + 1) + 1))
+    for tag, start, end, _mutant_start, _mutant_end in difflib.SequenceMatcher(
+        None, original, mutant, autojunk=False
+    ).get_opcodes():
+        if tag in ("replace", "delete"):
+            offsets.update(range(start, end))
+        elif tag == "insert":
+            offsets.add(start)
     return offsets
 
 
-def mutants_on_lines(
-    rel: str, source: str, ranges: dict[str, tuple[int, int]], changed: set[int]
-) -> list[str]:
-    """The names (as `mutmut run` takes them) of *rel*'s mutants whose line is in *changed*.
+def mutant_lines(bodies: dict[str, list[str]], name: str, start: int) -> set[int]:
+    """The lines of the source that mutant *name* changes, its function starting at line *start*."""
+    base = name.rsplit(_MUTANT, 1)[0]
+    original, mutant = bodies.get(f"{base}{_ORIGINAL}"), bodies.get(name)
+    if original is None or mutant is None:
+        return set()
+    return {start + offset for offset in differing_offsets(original, mutant)}
+
+
+@dataclass(frozen=True)
+class SourceFile:
+    """A mutated file: its path, its source, and the line range of each of its functions."""
+
+    rel: str
+    source: str
+    ranges: dict[str, tuple[int, int]]
+
+
+def mutants_on_lines(file: SourceFile, changed: set[int]) -> list[str]:
+    """The names (as `mutmut run` takes them) of *file*'s mutants on a line in *changed*.
 
     Needs the repo's mutmut configuration: run it from the repository root.
     """
-    generated = mutate_file_contents(rel, source, None, None)
+    generated = generate_mutants(file.rel, file.source)
     bodies = function_bodies(generated.code)
-    module = module_of(rel)
+    module = module_of(file.rel)
     chosen = []
     for name in generated.mutant_names:
-        base = name.rsplit(_MUTANT, 1)[0]
-        original, mutant = bodies.get(f"{base}{_ORIGINAL}"), bodies.get(name)
-        span = ranges.get(f"{rel}::{qualified(base)}")
-        if original is None or mutant is None or span is None:
-            continue
-        mutated = {span[0] + offset for offset in differing_offsets(original, mutant)}
-        if mutated & changed:
+        span = file.ranges.get(f"{file.rel}::{qualified(name.rsplit(_MUTANT, 1)[0])}")
+        if span is not None and mutant_lines(bodies, name, span[0]) & changed:
             chosen.append(f"{module}.{name}")
     return chosen
 
@@ -131,26 +162,19 @@ def select(root: Path, base: str) -> list[str]:
         changed = changed_lines(base, root, rel)
         if changed:
             source = (root / rel).read_text(encoding="utf-8")
-            names += mutants_on_lines(rel, source, function_ranges(root, rel), changed)
+            names += mutants_on_lines(SourceFile(rel, source, function_ranges(root, rel)), changed)
     return names
 
 
 def write_selection(mutants_dir: Path, names: list[str]) -> None:
     mutants_dir.mkdir(parents=True, exist_ok=True)
-    (mutants_dir / SELECTION_FILE).write_text(json.dumps({"mutants": names}, indent=2) + "\n")
+    (mutants_dir / SELECTION_FILE).write_text(json.dumps({SELECTION_KEY: names}, indent=2) + "\n")
 
 
-def run(root: Path, base: str) -> int:
-    """Choose the mutants, start from an empty `mutants/`, run them; mutmut's exit status."""
-    os.chdir(root)  # mutmut reads the repo's pyproject.toml from the working directory
-    mutants_dir = root / "mutants"
-    with step("mutation run: choose the mutants on changed lines"):
-        names = select(root, base)
+def run_selected(root: Path, names: list[str]) -> int:
+    """Start from an empty `mutants/`, have mutmut test *names*, record them; its exit status."""
+    mutants_dir = root / MUTANTS_DIR
     shutil.rmtree(mutants_dir, ignore_errors=True)
-    if not names:
-        print("Mutation run: no mutant sits on a changed line of a mutated file; nothing to run.")
-        write_selection(mutants_dir, [])
-        return 0
     print(f"Mutation run: {len(names)} mutant(s) on changed lines.")
     with step("mutation run: mutmut run"):
         status = subprocess.run(
@@ -158,6 +182,20 @@ def run(root: Path, base: str) -> int:
         ).returncode
     write_selection(mutants_dir, names)
     return status
+
+
+def run(root: Path, base: str) -> int:
+    """Choose the mutants on the lines changed since *base* and run them; mutmut's exit status."""
+    with step("mutation run: choose the mutants on changed lines"), contextlib.chdir(root):
+        names = select(
+            root, base
+        )  # mutmut reads the repo's configuration from the working directory
+    if names:
+        return run_selected(root, names)
+    shutil.rmtree(root / MUTANTS_DIR, ignore_errors=True)
+    print("Mutation run: no mutant sits on a changed line of a mutated file; nothing to run.")
+    write_selection(root / MUTANTS_DIR, [])
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

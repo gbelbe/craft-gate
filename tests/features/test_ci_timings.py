@@ -102,7 +102,7 @@ def _cost(world) -> None:
 
 
 @given("a mutation run with a mutant to test")
-def _a_mutant(world, monkeypatch) -> None:
+def _a_mutant(monkeypatch) -> None:
     import mutation_run
 
     monkeypatch.setattr(mutation_run, "select", lambda *_: ["pkg.mod.x_f__mutmut_1"])
