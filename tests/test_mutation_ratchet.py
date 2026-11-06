@@ -1,8 +1,7 @@
 """The mutation ratchet's acceptance rule, behaviourally.
 
-A touched function is accepted when it scores at least the threshold (80%), or, only when it
-already has a recorded baseline score, when it improves on that score by at least the improvement
-margin (20%). A function with no recorded baseline gets no second path: it must reach the threshold.
+A touched function is accepted when it scores at least the threshold (80%), and refused below it.
+There is one bar: a function that was recorded before, at any score, owes the same as a new one.
 """
 
 from __future__ import annotations
@@ -19,6 +18,7 @@ ratchet = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(ratchet)
 
 evaluate = ratchet.evaluate_results
+NEEDS_THE_BAR = "needs >= 80%"  # what a refusal says when the threshold is the default 80
 evaluate_domain = ratchet.evaluate_domain
 
 
@@ -26,7 +26,7 @@ def counts(killed: int, survived: int, no_tests: int = 0) -> dict[str, int]:
     return {"killed": killed, "survived": survived, "no_tests": no_tests}
 
 
-# -- a function with no recorded baseline must reach the threshold ----------------
+# -- a function that was never recorded must reach the threshold -----------------
 
 
 def test_a_new_function_below_the_threshold_is_refused() -> None:
@@ -35,8 +35,7 @@ def test_a_new_function_below_the_threshold_is_refused() -> None:
     assert len(violations) == 1
     assert violations[0].startswith("pkg.py::new:")
     assert "50%" in violations[0]
-    assert "80%" in violations[0]
-    assert "baseline" in violations[0]
+    assert NEEDS_THE_BAR in violations[0]
 
 
 def test_a_new_function_at_exactly_the_threshold_passes() -> None:
@@ -64,27 +63,29 @@ def test_the_threshold_the_caller_chose_is_the_one_a_new_function_must_reach() -
     assert len(evaluate({"f": counts(5, 5)}, {}, threshold=60.0)[0]) == 1
 
 
-# -- a function with a recorded baseline keeps the improvement path ---------------
+# -- a function that was recorded before owes the same threshold -----------------
 
 
-def test_a_known_function_may_pass_by_improving_twenty_percent() -> None:
-    # 50% -> 60% is exactly +20% of 50
-    violations, updated = evaluate({"f": counts(6, 4)}, {"f": 50.0})
-
-    assert violations == []
-    assert updated == {"f": 60.0}
-
-
-def test_a_known_function_short_of_the_improvement_is_refused() -> None:
-    violations, _ = evaluate({"f": counts(59, 41)}, {"f": 50.0})
+def test_a_recorded_function_below_the_threshold_is_refused_whatever_its_baseline() -> None:
+    # 50% -> 60% used to pass as "+20% of 50"; there is no such path any more
+    violations, _ = evaluate({"f": counts(6, 4)}, {"f": 50.0})
 
     assert len(violations) == 1
-    assert "59%" in violations[0]
-    assert "needs >= 60%" in violations[0]
+    assert "60%" in violations[0]
+    assert NEEDS_THE_BAR in violations[0]
 
 
-def test_a_known_function_at_the_threshold_passes_whatever_its_baseline() -> None:
+def test_a_recorded_function_at_the_threshold_passes_whatever_its_baseline() -> None:
     assert evaluate({"f": counts(8, 2)}, {"f": 79.0})[0] == []
+    assert evaluate({"f": counts(8, 2)}, {"f": 99.0})[0] == []
+
+
+def test_a_recorded_function_is_not_asked_to_beat_its_own_score() -> None:
+    # recorded at 95%, now 85%: above the bar, so the touch is accepted (and the score recorded)
+    violations, updated = evaluate({"f": counts(85, 15)}, {"f": 95.0})
+
+    assert violations == []
+    assert updated == {"f": 85.0}
 
 
 # -- unchanged behaviour ----------------------------------------------------------
@@ -114,7 +115,7 @@ def test_each_function_is_judged_on_its_own() -> None:
         {"good": counts(9, 1), "bad": counts(1, 9), "known": counts(6, 4)}, {"known": 50.0}
     )
 
-    assert [v.split(":")[0] for v in violations] == ["bad"]
+    assert [v.split(":")[0] for v in violations] == ["bad", "known"]
 
 
 # -- functions re-tested because their tests changed (not touched themselves) -----
@@ -192,29 +193,20 @@ def test_a_function_whose_mutants_were_not_all_re_tested_is_flagged() -> None:
     assert violations == ["f: 3 mutant(s) were not re-tested after the plan reset them"]
 
 
-# -- the improvement never asks for more than the threshold ------------------------
+# -- the bar is the threshold the caller chose --------------------------------------
 
 BASELINE = 78.0
 CHOSEN_THRESHOLD = 90.0
-FRESH_CODE_BAR = 80.0
-IMPROVEMENT = 20.0
-LOW_BASELINE = 50.0
-LOW_BASELINE_PLUS_IMPROVEMENT = 60.0
 
 
-def test_a_known_function_that_reaches_the_threshold_owes_no_further_improvement() -> None:
-    # 78% + 20% would be 94%, but the bar for fresh code is the threshold
-    assert evaluate({"f": counts(80, 20)}, {"f": BASELINE})[0] == []
-
-
-def test_a_known_function_just_short_of_the_threshold_is_told_the_threshold() -> None:
+def test_a_recorded_function_just_short_of_the_threshold_is_told_the_threshold() -> None:
     violations, _ = evaluate({"f": counts(79, 21)}, {"f": BASELINE})
 
     assert len(violations) == 1
-    assert "needs >= 80%" in violations[0]
+    assert NEEDS_THE_BAR in violations[0]
 
 
-def test_the_cap_follows_the_threshold_the_caller_chose() -> None:
+def test_the_bar_follows_the_threshold_the_caller_chose() -> None:
     refused, _ = evaluate({"f": counts(89, 11)}, {"f": BASELINE}, threshold=CHOSEN_THRESHOLD)
     passed, _ = evaluate({"f": counts(90, 10)}, {"f": BASELINE}, threshold=CHOSEN_THRESHOLD)
 
@@ -222,16 +214,8 @@ def test_the_cap_follows_the_threshold_the_caller_chose() -> None:
     assert passed == []
 
 
-def test_the_required_score_is_the_improvement_capped_at_the_threshold() -> None:
-    low = ratchet.required_score(LOW_BASELINE, IMPROVEMENT, FRESH_CODE_BAR)
-    caught_up = ratchet.required_score(BASELINE, IMPROVEMENT, FRESH_CODE_BAR)
-    capped = ratchet.required_score(BASELINE, IMPROVEMENT, CHOSEN_THRESHOLD)
-
-    assert (low, caught_up, capped) == (
-        LOW_BASELINE_PLUS_IMPROVEMENT,
-        FRESH_CODE_BAR,
-        CHOSEN_THRESHOLD,
-    )
+def test_there_is_no_improvement_margin_to_pass_a_different_way() -> None:
+    assert not hasattr(ratchet, "required_score")
 
 
 # -- a stored score and a fresh one are compared at the same precision -------------

@@ -485,7 +485,7 @@ comment; copying it unchanged changes nothing, because each value there is the d
 
 | Section | Values |
 |---|---|
-| `[patch-coverage]`, `[mutation]`, `[bdd]` | `enabled` and `reason`, `threshold` (and `improvement` for mutation), `source`, `paths`, `exclude` |
+| `[patch-coverage]`, `[mutation]`, `[bdd]` | `enabled` and `reason`, `threshold`, `source`, `paths`, `exclude` |
 | `[complexity]` | `cyclomatic`, `cognitive`, `duplicated-literal-occurrences`, `duplicated-literal-min-length` |
 | `[refactor-first]` | `per-file`: `must-decrease` or `must-not-increase` |
 | `[design-review]` | `max-parameters`, `max-lines` |

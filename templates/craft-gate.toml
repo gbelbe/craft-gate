@@ -22,8 +22,7 @@ exclude = ["tests/*", "*/tests/*", "test_*.py", "*_test.py", "conftest.py"]   # 
 [mutation]                  # a touched function's tests must notice a change in its behaviour
 enabled = true
 reason = ""
-threshold = 80              # percent of mutants killed that passes outright
-improvement = 20            # below the threshold, a recorded baseline may improve by this percent (never owing more than the threshold)
+threshold = 80              # percent of mutants killed that every touched function must reach, new or old
 regression-floor = 100      # a test change may lower a function it covers (not one the diff touched) while it stays at or above this percent; 100 = never
 dependency-change = "rerun" # a lock file or dependency list changed: "rerun" every mutant (sound), or "keep" the cached verdicts (the nightly campaign rebuilds them)
 unmutated-change = "retest" # a module mutmut does not mutate changed: "retest" every function its tests cover (sound), or "defer" them to the nightly campaign (touched functions and changed tests are still judged)

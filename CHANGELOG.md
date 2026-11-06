@@ -10,6 +10,12 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Removed (breaking):** the mutation improvement rule. A touched function must now score at least
+  `[mutation] threshold` (80 by default), whether it is new or old; the 20% improvement path for a
+  function with a recorded baseline is gone, and so is `improvement` (in `craft-gate.toml`, in
+  `pyproject.toml`, and as `--improvement` on `check_mutation_ratchet.py`). A repo that still sets
+  `improvement` now gets an "unknown key" error naming it: delete the line. `.mutation-baseline.json` is
+  still written, because `regression-floor` judges functions whose tests changed against it.
 - **Changed:** the complexity ratchet follows a file git sees as moved (`git diff -M`). Its functions,
   its invariant returns and its repeated literals are compared with what they were at the old path, and
   a move that changes nothing is not a touch, so moving a module into a folder no longer reads as

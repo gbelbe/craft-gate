@@ -167,13 +167,6 @@ Feature: Every value in craft-gate.toml changes what a gate does
     When the workflow asks for the mutation gate
     Then the workflow is told threshold=65
 
-  @key:mutation.improvement
-  Scenario: the mutation ratchet publishes how much a baseline must improve
-    Given a [tool.mutmut] section exists
-    And the config sets mutation.improvement to 35
-    When the workflow asks for the mutation gate
-    Then the workflow is told improvement=35
-
   @key:mutation.regression-floor
   Scenario: the mutation ratchet publishes how low a test change may leave a recorded score
     Given a [tool.mutmut] section exists

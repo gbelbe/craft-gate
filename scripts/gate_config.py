@@ -58,7 +58,6 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         ENABLED: True,
         REASON: "",
         THRESHOLD: 80,
-        "improvement": 20,
         "regression-floor": 100,
         "dependency-change": "rerun",
         "unmutated-change": "retest",
@@ -79,7 +78,7 @@ CHOICES = {
     (MUTATION, "dependency-change"): ("rerun", "keep"),
     (MUTATION, "unmutated-change"): ("retest", "defer"),
 }
-PERCENT_KEYS = (THRESHOLD, "improvement", "regression-floor")
+PERCENT_KEYS = (THRESHOLD, "regression-floor")
 MINIMUMS = {  # the smallest sensible value of each count; below it the gate would flag everything
     "cyclomatic": 1,
     "cognitive": 1,

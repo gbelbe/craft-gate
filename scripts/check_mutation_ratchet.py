@@ -12,13 +12,10 @@ score (killed / (killed + survived), mutmut's own definition — see
 `mutmut badge`) below --threshold. Not base-vs-head like the complexity
 ratchet: mutation testing is too expensive to run twice per PR (it reruns
 the whole test suite once per mutant), so this checks touched functions
-against a floor on the current tree only. The floor is --threshold; a
-function that already has a score in the baseline file may instead improve on
-that score by --improvement percent, and is never asked for more than the
-threshold itself (a function at 78% that reaches the threshold has no further
-to go, whatever 78% + --improvement comes to). A function with *no* recorded baseline
-has no score to improve on, so it must reach --threshold outright: a first
-sighting is not a free pass. A genuinely equivalent mutant belongs behind mutmut's own
+against a floor on the current tree only. The floor is --threshold, the same
+for every touched function, new or old: there is no improvement path, so
+touching a function whose tests are weak means bringing them to the threshold.
+A genuinely equivalent mutant belongs behind mutmut's own
 `# pragma: no mutate` (mutmut's answer to this, same idea as coverage.py's
 `# pragma: no cover`) — fix the false positive at its source, not by
 lowering this gate's bar.
@@ -183,28 +180,16 @@ def _score_violation(name: str, score: float, needs: str) -> str:
     return f"{name}: mutation score {_pct(score)}, {needs}"
 
 
-def required_score(previous: float, improvement: float, threshold: float) -> float:
-    """What a function below the threshold must reach: its improvement, at most the threshold.
-
-    The threshold is the bar for fresh code, so a function that has caught up owes nothing more.
-    """
-    return min(previous * (1.0 + improvement / 100.0), threshold)
-
-
 def evaluate_results(
     results: dict[str, dict[str, int]],
     baseline: dict[str, float],
     threshold: float = DEFAULT_THRESHOLD,
-    improvement: float = 20.0,
 ) -> tuple[list[str], dict[str, float]]:
-    """Apply the absolute floor, or the improvement rule for a function with a recorded baseline.
+    """Apply the one bar to every touched function: it must score at least *threshold*.
 
-    A function scoring below *threshold* is judged by whether it has a baseline:
-    - recorded: it must improve on it by *improvement* percent or reach *threshold*, whichever is
-      less;
-    - none (new, or never recorded): refused. The improvement path needs a score
-      to improve on, and a first sighting must not be a free pass.
-    At or above *threshold* a function always passes.
+    New or old makes no difference, and nothing is compared with an earlier score. The scores are
+    still recorded in *baseline*, which is what the functions re-tested because their tests changed
+    are judged against (see :func:`evaluate_domain`).
     """
     violations: list[str] = []
     updated = dict(baseline)
@@ -215,13 +200,8 @@ def evaluate_results(
                 violations.append(f"{name}: no covering tests")
             continue
         score = mutation_score(counts["killed"], tested)
-        previous = baseline.get(name)
         if score < threshold:
-            if previous is None:
-                needs = f"a function with no recorded baseline needs >= {_pct(threshold)}"
-                violations.append(_score_violation(name, score, needs))
-            elif score < (required := required_score(previous, improvement, threshold)):
-                violations.append(_score_violation(name, score, f"needs >= {_pct(required)}"))
+            violations.append(_score_violation(name, score, f"needs >= {_pct(threshold)}"))
         updated[name] = score
     return violations, updated
 
@@ -315,7 +295,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--path", default=".", help="source directory to scan")
     parser.add_argument("--mutants-dir", default="mutants", help="mutmut's output directory")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
-    parser.add_argument("--improvement", type=float, default=20.0)
     parser.add_argument("--baseline", default=".mutation-baseline.json")
     parser.add_argument(
         "--regression-tolerance",
@@ -359,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         violations, updated = [], {**baseline, "__meta__": metadata}
     else:
         results = collect_touched_results(root, mutants_dir, group_by_file(touched))
-        violations, updated = evaluate_results(results, baseline, args.threshold, args.improvement)
+        violations, updated = evaluate_results(results, baseline, args.threshold)
         domain = collect_touched_results(root, mutants_dir, group_by_file(retested))
         weaker, raised = evaluate_domain(
             domain, baseline, args.regression_tolerance, args.regression_floor

@@ -62,7 +62,7 @@ DIRECTION = {
         ),
         "higher",
     ),
-    **dict.fromkeys(("threshold", "improvement", "regression-floor"), "lower"),
+    **dict.fromkeys(("threshold", "regression-floor"), "lower"),
     "enabled": "off",
     **dict.fromkeys(("legacy-debt", "new-code"), "on"),
     "exclude": "wider",
