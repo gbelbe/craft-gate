@@ -58,13 +58,15 @@ def _cache(world) -> None:
     (world.mutants / "mutmut-stats.json").write_text(json.dumps(STATS))
 
 
-def move(world, *, edit: bool) -> None:
+def move(world, *, edit: bool, touch: bool = False) -> None:
     root = world.root
     (root / NEW).parent.mkdir(parents=True)
     git(root, "mv", OLD, NEW)
     if edit:
         with (root / NEW).open("a") as handle:
             handle.write("# edited\n")
+    if touch:
+        (root / "pkg/mod.py").write_text("def covered():\n    return 2\n")
     (root / "pyproject.toml").write_text(PYPROJECT.format(selected=NEW))
     git(root, "add", ".")
     inputs, old_args, new_args = mutation_plan.collect_inputs(root, "HEAD", world.mutants)
@@ -80,6 +82,19 @@ def _moved(world) -> None:
 @when("tests/unit/test_a.py is moved to tests/brick/test_a.py and edited")
 def _moved_and_edited(world) -> None:
     move(world, edit=True)
+
+
+@when(
+    "tests/unit/test_a.py is moved to tests/brick/test_a.py and edited, "
+    "and the function it covers is edited too"
+)
+def _moved_edited_and_function_touched(world) -> None:
+    move(world, edit=True, touch=True)
+
+
+@then("the plan measures those tests again")
+def _measured_again(world) -> None:
+    assert world.plan.stale_tests == (f"{OLD}::{TEST}",)  # the cache knows them by the old path
 
 
 @then("the plan re-tests no function")

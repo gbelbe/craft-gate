@@ -83,8 +83,124 @@ def make(changes, **overrides):
             changed_sections=tuple(given["sections"]),
             keep_on_dependency_change=bool(overrides.get("keep")),
             renamed=tuple(overrides.get("renamed", ())),
+            touched=overrides.get("touched"),
         )
     )
+
+
+# -- only the functions the diff touches are re-tested ----------------------------
+
+CTX_KEY = ("ster.mcp_context", "overview")
+LOAD_KEY = ("ster.store._load_save", "load")
+CTX_TESTS = {"tests/unit/test_ctx.py::test_c", "tests/unit/test_ctx.py::test_d"}
+
+
+def test_a_changed_test_re_tests_only_the_covered_function_the_diff_touches() -> None:
+    plan = make([("M", "tests/unit/test_ctx.py")], touched=frozenset({CTX_KEY}))
+
+    assert plan.reset_functions == (CTX,)
+
+
+def test_the_tests_a_change_staled_are_still_measured_again() -> None:
+    plan = make([("M", "tests/unit/test_ctx.py")], touched=frozenset({CTX_KEY}))
+
+    assert set(plan.stale_tests) >= CTX_TESTS
+
+
+def test_a_covered_function_the_diff_does_not_touch_keeps_its_verdicts() -> None:
+    plan = make([("M", "tests/unit/test_ctx.py")], touched=frozenset({CTX_KEY}))
+
+    assert LOAD not in plan.reset_functions
+
+
+def test_the_plan_says_how_many_covered_functions_were_left_alone() -> None:
+    plan = make([("M", "tests/unit/test_ctx.py")], touched=frozenset({CTX_KEY}))
+
+    assert any("1 function(s) covered by a changed test but not touched" in r for r in plan.reasons)
+
+
+def test_a_change_touching_no_covered_function_re_tests_none_but_still_measures_its_tests() -> None:
+    plan = make([("M", "tests/unit/test_promote.py")], touched=frozenset())
+
+    assert plan.reset_functions == ()
+    assert set(plan.stale_tests) == {
+        "tests/unit/test_promote.py::test_p1",
+        "tests/unit/test_promote.py::test_p2",
+    }
+
+
+def test_when_the_touched_functions_are_not_known_nothing_is_narrowed() -> None:
+    plan = make([("M", "tests/unit/test_ctx.py")], touched=None)
+
+    assert plan.reset_functions == tuple(sorted((CTX, LOAD)))
+    assert not any("not touched" in r for r in plan.reasons)
+
+
+def test_a_touched_function_is_re_tested_when_its_tests_change_even_if_its_hash_did_not() -> None:
+    # a whitespace-only touch leaves mutmut's hash alone, so the plan must reset it itself
+    plan = make([("M", "tests/unit/test_promote.py")], touched=frozenset({PROMOTE_KEY}))
+
+    assert plan.reset_functions == (PROMOTE,)
+
+
+PROMOTE_KEY = ("ster.store._load_save", "_promote_one")
+
+
+def test_a_method_is_matched_by_its_class_and_name() -> None:
+    method = "ster.mcp_server.xǁHandlerǁrun"
+    stats = {
+        "tests_by_mangled_function_name": {method: ["tests/unit/test_server.py::test_s"]},
+        "duration_by_test": {"tests/unit/test_server.py::test_s": 0.1},
+    }
+
+    hit = make(
+        [("M", "tests/unit/test_server.py")],
+        stats=stats,
+        touched=frozenset({("ster.mcp_server", "Handler.run")}),
+    )
+    miss = make(
+        [("M", "tests/unit/test_server.py")],
+        stats=stats,
+        touched=frozenset({("ster.mcp_server", "Other.run")}),
+    )
+
+    assert hit.reset_functions == (method,)
+    assert miss.reset_functions == ()
+
+
+def test_the_functions_of_a_changed_data_file_are_narrowed_too() -> None:
+    sources = {"ster/store/_load_save.py": "open('data/shapes.json')"}
+    changes = [("M", "ster/data/shapes.json")]
+
+    wide = make(changes, sources=sources, touched=None)
+    narrow = make(changes, sources=sources, touched=frozenset())
+
+    assert LOAD in wide.reset_functions
+    assert narrow.reset_functions == ()
+
+
+def test_the_touched_functions_come_from_the_diff_against_the_base(tmp_path) -> None:
+    git = git_in(tmp_path)
+    package = tmp_path / "ster" / "pkg"
+    package.mkdir(parents=True)
+    source = package / "__init__.py"
+    source.write_text("def kept():\n    return 1\n\n\ndef changed():\n    return 2\n")
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    source.write_text("def kept():\n    return 1\n\n\ndef changed():\n    return 3\n")
+    git("commit", "-q", "-am", "edit")
+
+    touched = mp._touched_functions(tmp_path, "HEAD~1", frozenset({"ster/pkg/__init__.py"}))
+
+    assert touched == frozenset({("ster.pkg", "changed")})
+
+
+def test_when_git_cannot_say_the_touched_functions_are_unknown(tmp_path) -> None:
+    (tmp_path / "ster").mkdir()
+    (tmp_path / "ster" / "x.py").write_text("def f():\n    return 1\n")  # not a git repository
+
+    assert mp._touched_functions(tmp_path, "no-such-ref", frozenset({"ster/x.py"})) is None
 
 
 # -- first initialisation and cache-wide causes -----------------------------------

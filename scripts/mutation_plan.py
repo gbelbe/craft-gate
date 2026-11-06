@@ -10,7 +10,10 @@ minutes
 spent re-proving functions the change cannot have touched.
 
 This script turns the diff into the narrowest set of cached verdicts to drop, then lets an ordinary
-`mutmut run` re-test exactly those (it re-tests every mutant whose verdict is empty):
+`mutmut run` re-test exactly those (it re-tests every mutant whose verdict is empty). Only a
+function the diff touches is judged, so only its verdicts are dropped; a function merely covered
+by an edited test keeps its cached verdicts, though the edited tests are still measured again so
+a touched function sees the right ones:
 
     mutation_plan.py run --base origin/main      # plan, drop, `mutmut run`, repeat once if needed
     mutation_plan.py plan --base origin/main     # read-only: what would be dropped, and why
@@ -24,8 +27,8 @@ them), instead of re-running every mutant for a bump that touches no function. T
 (`pytest.ini`, `tool.pytest`, the root conftest) still runs in full.
 Likewise `unmutated-change = "defer"`: a change to a module mutmut does not mutate then resets
 nothing in a pull request (the nightly campaign re-tests what it reaches), instead of every function
-covered by a test that imports it, however indirectly. The functions the diff touches, and those
-whose tests it changes, are still re-tested and judged.
+covered by a test that imports it, however indirectly. The functions the diff touches are still
+re-tested and judged.
 A test file git sees renamed with its content unchanged (a folder of tests moved into bricks) is
 the same tests: the cache follows it to its new path, nothing it covered is reset, and nothing is
 measured again. A rename that also edits the file is a changed test, as ever; a conftest or helper
@@ -64,8 +67,10 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
 )  # siblings by bare name, also when imported as scripts.<name>
+from check_mutation_ratchet import function_ranges  # noqa: E402
 from gate_config import load_settings  # noqa: E402
 from gate_timing import step  # noqa: E402
+from gitdiff import touched_names  # noqa: E402
 
 try:  # Python 3.11+; older interpreters fall back to a full run rather than guessing
     import tomllib
@@ -131,6 +136,9 @@ class Inputs:  # pylint: disable=too-many-instance-attributes  # a record: one f
         False  # unmutated-change = "defer": the nightly run re-tests them
     )
     renamed: tuple[tuple[str, str], ...] = ()  # (old, new) test files moved with no change
+    touched: frozenset[tuple[str, str]] | None = (
+        None  # (module, qualified name) of the mutated functions the diff touches; None: not known
+    )
 
 
 @dataclass(frozen=True)
@@ -240,6 +248,12 @@ def _incremental(inputs: Inputs) -> Plan:
 
     reset = _functions_covered_by(by_function, domain.stale)
     reset |= _functions_reading_data(inputs, by_function)
+    reset, left_alone = _touched_only(reset, inputs.touched)
+    if left_alone:
+        domain.note(
+            f"{left_alone} function(s) covered by a changed test but not touched by the diff: "
+            f"not re-tested (only touched functions are judged)"
+        )
     return Plan(
         "incremental",
         tuple(domain.reasons),
@@ -249,6 +263,30 @@ def _incremental(inputs: Inputs) -> Plan:
         domain.second_pass or bool(added),
         inputs.renamed,
     )
+
+
+def _touched_only(
+    reset: set[str], touched: frozenset[tuple[str, str]] | None
+) -> tuple[set[str], int]:
+    """(the functions to re-test, how many were left alone).
+
+    Only a function the diff touches is judged, so only its verdicts need to be fresh; the others
+    would be re-proved for nothing. The tests a change staled are still re-measured, which is what
+    keeps a touched function's own coverage right. With *touched* unknown, nothing is narrowed.
+    """
+    if touched is None:
+        return reset, 0
+    kept = {fn for fn in reset if _function_key(fn) in touched}
+    return kept, len(reset) - len(kept)
+
+
+def _function_key(mangled: str) -> tuple[str, str]:
+    """'pkg.mod.x_load' -> ('pkg.mod', 'load'); 'pkg.mod.xǁKǁrun' -> ('pkg.mod', 'K.run')."""
+    module, name = split_mangled(mangled)
+    if name.startswith("xǁ"):
+        _marker, klass, method = name.split("ǁ", 2)
+        return module, f"{klass}.{method}"
+    return module, name[2:] if name.startswith("x_") else name
 
 
 def _classify(ctx: _Context, status: str, path: str, domain: _Domain) -> None:
@@ -607,6 +645,27 @@ def _mutation_settings(root: Path) -> dict:
         return {}
 
 
+def _touched_functions(
+    root: Path, base: str, mutated: frozenset[str]
+) -> frozenset[tuple[str, str]] | None:
+    """The mutated functions the diff touches, as (module, qualified name); None if git cannot say.
+
+    The same functions the ratchet will judge, found the same way.
+    """
+    if not _git(root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}").strip():
+        return (
+            None  # git reports its errors as "nothing changed", which would narrow everything away
+        )
+    try:
+        ranges: dict[str, tuple[int, int]] = {}
+        for rel in sorted(mutated):
+            ranges.update(function_ranges(root, rel))
+        names = touched_names(root, base, ranges)
+    except Exception:  # noqa: BLE001  # unknown means no narrowing, never a wrong plan
+        return None
+    return frozenset((_module_of(rel), qual) for rel, qual in (n.split("::", 1) for n in names))
+
+
 def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, list[str], list[str]]:
     new_doc = _pyproject(
         (root / "pyproject.toml").read_text() if (root / "pyproject.toml").exists() else ""
@@ -644,6 +703,7 @@ def collect_inputs(root: Path, base: str, mutants_dir: Path) -> tuple[Inputs, li
         sources=sources,
         changed_sections=changed_sections(old_doc, new_doc) if old_doc else (),
         graph=ImportGraph(graph, {f: by_file.get(f, set()) for f in selection}),
+        touched=_touched_functions(root, base, mutated),
     )
     return (
         inputs,

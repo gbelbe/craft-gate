@@ -8,7 +8,13 @@ Feature: Moving a test file does not cost a mutation re-run
     Then the plan re-tests no function
     And the cache names those tests after tests/brick/test_a.py
 
-  Scenario: a test file moved and edited
+  Scenario: a test file moved and edited, covering a function the change does not touch
     Given a mutation cache that knows the tests of tests/unit/test_a.py
     When tests/unit/test_a.py is moved to tests/brick/test_a.py and edited
+    Then the plan measures those tests again
+    And the plan re-tests no function
+
+  Scenario: a test file moved and edited, covering a function the change touches
+    Given a mutation cache that knows the tests of tests/unit/test_a.py
+    When tests/unit/test_a.py is moved to tests/brick/test_a.py and edited, and the function it covers is edited too
     Then the plan re-tests the function those tests cover

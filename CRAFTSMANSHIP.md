@@ -446,9 +446,10 @@ checks a flat floor on the current tree rather than a base-vs-head
 comparison like the complexity ratchet.
 
 **Runs are diff-scoped, not whole-campaign.** `scripts/mutation_plan.py run` drops only the cached
-verdicts the diff can have staled — the functions a changed test, fixture, data file or unmutated
-helper reaches — then runs `mutmut run`, which re-tests exactly those and any function whose source
-changed. A full campaign happens on the first initialisation of a repo and on cache-wide causes
+verdicts the diff can have staled and that a verdict needs — the touched functions a changed test, fixture,
+data file or unmutated helper reaches — then runs `mutmut run`, which re-tests exactly those and any function
+whose source changed. A function merely covered by an edited test is not touched, so it is not judged and keeps
+its cached verdicts; the edited tests are still measured again, so a touched function sees the right ones. A full campaign happens on the first initialisation of a repo and on cache-wide causes
 only. Test files you add are measured on a first pass and their functions re-tested on a second.
 Only a function the diff touches is judged: one that is merely re-tested because its tests changed is
 not, and nothing is stored between runs. A repo may set `[mutation] unmutated-change = "defer"` so that a change to a

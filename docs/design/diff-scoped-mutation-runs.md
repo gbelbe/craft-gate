@@ -44,11 +44,17 @@ list that merely got longer. Then a plain `mutmut run` does the work. The finger
 the exact scheme before it is touched; if the cache does not look like mutmut 3.8's, or planning fails for
 any reason, the run falls back to a full campaign, so a wrong plan costs time and never a wrong verdict.
 
-**Judging what was re-tested.** Only the functions the diff touches are judged, against the threshold. A
-function re-tested because its tests changed was not touched, so it is not held to anything and no score is
-stored for it. (The ratchet used to refuse a test change that lowered such a function's score, against a recorded
-baseline; that rule and the baseline file are gone. The planner still re-tests those functions, which keeps the
-cache fresh but is no longer needed for a verdict: narrowing it to the touched functions is a later change.)
+**Judging what was re-tested.** Only the functions the diff touches are judged, against the threshold, so only
+their verdicts need to be fresh. The planner therefore drops a function's verdicts only when a changed test,
+fixture, data file or unmutated module reaches it *and* the diff touches it (the touched functions are found the
+way the ratchet finds them: the lines the diff changed against the functions' line ranges). A function that is
+only covered by an edited test keeps its cached verdicts and is not judged. The tests the change staled are still
+forgotten and measured again, whatever they cover: that is what keeps a touched function's own coverage right,
+including a test edited to cover it. A touched function needs the reset even when mutmut's hash of it did not
+change (a whitespace-only touch), because the tests that kill its mutants may have. When the touched functions
+cannot be told (git cannot resolve the base), nothing is narrowed and the plan is the wider one. A mutant still
+without a verdict after the run (the run was interrupted, or a test failed to collect) refuses the touched
+function it belongs to, rather than being ignored.
 
 **Measured**, on the same consumer repo narrowed to one mutated file (654 mutants): first initialisation
 37 s; after editing one test file, 16 s, re-testing 89 mutants (14%), with all 654 verdicts present and
