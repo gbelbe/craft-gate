@@ -69,3 +69,20 @@ def run_main(monkeypatch: pytest.MonkeyPatch) -> Callable[..., int]:
         return module.main()
 
     return run
+
+
+def record_real_run(root: Path, out: Path) -> None:
+    """Run a throwaway project's tests with per-test coverage, then record its test-impact map."""
+    import test_impact  # noqa: PLC0415
+
+    command = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--cov=pkg"]
+    run = subprocess.run(
+        [*command, "--cov-context=test", "tests"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    coverage, path = str(root / ".coverage"), str(root)
+    test_impact.main(["record", "--coverage", coverage, "--out", str(out), "--path", path])

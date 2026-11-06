@@ -13,6 +13,7 @@ reading to use the tool. For how the pieces fit together, start with
 | Patch coverage | [docs/design/patch-coverage.md](docs/design/patch-coverage.md) |
 | Mutation ratchet | [docs/design/mutation-ratchet.md](docs/design/mutation-ratchet.md) |
 | Mutation runs on changed lines | [docs/design/mutation-changed-lines.md](docs/design/mutation-changed-lines.md) |
+| Test impact: run only the test files a change can affect | [docs/design/test-impact.md](docs/design/test-impact.md) |
 | Behaviour coverage (Gherkin scenarios cover the changed lines) | [docs/design/behaviour-coverage.md](docs/design/behaviour-coverage.md) |
 | The independent reviewer (advisory design review and the craft-reviewer subagent) | [docs/design/reviewer.md](docs/design/reviewer.md) |
 | Reporting (the PR comment and SARIF export) | [docs/design/reporting.md](docs/design/reporting.md) |

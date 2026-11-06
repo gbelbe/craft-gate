@@ -56,3 +56,44 @@ def test_the_coverage_jobs_leave_test_files_out_of_the_measurement(job) -> None:
 
     assert "steps.gate.outputs.exclude" in diff_cover["run"]
     assert "set -f" in diff_cover["run"]  # the globs are diff-cover's, not the shell's
+
+
+TEST_IMPACT = yaml.safe_load("jobs:\n" + (ROOT / "templates" / "test-impact.yml").read_text())[
+    "jobs"
+]
+
+
+def _impact_steps() -> dict[str, dict]:
+    return {s["name"]: s for s in TEST_IMPACT["tests"]["steps"] if "name" in s}
+
+
+def test_the_test_impact_template_runs_everything_outside_a_pull_request() -> None:
+    pick = _impact_steps()["Choose the test files this change can affect"]["run"]
+
+    assert 'if [ "${{ github.event_name }}" != "pull_request" ]' in pick
+    assert "targets=tests" in pick  # the main branch and the merge queue run the whole suite
+
+
+def test_the_test_impact_template_runs_everything_when_the_selection_cannot_narrow() -> None:
+    pick = _impact_steps()["Choose the test files this change can affect"]["run"]
+
+    assert 'if [ "$picked" = "ALL" ]' in pick
+    assert "scripts/test_impact.py select" in pick
+
+
+def test_the_test_impact_template_records_the_map_only_on_the_main_branch() -> None:
+    steps = _impact_steps()
+    on_main = (
+        "github.event_name == 'push' && github.ref_name == github.event.repository.default_branch"
+    )
+
+    assert steps["Record which test ran which line"]["if"] == on_main
+    assert steps["Keep the map for the pull requests that follow"]["if"] == on_main
+    assert "--cov-context=test" in steps["Run the tests"]["run"]
+
+
+def test_the_test_impact_template_names_the_merge_queue() -> None:
+    text = (ROOT / "templates" / "test-impact.yml").read_text()
+
+    assert "merge_group:" in text
+    assert "fetch-depth: 0" in text
