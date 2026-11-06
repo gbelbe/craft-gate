@@ -65,7 +65,7 @@ def world(repo):
 
 
 def _save(world, when_made) -> None:
-    world.impact = ti.build_map(EXECUTED, world.repo.sha(), when_made)
+    world.impact = ti.build_map(EXECUTED, world.repo.sha("HEAD^{tree}"), when_made)
     world.map_path.write_text(json.dumps(world.impact))
 
 
