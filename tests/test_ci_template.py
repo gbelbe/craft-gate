@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+
 import pytest
 import yaml
 from conftest import ROOT
@@ -71,7 +74,7 @@ def test_the_test_impact_template_runs_everything_outside_a_pull_request() -> No
     pick = _impact_steps()["Choose the test files this change can affect"]["run"]
 
     assert 'if [ "${{ github.event_name }}" != "pull_request" ]' in pick
-    assert "targets=tests" in pick  # the main branch and the merge queue run the whole suite
+    assert 'echo "targets=tests"' in pick  # the merge queue and the main branch run the whole suite
 
 
 def test_the_test_impact_template_runs_everything_when_the_selection_cannot_narrow() -> None:
@@ -81,22 +84,74 @@ def test_the_test_impact_template_runs_everything_when_the_selection_cannot_narr
     assert "scripts/test_impact.py select" in pick
 
 
-def test_the_test_impact_template_records_the_map_only_on_the_main_branch() -> None:
+def test_the_test_impact_template_records_the_map_on_each_full_run() -> None:
     steps = _impact_steps()
-    on_main = (
-        "github.event_name == 'push' && github.ref_name == github.event.repository.default_branch"
-    )
+    full_run = "github.event_name != 'pull_request' && steps.tested.outputs.queued != 'true'"
 
-    assert steps["Record which test ran which line"]["if"] == on_main
-    assert steps["Keep the map for the pull requests that follow"]["if"] == on_main
+    assert steps["Record which test ran which line"]["if"] == full_run
+    assert steps["Keep the map for the pull requests that follow"]["if"] == full_run
     assert "--cov-context=test" in steps["Run the tests"]["run"]
 
 
-def test_the_test_impact_template_uploads_the_map_although_its_name_starts_with_a_dot() -> None:
-    keep = _impact_steps()["Keep the map for the pull requests that follow"]
+def test_the_test_impact_template_names_the_map_after_its_tree() -> None:
+    steps = _impact_steps()
+    keep = steps["Keep the map for the pull requests that follow"]["with"]
 
-    assert keep["with"]["path"] == ".test-impact.json"
-    assert keep["with"]["include-hidden-files"] is True  # upload-artifact skips dot files otherwise
+    assert keep["name"] == "test-impact-map-${{ steps.tree.outputs.tree }}"
+    assert keep["path"] == ".test-impact.json"
+    assert keep["include-hidden-files"] is True  # upload-artifact skips dot files otherwise
+
+
+def _run_skip_step(tmp_path, gh_script: str) -> str:
+    """Run the push-skip step's script with a stub `gh`; what it wrote to its outputs file."""
+    stub = tmp_path / "gh"
+    stub.write_text("#!/bin/bash\n" + gh_script)
+    stub.chmod(0o755)
+    outputs = tmp_path / "outputs"
+    outputs.touch()
+    script = _impact_steps()["Skip a push whose content the merge queue already tested"]["run"]
+    subprocess.run(
+        ["bash", "-e", "-c", script],
+        check=True,
+        env={
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "GITHUB_OUTPUT": str(outputs),
+            "GITHUB_STEP_SUMMARY": str(tmp_path / "summary"),
+            "TREE": "abc123",
+            "GITHUB_REPOSITORY": "o/r",
+        },
+    )
+    return outputs.read_text()
+
+
+def test_a_push_skips_the_suite_when_an_artifact_names_its_tree(tmp_path) -> None:
+    assert _run_skip_step(tmp_path, "echo 1") == "queued=true\n"
+
+
+def test_a_push_runs_the_suite_when_no_artifact_names_its_tree(tmp_path) -> None:
+    assert _run_skip_step(tmp_path, "echo 0") == ""
+
+
+def test_a_push_runs_the_suite_when_the_artifact_lookup_fails(tmp_path) -> None:
+    assert _run_skip_step(tmp_path, "exit 1") == ""
+
+
+def test_the_test_impact_template_runs_the_suite_unless_the_queue_already_did() -> None:
+    steps = _impact_steps()
+
+    expected = "steps.pick.outputs.targets != '' && steps.tested.outputs.queued != 'true'"
+    assert steps["Run the tests"]["if"] == expected
+    assert steps["Skip a push whose content the merge queue already tested"]["if"] == (
+        "github.event_name == 'push'"
+    )
+
+
+def test_the_test_impact_template_restores_the_newest_map_for_a_pull_request() -> None:
+    find = _impact_steps()["Find the map of the last full run"]
+
+    assert find["if"] == "github.event_name == 'pull_request'"
+    assert 'startswith("test-impact-map-")' in find["run"]
+    assert "gh run download" in find["run"]
 
 
 def test_the_test_impact_template_names_the_merge_queue() -> None:

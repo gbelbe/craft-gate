@@ -1,20 +1,23 @@
-# Run only the tests a pull request can affect, and the whole suite when a change lands. A fragment
-# to merge into your CI workflow (the `jobs:` and `on:` below), not a complete file.
+# Run only the tests a pull request can affect, and the whole suite once, before a change lands. A
+# fragment to merge into your CI workflow (the `jobs:` and `on:` below), not a complete file.
 #
 # How it works (docs/design/test-impact.md):
-#   - a push to the main branch runs the whole suite with per-test coverage contexts and records which
-#     test file ran which line (scripts/test_impact.py record), keeping the map as an artifact;
+#   - the merge queue runs the whole suite on the change about to land, with per-test coverage contexts,
+#     and records which test file ran which line (scripts/test_impact.py record). The map is kept as an
+#     artifact named for the tree it was made on. Turn the queue on for the main branch (Settings >
+#     Rules > "Require merge queue") and make the `tests` job required: a change the selection missed
+#     cannot reach the main branch;
+#   - a push to the main branch finds that artifact by its tree (the content that was tested, which a
+#     squash merge keeps) and runs nothing more. With no artifact for the tree (a push that skipped the
+#     queue, a repository without one) it runs the whole suite and records the map itself;
 #   - a pull request restores the latest map and runs only the test files its diff can affect
 #     (scripts/test_impact.py select). Without a usable map, or for a change it cannot place (a lock
-#     file, a workflow, conftest.py), it runs everything;
-#   - the merge queue runs the whole suite on the commit about to land. Turn the queue on for the main
-#     branch (Settings > Rules > "Require merge queue") and make the `tests` job required: a change the
-#     selection missed cannot reach the main branch.
+#     file, a workflow, conftest.py), it runs everything.
 #
 # Add to your workflow's `on:`:
 #   merge_group:
 #
-# The checkout must be deep (fetch-depth: 0): the map names the commit it was recorded at, and the
+# The checkout must be deep (fetch-depth: 0): the map names the tree it was recorded on, and the
 # selection reads the diff against it.
 
   tests:
@@ -22,7 +25,7 @@
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read # to download the map from the main branch's last run
+      actions: read # to find and download the map
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,20 +34,29 @@
       - name: Install the project and its test tools
         run: uv sync --extra dev # replace with your install
 
-      - name: Restore the map of the last full run
+      - name: Find the map of the last full run
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(gh run list --workflow ci.yml --branch "${{ github.event.repository.default_branch }}" \
-            --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          if [ -n "$run_id" ]; then gh run download "$run_id" --name test-impact-map --dir . || true; fi
+          read -r run_id name < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq \
+            '[.artifacts[] | select((.name | startswith("test-impact-map-")) and (.expired | not))][0]
+             | select(. != null) | "\(.workflow_run.id) \(.name)"')
+          if [ -z "${run_id:-}" ]; then
+            echo "No map found: every test runs." >> "$GITHUB_STEP_SUMMARY"
+          elif ! gh run download "$run_id" --name "$name" --dir .; then
+            echo "::warning::The map $name of run $run_id could not be downloaded: every test runs."
+          fi
+
+      - name: Name the content under test
+        id: tree
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
 
       - name: Choose the test files this change can affect
         id: pick
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "targets=tests" >> "$GITHUB_OUTPUT"      # the main branch and the merge queue run all
+            echo "targets=tests" >> "$GITHUB_OUTPUT"  # the queue and the main branch run everything
             exit 0
           fi
           picked=$(python3 scripts/test_impact.py select)
@@ -58,19 +70,33 @@
             echo "Selected $(echo "$picked" | wc -l | tr -d ' ') test file(s)." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Skip a push whose content the merge queue already tested
+        id: tested
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TREE: ${{ steps.tree.outputs.tree }}
+        run: |
+          named=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=test-impact-map-$TREE" \
+            --jq '[.artifacts[] | select(.expired | not)] | length') || named=0
+          if [ "${named:-0}" -gt 0 ]; then
+            echo "queued=true" >> "$GITHUB_OUTPUT"
+            echo "The merge queue already ran every test on this tree." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Run the tests
-        if: steps.pick.outputs.targets != ''
+        if: steps.pick.outputs.targets != '' && steps.tested.outputs.queued != 'true'
         run: uv run pytest ${{ steps.pick.outputs.targets }} --cov --cov-context=test -q
 
       - name: Record which test ran which line
-        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        if: github.event_name != 'pull_request' && steps.tested.outputs.queued != 'true'
         run: uv run python scripts/test_impact.py record
 
       - name: Keep the map for the pull requests that follow
-        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        if: github.event_name != 'pull_request' && steps.tested.outputs.queued != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: test-impact-map
+          name: test-impact-map-${{ steps.tree.outputs.tree }}
           path: .test-impact.json
-          include-hidden-files: true  # the map's name starts with a dot; v4+ skips such files
+          include-hidden-files: true # the map's name starts with a dot; v4+ skips such files
           retention-days: 14

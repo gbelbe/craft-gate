@@ -84,7 +84,7 @@ def test_the_map_keeps_what_each_test_file_ran_and_drops_what_ran_outside_any_te
     built = ti.build_map(EXECUTED, "abc", NOW)
 
     assert built["version"] == ti.MAP_VERSION
-    assert built[ti.COMMIT] == "abc"
+    assert built[ti.TREE] == "abc"
     assert built["created"] == NOW.isoformat()
     assert built[ti.SOURCES] == {SOURCE: {TEST_F: [[5, 5]], TEST_G: [[9, 9]]}}
 
@@ -100,7 +100,7 @@ def test_the_lines_of_one_test_file_are_gathered_across_its_tests():
 def _map_file(tmp_path, **changes):
     data = {
         ti.VERSION: ti.MAP_VERSION,
-        ti.COMMIT: "abc",
+        ti.TREE: "abc",
         ti.CREATED: NOW.isoformat(),
         ti.SOURCES: {},
     }
@@ -111,7 +111,7 @@ def _map_file(tmp_path, **changes):
 
 
 def test_a_fresh_map_is_loaded(tmp_path):
-    assert ti.load_map(_map_file(tmp_path), 14, NOW)[ti.COMMIT] == "abc"
+    assert ti.load_map(_map_file(tmp_path), 14, NOW)[ti.TREE] == "abc"
 
 
 def test_a_map_exactly_as_old_as_the_limit_is_still_used(tmp_path):
@@ -190,10 +190,8 @@ def test_a_path_under_a_tests_directory_is_a_test_path(path, expected):
 
 @pytest.fixture
 def project(repo):
-    commit = repo.commit(
-        "base", pkg__mod_py=MODULE, tests__test_f_py=TESTS_F, tests__test_g_py=TESTS_G
-    )
-    impact = ti.build_map(EXECUTED, commit, NOW)
+    repo.commit("base", pkg__mod_py=MODULE, tests__test_f_py=TESTS_F, tests__test_g_py=TESTS_G)
+    impact = ti.build_map(EXECUTED, repo.sha("HEAD^{tree}"), NOW)
     return repo, impact
 
 
@@ -222,7 +220,7 @@ def test_inserting_a_line_between_two_functions_selects_the_tests_around_it(proj
     assert _selected(repo, impact) == {TEST_F, TEST_G}
 
 
-def test_the_line_numbers_of_the_map_commit_hold_after_main_moved_on(project):
+def test_the_line_numbers_of_the_map_tree_hold_after_main_moved_on(project):
     repo, impact = project
     repo.commit("main moves", pkg__mod_py="# a new header\n# and another\n" + MODULE)
     repo.write(SOURCE, ("# a new header\n# and another\n" + MODULE).replace(TIMES_TWO, "x * 3"))
@@ -286,7 +284,7 @@ def test_a_moved_source_file_is_read_against_its_old_path(project):
     assert _selected(repo, impact) == {TEST_G}
 
 
-def test_the_working_tree_is_compared_with_the_commit_of_the_map(project):
+def test_the_working_tree_is_compared_with_the_tree_of_the_map(project):
     repo, impact = project
     repo.write(SOURCE, MODULE.replace(TIMES_TWO, "x * 3"))
     repo.git("add", "-A")
@@ -298,7 +296,7 @@ def test_the_working_tree_is_compared_with_the_commit_of_the_map(project):
 def test_the_main_output_is_one_sorted_test_file_a_line(project, tmp_path, capsys):
     repo, impact = project
     repo.write(SOURCE, MODULE.replace("BASE = 1", "BASE = 2"))
-    fresh = ti.build_map(EXECUTED, impact[ti.COMMIT], datetime.now(UTC))
+    fresh = ti.build_map(EXECUTED, impact[ti.TREE], datetime.now(UTC))
     path = tmp_path / IMPACT_FILE
     path.write_text(json.dumps(fresh))
 
@@ -309,7 +307,7 @@ def test_the_main_output_is_one_sorted_test_file_a_line(project, tmp_path, capsy
 def test_the_map_restored_into_the_checkout_is_not_a_change(project, capsys):
     repo, impact = project
     repo.write(SOURCE, MODULE.replace(PLUS_ONE, PLUS_TWO))
-    fresh = ti.build_map(EXECUTED, impact[ti.COMMIT], datetime.now(UTC))
+    fresh = ti.build_map(EXECUTED, impact[ti.TREE], datetime.now(UTC))
     repo.write(ti.DEFAULT_MAP, json.dumps(fresh))
 
     assert (
@@ -320,7 +318,7 @@ def test_the_map_restored_into_the_checkout_is_not_a_change(project, capsys):
 
 def test_the_main_output_is_all_without_a_usable_map(project, tmp_path, capsys):
     repo, impact = project
-    old = ti.build_map(EXECUTED, impact[ti.COMMIT], NOW - timedelta(days=60))
+    old = ti.build_map(EXECUTED, impact[ti.TREE], NOW - timedelta(days=60))
     path = tmp_path / IMPACT_FILE
     path.write_text(json.dumps(old))
     args = [SELECT, MAP_FLAG, str(path), PATH_FLAG, str(repo.path)]
@@ -331,7 +329,28 @@ def test_the_main_output_is_all_without_a_usable_map(project, tmp_path, capsys):
     assert capsys.readouterr().out == "ALL\n"
 
 
-def test_the_main_output_is_all_when_the_commit_of_the_map_is_not_here(project, tmp_path, capsys):
+def test_a_map_made_on_a_tree_still_applies_after_the_change_landed_as_another_commit(project):
+    repo, _ = project
+    repo.git("checkout", "-q", "-b", "queue")
+    repo.commit("the change the queue tested", pkg__mod_py=MODULE + "# more\n")
+    queued = repo.sha()
+    tested = ti.build_map(EXECUTED, repo.sha("HEAD^{tree}"), NOW)
+    repo.git("checkout", "-q", "main")
+    repo.git("merge", "--squash", "queue")  # lands as a new commit holding the tested tree
+    repo.commit_staged("squashed")
+
+    assert repo.sha() != queued
+    assert _selected(repo, tested) == set()  # no change since the tree the map was made on
+
+
+def test_a_commit_id_is_not_a_tree_of_this_checkout(project):
+    repo, impact = project
+
+    assert ti.tree_present(impact[ti.TREE], repo.path)
+    assert not ti.tree_present(repo.sha(), repo.path)
+
+
+def test_the_main_output_is_all_when_the_tree_of_the_map_is_not_here(project, tmp_path, capsys):
     repo, impact = project
     gone = ti.build_map(EXECUTED, "0" * 40, datetime.now(UTC))
     path = tmp_path / IMPACT_FILE
@@ -385,7 +404,7 @@ def test_git_failing_to_say_what_changed_runs_every_test_and_says_so(
     project, tmp_path, monkeypatch, capsys
 ):
     repo, impact = project
-    fresh = ti.build_map(EXECUTED, impact[ti.COMMIT], datetime.now(UTC))
+    fresh = ti.build_map(EXECUTED, impact[ti.TREE], datetime.now(UTC))
     path = tmp_path / IMPACT_FILE
     path.write_text(json.dumps(fresh))
     real = ti.git

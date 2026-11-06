@@ -6,10 +6,10 @@
 
 ``record`` reads a coverage data file made with per-test contexts
 (``pytest --cov --cov-context=test``) and writes a small map: for each source file, which test
-files executed which lines, and the commit the run was made at. The run on the main branch makes
-it, a full run every project already does.
+files executed which lines, and the tree (the content, not the commit) the run was made on. The full
+run that lets a change land makes it: the merge queue's, or a push to the main branch.
 
-``select`` compares the working tree with that commit and prints what to run, one test file a line:
+``select`` compares the working tree with that tree and prints what to run, one test file a line:
 
 * a changed source line selects the test files that executed it. A line no test recorded
   (module-level code runs at import, outside any test) selects every test file that touched the
@@ -20,9 +20,9 @@ it, a full run every project already does.
 * a documentation file selects nothing.
 
 The output is ``ALL`` when it cannot narrow: no map, a map that cannot be read or is older than
-``--max-age-days``, or a commit that is not in this checkout. It never selects fewer files than a
-change can affect, only more. The map's line numbers are those of its own commit, so the diff is
-read against that commit and its old side is used: a main branch that has moved on since shifts
+``--max-age-days``, or a tree that is not in this checkout. It never selects fewer files than a
+change can affect, only more. The map's line numbers are those of its own tree, so the diff is
+read against that tree and its old side is used: a main branch that has moved on since shifts
 nothing.
 """
 
@@ -43,8 +43,8 @@ sys.path.insert(
 )  # siblings by bare name, also when imported as scripts.<name>
 from gitdiff import git  # noqa: E402
 
-MAP_VERSION = 1
-VERSION, COMMIT, CREATED, SOURCES = "version", "commit", "created", "sources"  # the map's keys
+MAP_VERSION = 2
+VERSION, TREE, CREATED, SOURCES = "version", "tree", "created", "sources"  # the map's keys
 ALL = "ALL"
 DEFAULT_MAP = ".test-impact.json"
 DEFAULT_MAX_AGE_DAYS = 14
@@ -76,7 +76,7 @@ def covers(ranges: list[list[int]], lines: set[int]) -> bool:
     return any(start <= line <= end for start, end in ranges for line in lines)
 
 
-def build_map(executed: dict[str, dict[int, list[str]]], commit: str, when: datetime) -> dict:
+def build_map(executed: dict[str, dict[int, list[str]]], tree: str, when: datetime) -> dict:
     """The map of a run: *executed* is {source file: {line: [contexts]}}."""
     sources: dict[str, dict[str, list[list[int]]]] = {}
     for source, by_line in executed.items():
@@ -88,7 +88,7 @@ def build_map(executed: dict[str, dict[int, list[str]]], commit: str, when: date
         sources[source] = {test: to_ranges(lines) for test, lines in sorted(per_test.items())}
     return {
         VERSION: MAP_VERSION,
-        COMMIT: commit,
+        TREE: tree,
         CREATED: when.isoformat(),
         SOURCES: sources,
     }
@@ -110,9 +110,9 @@ def repo_relative(file: str, root: Path) -> str:
 
 
 def record(coverage: Path, out: Path, root: Path) -> None:
-    commit = git(["rev-parse", "HEAD"], cwd=root).strip()
+    tree = git(["rev-parse", "HEAD^{tree}"], cwd=root).strip()
     executed = {repo_relative(f, root): v for f, v in read_coverage(coverage).items()}
-    out.write_text(json.dumps(build_map(executed, commit, datetime.now(UTC))) + "\n")
+    out.write_text(json.dumps(build_map(executed, tree, datetime.now(UTC))) + "\n")
 
 
 def load_map(path: Path, max_age_days: int, now: datetime) -> dict | None:
@@ -162,7 +162,7 @@ def tests_for_source(entry: dict[str, list[list[int]]], lines: set[int]) -> set[
 
 
 class Change(NamedTuple):
-    """A file the working tree changed since the map's commit: git's status letter, both paths."""
+    """A file the working tree changed since the map's tree: git's status letter, both paths."""
 
     status: str
     old: str
@@ -177,12 +177,12 @@ NOTHING, ITSELF, SOURCE, EVERYTHING = (
 )  # what a change is
 
 
-def changes_since(commit: str, root: Path) -> list[Change]:
-    """Every file the working tree changed since *commit*; a failing git call raises.
+def changes_since(tree: str, root: Path) -> list[Change]:
+    """Every file the working tree changed since *tree*; a failing git call raises.
 
     A file not yet added to git counts as added: a check run before it is committed misses nothing.
     """
-    out = git(["diff", "--name-status", "-M", commit], cwd=root)
+    out = git(["diff", "--name-status", "-M", tree], cwd=root)
     rows = []
     for row in out.splitlines():
         fields = row.split("\t")
@@ -218,7 +218,7 @@ def affected(root: Path, impact: dict, change: Change) -> set[str] | None:
     if entry is None:
         return set()  # never run by a test, or new: its tests are the changed ones
     diff = git(
-        ["diff", "-U0", "-M", "--no-color", impact[COMMIT], "--", change.old, change.new], cwd=root
+        ["diff", "-U0", "-M", "--no-color", impact[TREE], "--", change.old, change.new], cwd=root
     )
     return tests_for_source(entry, old_side_lines(diff))
 
@@ -230,7 +230,7 @@ def select(root: Path, impact: dict, ignore: frozenset[str] = frozenset()) -> se
     checkout, where git sees it as a new file.
     """
     chosen: set[str] = set()
-    for change in changes_since(impact[COMMIT], root):
+    for change in changes_since(impact[TREE], root):
         if change.new in ignore:
             continue
         picked = affected(root, impact, change)
@@ -246,14 +246,15 @@ def ignore_key(path: Path, root: Path) -> str:
     return resolved.relative_to(root).as_posix() if resolved.is_relative_to(root) else str(path)
 
 
-def commit_present(commit: str, root: Path) -> bool:
-    return bool(git(["cat-file", "-t", commit], cwd=root, check=False).strip())
+def tree_present(tree: str, root: Path) -> bool:
+    """Whether this checkout holds a tree of that id (a commit's or a blob's id is not one)."""
+    return git(["cat-file", "-t", tree], cwd=root, check=False).strip() == "tree"
 
 
 def run_select(root: Path, map_path: Path, max_age_days: int, now: datetime) -> str:
     """What `select` prints: ALL, or one test file a line. Anything that goes wrong is ALL."""
     impact = load_map(map_path, max_age_days, now)
-    if impact is None or not commit_present(impact[COMMIT], root):
+    if impact is None or not tree_present(impact[TREE], root):
         return ALL
     try:
         picked = select(root, impact, frozenset({ignore_key(map_path, root)}))

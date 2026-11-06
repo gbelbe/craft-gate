@@ -10,10 +10,14 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Changed:** the test-impact map is keyed on the **tree** (the tested content) instead of the commit, and
+  the merge queue records it, so the whole suite runs once per change. A push to the main branch finds the
+  map of its own tree (`test-impact-map-<tree>`) and runs nothing more; without one (a push past the queue,
+  no queue) it runs the whole suite and records it. Maps of the earlier format (version 1) are refused: a
+  pull request runs everything until a new one exists. Breaking for projects that adopted the template.
 - **Fixed:** `templates/test-impact.yml` uploaded no map: `.test-impact.json` starts with a dot and
-  `actions/upload-artifact` skips such files, so the step warned and every pull request ran everything.
-  The upload now sets `include-hidden-files: true`.
-- **Added:** `scripts/test_impact.py`, and `templates/test-impact.yml` to wire it. A full run on the main branch
+  `actions/upload-artifact` skips such files. The upload sets `include-hidden-files: true`.
+- **Added:** `scripts/test_impact.py`, and `templates/test-impact.yml` to wire it. A full run
   records, per test file, the source lines it executed (`record`, from `--cov-context=test`); a pull request
   runs only the test files its diff can affect (`select`), and everything for a change it cannot place or
   when the map is missing or stale. The template runs the whole suite in the merge queue, so a change the
