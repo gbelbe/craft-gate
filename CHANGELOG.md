@@ -10,6 +10,11 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Added:** `scripts/test_impact.py`, and `templates/test-impact.yml` to wire it. A full run on the main branch
+  records, per test file, the source lines it executed (`record`, from `--cov-context=test`); a pull request
+  runs only the test files its diff can affect (`select`), and everything for a change it cannot place or
+  when the map is missing or stale. The template runs the whole suite in the merge queue, so a change the
+  selection missed cannot land. Opt-in: nothing runs unless the workflow adds the job.
 - **Replaced (breaking):** the mutation planner. `scripts/mutation_run.py` empties `mutants/`, generates
   every mutant, keeps those whose mutated line is a line the diff changed and has `mutmut run` test only them;
   `check_mutation_ratchet.py` judges exactly those (it reads `mutants/mutation-selection.json`). Nothing is

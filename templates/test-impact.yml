@@ -1,0 +1,75 @@
+# Run only the tests a pull request can affect, and the whole suite when a change lands. A fragment
+# to merge into your CI workflow (the `jobs:` and `on:` below), not a complete file.
+#
+# How it works (docs/design/test-impact.md):
+#   - a push to the main branch runs the whole suite with per-test coverage contexts and records which
+#     test file ran which line (scripts/test_impact.py record), keeping the map as an artifact;
+#   - a pull request restores the latest map and runs only the test files its diff can affect
+#     (scripts/test_impact.py select). Without a usable map, or for a change it cannot place (a lock
+#     file, a workflow, conftest.py), it runs everything;
+#   - the merge queue runs the whole suite on the commit about to land. Turn the queue on for the main
+#     branch (Settings > Rules > "Require merge queue") and make the `tests` job required: a change the
+#     selection missed cannot reach the main branch.
+#
+# Add to your workflow's `on:`:
+#   merge_group:
+#
+# The checkout must be deep (fetch-depth: 0): the map names the commit it was recorded at, and the
+# selection reads the diff against it.
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # to download the map from the main branch's last run
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the project and its test tools
+        run: uv sync --extra dev # replace with your install
+
+      - name: Restore the map of the last full run
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --workflow ci.yml --branch "${{ github.event.repository.default_branch }}" \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+          if [ -n "$run_id" ]; then gh run download "$run_id" --name test-impact-map --dir . || true; fi
+
+      - name: Choose the test files this change can affect
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "targets=tests" >> "$GITHUB_OUTPUT"      # the main branch and the merge queue run all
+            exit 0
+          fi
+          picked=$(python3 scripts/test_impact.py select)
+          if [ "$picked" = "ALL" ]; then
+            echo "targets=tests" >> "$GITHUB_OUTPUT"
+          elif [ -z "$picked" ]; then
+            echo "targets=" >> "$GITHUB_OUTPUT"
+            echo "No test can be affected by this change." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "targets=$(echo "$picked" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+            echo "Selected $(echo "$picked" | wc -l | tr -d ' ') test file(s)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Run the tests
+        if: steps.pick.outputs.targets != ''
+        run: uv run pytest ${{ steps.pick.outputs.targets }} --cov --cov-context=test -q
+
+      - name: Record which test ran which line
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        run: uv run python scripts/test_impact.py record
+
+      - name: Keep the map for the pull requests that follow
+        if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-impact-map
+          path: .test-impact.json
+          retention-days: 14
