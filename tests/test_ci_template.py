@@ -92,6 +92,13 @@ def test_the_test_impact_template_records_the_map_only_on_the_main_branch() -> N
     assert "--cov-context=test" in steps["Run the tests"]["run"]
 
 
+def test_the_test_impact_template_uploads_the_map_although_its_name_starts_with_a_dot() -> None:
+    keep = _impact_steps()["Keep the map for the pull requests that follow"]
+
+    assert keep["with"]["path"] == ".test-impact.json"
+    assert keep["with"]["include-hidden-files"] is True  # upload-artifact skips dot files otherwise
+
+
 def test_the_test_impact_template_names_the_merge_queue() -> None:
     text = (ROOT / "templates" / "test-impact.yml").read_text()
 

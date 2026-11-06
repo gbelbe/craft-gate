@@ -10,6 +10,9 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** `templates/test-impact.yml` uploaded no map: `.test-impact.json` starts with a dot and
+  `actions/upload-artifact` skips such files, so the step warned and every pull request ran everything.
+  The upload now sets `include-hidden-files: true`.
 - **Added:** `scripts/test_impact.py`, and `templates/test-impact.yml` to wire it. A full run on the main branch
   records, per test file, the source lines it executed (`record`, from `--cov-context=test`); a pull request
   runs only the test files its diff can affect (`select`), and everything for a change it cannot place or
