@@ -5,7 +5,6 @@ from __future__ import annotations
 import check_complexity_ratchet as complexity
 import check_refactor_first as refactor_first
 import gitdiff
-import mutation_plan
 from craftcov_core.discovery import discover_python_files
 
 NAME = "café.py"
@@ -58,9 +57,3 @@ def test_refactor_first_does_not_crash_on_the_accented_file(repo, run_main) -> N
     code = run_main(refactor_first, "--base", MAIN, "--path", str(repo.path))
 
     assert code in (0, 1)  # a verdict, not a FileNotFoundError
-
-
-def test_the_mutation_plan_reads_the_accented_change(repo) -> None:
-    accented_change(repo)
-
-    assert ("A", NAME) in mutation_plan.read_changes(repo.path, MAIN)

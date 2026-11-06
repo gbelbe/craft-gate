@@ -167,20 +167,6 @@ Feature: Every value in craft-gate.toml changes what a gate does
     When the workflow asks for the mutation gate
     Then the workflow is told threshold=65
 
-  @key:mutation.dependency-change
-  Scenario: the mutation ratchet publishes whether a dependency change keeps its cache
-    Given a [tool.mutmut] section exists
-    And the config sets mutation.dependency-change to "keep"
-    When the workflow asks for the mutation gate
-    Then the workflow is told dependency-change=keep
-
-  @key:mutation.unmutated-change
-  Scenario: the mutation ratchet publishes whether a change to an unmutated module is left to the nightly run
-    Given a [tool.mutmut] section exists
-    And the config sets mutation.unmutated-change to "defer"
-    When the workflow asks for the mutation gate
-    Then the workflow is told unmutated-change=defer
-
   @key:mutation.enabled
   Scenario: the mutation ratchet can be switched off
     Given the config sets mutation.enabled to false

@@ -101,22 +101,22 @@ def _cost(world) -> None:
     assert "| m.x_f__mutmut | 4.50 |" in world.report
 
 
-@given("a mutation plan that needs a second pass")
-def _two_passes(world, monkeypatch) -> None:
-    import mutation_plan
+@given("a mutation run with a mutant to test")
+def _a_mutant(monkeypatch) -> None:
+    import mutation_run
 
-    decided = mutation_plan.Plan(mode="incremental", needs_second_pass=True)
-    monkeypatch.setattr(mutation_plan, "collect_inputs", lambda *_: (None, [], []))
-    monkeypatch.setattr(mutation_plan, "plan", lambda _inputs: decided)
-    monkeypatch.setattr(mutation_plan, "apply", lambda *_: 0)
-    monkeypatch.setattr(mutation_plan, "_mutmut_run", lambda _root: 0)
+    monkeypatch.setattr(mutation_run, "select", lambda *_: ["pkg.mod.x_f__mutmut_1"])
+    monkeypatch.setattr(
+        mutation_run.subprocess, "run", lambda *_a, **_k: SimpleNamespace(returncode=0)
+    )
 
 
 @when("the mutation run executes")
-def _mutation_run(world) -> None:
-    import mutation_plan
+def _mutation_run(world, monkeypatch) -> None:
+    import mutation_run
 
-    mutation_plan.run(world.root, "main", world.root / "mutants")
+    monkeypatch.chdir(world.root)
+    mutation_run.run(world.root, "main")
 
 
 @then(parsers.parse('the trace names the stages "{first}" and "{second}"'))

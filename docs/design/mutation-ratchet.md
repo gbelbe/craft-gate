@@ -23,13 +23,10 @@ default local runner and CI job then run mutation testing on every full/PR run.
 Mark those tests with `@pytest.mark.mutation`. Name the test files explicitly,
 not only `-m mutation`, because mutmut must not collect unrelated test modules
 before applying the marker. `gate_config.py` checks the two agree: the marker is registered, every
-selected file exists, and no file carrying the marker is missing from the list. The normal test job still runs the full suite. The
-mutation cache is incremental:
-mutmut regenerates and retests changed functions, while
-`cache_invalidation_files` plus `on_dependency_change = "rerun"` force a full
-rerun when tests or test configuration change. Scheduled and manually
-dispatched CI runs delete `mutants/` before running, providing a periodic
-fresh campaign. Use the local runner's `--fresh` option for the same behavior.
+selected file exists, and no file carrying the marker is missing from the list. The normal test job still runs the full suite. A
+mutation run starts from an empty `mutants/` and tests only the mutants on the lines the diff changed
+(`scripts/mutation_run.py`; see `mutation-changed-lines.md`), so there is no cache to keep fresh and no
+scheduled full campaign.
 
 The ratchet is per changed function, not aggregate, and the bar is one number: a
 touched function at or above 80% passes, below it is refused, whether the

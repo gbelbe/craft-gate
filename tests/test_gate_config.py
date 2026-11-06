@@ -446,36 +446,12 @@ def test_a_file_named_like_a_test_with_the_suffix_form_is_an_orphan(tmp_path) ->
     assert f"{UNIT}/orphan_test.py" in decision.reason
 
 
-def test_a_mutation_cache_may_be_kept_on_a_dependency_change(tmp_path) -> None:
-    root = project(tmp_path, '[tool.craft-gate.mutation]\ndependency-change = "keep"\n')
-
-    assert cfg.load_settings(root)[cfg.MUTATION]["dependency-change"] == "keep"
-
-
-def test_a_dependency_change_reruns_every_mutant_unless_the_repo_says_otherwise(tmp_path) -> None:
-    assert cfg.load_settings(project(tmp_path))[cfg.MUTATION]["dependency-change"] == "rerun"
-
-
-def test_any_other_dependency_change_policy_is_refused(tmp_path) -> None:
-    root = project(tmp_path, '[tool.craft-gate.mutation]\ndependency-change = "ignore"\n')
-
-    with pytest.raises(cfg.ConfigError, match="dependency-change is not valid"):
-        cfg.load_settings(root)
-
-
-def test_a_change_to_an_unmutated_module_is_retested_unless_the_repo_says_otherwise(
-    tmp_path,
-) -> None:
-    assert cfg.load_settings(project(tmp_path))[cfg.MUTATION]["unmutated-change"] == "retest"
-
-
-def test_a_change_to_an_unmutated_module_may_be_left_to_the_nightly_run(tmp_path) -> None:
-    root = project(tmp_path, '[tool.craft-gate.mutation]\nunmutated-change = "defer"\n')
-
-    assert cfg.load_settings(root)[cfg.MUTATION]["unmutated-change"] == "defer"
-
-
-REMOVED_MUTATION_KEYS = ("improvement", "regression-floor")
+REMOVED_MUTATION_KEYS = (
+    "improvement",
+    "regression-floor",
+    "dependency-change",
+    "unmutated-change",
+)
 
 
 @pytest.mark.parametrize("key", REMOVED_MUTATION_KEYS)
@@ -483,11 +459,4 @@ def test_a_removed_mutation_key_is_refused_by_name(tmp_path, key) -> None:
     root = project(tmp_path, f"[tool.craft-gate.mutation]\n{key} = 20\n")
 
     with pytest.raises(cfg.ConfigError, match=key):
-        cfg.load_settings(root)
-
-
-def test_any_other_unmutated_change_policy_is_refused(tmp_path) -> None:
-    root = project(tmp_path, '[tool.craft-gate.mutation]\nunmutated-change = "skip"\n')
-
-    with pytest.raises(cfg.ConfigError, match="unmutated-change is not valid"):
         cfg.load_settings(root)
