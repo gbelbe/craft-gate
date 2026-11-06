@@ -140,9 +140,12 @@ def test_when_the_touched_functions_are_not_known_nothing_is_narrowed_and_the_pl
     assert not any("not touched by the diff" in r for r in plan.reasons)
 
 
+UNKNOWN_SHAPE = "ster.mod.mystery"  # neither x_name nor xǁClassǁname
+
+
 def test_a_mangled_name_of_a_shape_it_does_not_know_is_never_narrowed_away() -> None:
-    assert mp.qualified_key("ster.mod.mystery") is None
-    assert mp._touched_only({"ster.mod.mystery", LOAD}, frozenset()) == {"ster.mod.mystery"}
+    assert mp.qualified_key(UNKNOWN_SHAPE) is None
+    assert mp._touched_only({UNKNOWN_SHAPE, LOAD}, frozenset()) == {UNKNOWN_SHAPE}
 
 
 def test_the_qualified_key_of_a_function_and_of_a_method() -> None:
