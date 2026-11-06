@@ -11,8 +11,7 @@ it only added a test file. The cause is mutmut's invalidation, read from its 3.8
 observed: with `cache_invalidation_files = ["tests/**/*.py"]` and `on_dependency_change = "rerun"`,
 editing one test file reset the cached verdicts of four functions that test does not cover. The same
 policy also fires on `pyproject.toml`, any lock file and every tracked non-Python file git reports as
-changed since the last full run — including `.mutation-baseline.json`, which the ratchet then rewrote (it no
-longer writes one).
+changed since the last full run.
 
 **What mutmut already does well.** It hashes each mutated function's source and re-tests only the
 mutants of a function that changed (plus its recorded callers). It measures a test it has never seen

@@ -159,15 +159,11 @@ def mutation_score(killed: int, tested: int) -> float:
 
 
 def _pct(score: float) -> str:
-    """A percentage with the decimals it needs and no more: 60 -> '60%', 97.4359 -> '97.44%'.
+    """A percentage with the decimals it needs and no more: 60 -> '60%', 79.5 -> '79.5%'.
 
-    Whole numbers hid the difference between two scores a gate had just told apart ("97% to 97%").
+    Whole numbers would hide the difference between a score and a threshold a hair above it.
     """
     return f"{score:.2f}".rstrip("0").rstrip(".") + "%"
-
-
-def _score_violation(name: str, score: float, needs: str) -> str:
-    return f"{name}: mutation score {_pct(score)}, {needs}"
 
 
 def evaluate_results(
@@ -175,10 +171,18 @@ def evaluate_results(
 ) -> list[str]:
     """Apply the one bar to every touched function: it must score at least *threshold*.
 
-    New or old makes no difference, and nothing is compared with an earlier score or stored.
+    New or old makes no difference, and nothing is compared with an earlier score or stored. A
+    function with a mutant that has no verdict (the run was interrupted, or a test failed to
+    collect) is refused too: its score would be a guess.
     """
     violations: list[str] = []
     for name, counts in sorted(results.items()):
+        if counts.get("pending"):
+            violations.append(
+                f"{name}: {counts['pending']} mutant(s) have no verdict "
+                f"(the run was interrupted, or a test failed to collect)"
+            )
+            continue
         tested = counts["killed"] + counts["survived"]
         if not tested:
             if counts["no_tests"]:
@@ -186,7 +190,7 @@ def evaluate_results(
             continue
         score = mutation_score(counts["killed"], tested)
         if score < threshold:
-            violations.append(_score_violation(name, score, f"needs >= {_pct(threshold)}"))
+            violations.append(f"{name}: mutation score {_pct(score)}, needs >= {_pct(threshold)}")
     return violations
 
 
@@ -199,14 +203,28 @@ def group_by_file(names: set[str]) -> dict[str, set[str]]:
     return grouped
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
     parser.add_argument("--path", default=".", help="source directory to scan")
     parser.add_argument("--mutants-dir", default="mutants", help="mutmut's output directory")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
-    args = parser.parse_args(argv)
+    return parser
 
+
+def _report(violations: list[str], threshold: float) -> int:
+    """Say what the ratchet found; the exit status."""
+    if violations:
+        print(f"Mutation ratchet: {len(violations)} violation(s):", file=sys.stderr)
+        for v in violations:
+            print(f"  - {v}", file=sys.stderr)
+        return 1
+    print(f"Mutation ratchet: OK (touched functions >= {threshold:.0f}% mutation score).")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
     root = Path(args.path)
     mutants_dir = root / args.mutants_dir
     if not mutants_dir.exists():
@@ -227,16 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     results = collect_touched_results(root, mutants_dir, group_by_file(touched))
-    violations = evaluate_results(results, args.threshold)
-
-    if violations:
-        print(f"Mutation ratchet: {len(violations)} violation(s):", file=sys.stderr)
-        for v in violations:
-            print(f"  - {v}", file=sys.stderr)
-        return 1
-
-    print(f"Mutation ratchet: OK (touched functions >= {args.threshold:.0f}% mutation score).")
-    return 0
+    return _report(evaluate_results(results, args.threshold), args.threshold)
 
 
 if __name__ == "__main__":

@@ -70,6 +70,16 @@ def test_each_function_is_judged_on_its_own() -> None:
     assert [v.split(":")[0] for v in violations] == ["bad", "weak"]
 
 
+def test_a_function_with_mutants_that_have_no_verdict_is_refused() -> None:
+    results = {"f": {"killed": 9, "survived": 0, "no_tests": 0, "other": 0, "pending": 3}}
+
+    violations = evaluate(results)
+
+    assert violations == [
+        "f: 3 mutant(s) have no verdict (the run was interrupted, or a test failed to collect)"
+    ]
+
+
 # -- what is not judged -----------------------------------------------------------------
 
 
