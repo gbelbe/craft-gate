@@ -450,10 +450,8 @@ verdicts the diff can have staled — the functions a changed test, fixture, dat
 helper reaches — then runs `mutmut run`, which re-tests exactly those and any function whose source
 changed. A full campaign happens on the first initialisation of a repo and on cache-wide causes
 only. Test files you add are measured on a first pass and their functions re-tested on a second.
-A test change that *lowers* the score of a function it covers fails the ratchet, even though the
-function itself was not touched, unless the function still scores at least `[mutation] regression-floor`
-(100 by default: no excuse; a repo that sets 90 lets a function recorded at 100% settle at 95%, and the
-value is reported as loosened). A repo may set `[mutation] unmutated-change = "defer"` so that a change to a
+Only a function the diff touches is judged: one that is merely re-tested because its tests changed is
+not, and nothing is stored between runs. A repo may set `[mutation] unmutated-change = "defer"` so that a change to a
 module mutmut does not mutate resets nothing in a pull request (the nightly campaign re-tests what it reaches);
 it is reported as a loosened value. DESIGN.md's "Diff-scoped mutation runs" has the details and limits.
 
@@ -468,12 +466,10 @@ gate entirely on a PR where that's the right call.
 kill a meaningful mutation: assert the observable result, cover the relevant
 boundary/error branch, and avoid merely executing the line. Mutation selection
 is diff-scoped and per function. A changed function passes at the threshold
-(80% by default), or, below it, only when it already has a recorded score in
-`.mutation-baseline.json` and improves on it by at least 20% — never asked for
-more than the threshold itself, so a function at 78% that reaches the threshold
-passes. A function with no recorded score — new, or never measured — must reach
-the threshold outright; there is no "first run records the baseline" grace.
-Design its tests for the threshold before the first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
+(80% by default) and is refused below it, whether it is new or has been there for
+years: nothing is compared with an earlier score, so touching a function whose
+tests are weak means bringing them to the threshold. Design its tests for the
+threshold before the first push (see `templates/tdd-bdd-yagni.snippet.md`, "Design the tests before
 the code").
 
 ## Configuration: craft-gate.toml
@@ -485,7 +481,7 @@ comment; copying it unchanged changes nothing, because each value there is the d
 
 | Section | Values |
 |---|---|
-| `[patch-coverage]`, `[mutation]`, `[bdd]` | `enabled` and `reason`, `threshold` (and `improvement` for mutation), `source`, `paths`, `exclude` |
+| `[patch-coverage]`, `[mutation]`, `[bdd]` | `enabled` and `reason`, `threshold`, `source`, `paths`, `exclude` |
 | `[complexity]` | `cyclomatic`, `cognitive`, `duplicated-literal-occurrences`, `duplicated-literal-min-length` |
 | `[refactor-first]` | `per-file`: `must-decrease` or `must-not-increase` |
 | `[design-review]` | `max-parameters`, `max-lines` |
@@ -708,7 +704,7 @@ it is ignored; a plural built with a ternary inside a string is a nested-ternary
 **Process traps**
 - **A comment is a changed line.** Sonar counts a line you only touched as new code, but so do diff-cover and
   the mutation ratchet: rewriting a suppression comment on an `except` branch no test runs, or on a line
-  inside a function with no mutation baseline, fails *those* gates (a sweep of four such comments failed
+  inside a function below the mutation threshold, fails *those* gates (a sweep of four such comments failed
   on coverage and on a 29 % mutation score, and was closed). Fix the syntax **in the lines your change
   adds**; leave older lines alone unless you are testing them.
 - **Test code is code.** Every rule above applies to `tests/` too (S5332 and S5852 were raised on test

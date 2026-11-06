@@ -206,9 +206,7 @@
         run: |
           uv run --with-requirements scripts/gate-requirements.txt python3 scripts/check_mutation_ratchet.py \
             --base "origin/${{ github.base_ref || 'main' }}" \
-            --threshold ${{ steps.gate.outputs.threshold }} \
-            --improvement ${{ steps.gate.outputs.improvement }} \
-            --regression-floor ${{ steps.gate.outputs.regression-floor }}
+            --threshold ${{ steps.gate.outputs.threshold }}
 
       # Where the time went: the planner's stages, then the tests that make every mutant slow.
       - name: Where the mutation time went

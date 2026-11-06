@@ -109,7 +109,6 @@ def _two_passes(world, monkeypatch) -> None:
     monkeypatch.setattr(mutation_plan, "collect_inputs", lambda *_: (None, [], []))
     monkeypatch.setattr(mutation_plan, "plan", lambda _inputs: decided)
     monkeypatch.setattr(mutation_plan, "apply", lambda *_: 0)
-    monkeypatch.setattr(mutation_plan, "record_domain", lambda *_, **__: None)
     monkeypatch.setattr(mutation_plan, "_mutmut_run", lambda _root: 0)
 
 

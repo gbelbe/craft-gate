@@ -11,7 +11,7 @@ it only added a test file. The cause is mutmut's invalidation, read from its 3.8
 observed: with `cache_invalidation_files = ["tests/**/*.py"]` and `on_dependency_change = "rerun"`,
 editing one test file reset the cached verdicts of four functions that test does not cover. The same
 policy also fires on `pyproject.toml`, any lock file and every tracked non-Python file git reports as
-changed since the last full run — including `.mutation-baseline.json`, which the ratchet itself rewrites.
+changed since the last full run.
 
 **What mutmut already does well.** It hashes each mutated function's source and re-tests only the
 mutants of a function that changed (plus its recorded callers). It measures a test it has never seen
@@ -35,7 +35,7 @@ the global reset above. The planner supplies the missing precision:
 | a data file under the source tree | the functions of the mutated modules that name it |
 | an unmutated module | the tests whose imports reach it, directly or through other modules |
 | a lock file, the dependency list, pytest's own arguments, the root `conftest.py` | **full rerun**: any verdict may change |
-| docs, workflows, the baseline file, other `pyproject.toml` sections | nothing |
+| docs, workflows, other `pyproject.toml` sections | nothing |
 
 **Mechanism.** The planner empties the verdicts of the functions to re-test (what mutmut's own
 `_reset_mutant_results` does), forgets the stale tests so mutmut measures them again, and, when the
@@ -44,12 +44,11 @@ list that merely got longer. Then a plain `mutmut run` does the work. The finger
 the exact scheme before it is touched; if the cache does not look like mutmut 3.8's, or planning fails for
 any reason, the run falls back to a full campaign, so a wrong plan costs time and never a wrong verdict.
 
-**Judging what was re-tested.** A function re-tested because its tests changed was not touched, so it is
-not held to the threshold. But a test change must not leave it weaker: the ratchet refuses a function whose
-score fell below its recorded baseline (`--regression-tolerance` points of slack, default 0) and raises the
-baseline when it rose; a function with no baseline is recorded. A mutant still without a verdict after
-the run (the run was interrupted, or a test failed to collect) is reported as not re-tested rather than
-silently ignored.
+**Judging what was re-tested.** Only the functions the diff touches are judged, against the threshold. A
+function re-tested because its tests changed was not touched, so it is not held to anything and no score is
+stored for it. (The ratchet used to refuse a test change that lowered such a function's score, against a recorded
+baseline; that rule and the baseline file are gone. The planner still re-tests those functions, which keeps the
+cache fresh but is no longer needed for a verdict: narrowing it to the touched functions is a later change.)
 
 **Measured**, on the same consumer repo narrowed to one mutated file (654 mutants): first initialisation
 37 s; after editing one test file, 16 s, re-testing 89 mutants (14%), with all 654 verdicts present and

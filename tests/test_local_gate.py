@@ -35,7 +35,7 @@ def test_local_runner_fast_mode_skips_expensive_gates() -> None:
     assert "--fast" in runner
     assert "--mutation" in runner
     assert "git diff --name-only" in runner
-    assert '--improvement "$improvement"' in runner
+    assert "--improvement" not in runner
 
 
 def test_local_runner_documents_focused_mutation_selection() -> None:
@@ -81,12 +81,11 @@ def test_bootstrap_installs_local_runner() -> None:
     assert "templates/local-craft-gate.sh" in bootstrap
 
 
-def test_mutation_ratchet_documents_absolute_or_improvement_rule() -> None:
+def test_mutation_ratchet_has_one_bar_and_no_baseline_file() -> None:
     source = (ROOT / "scripts" / "check_mutation_ratchet.py").read_text()
 
     assert "evaluate_results" in source
-    assert "improvement" in source
-    assert ".mutation-baseline.json" in source
+    assert ".mutation-baseline.json" not in source
 
 
 def test_local_runner_asks_gate_config_before_each_test_gate() -> None:

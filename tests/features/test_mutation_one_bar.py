@@ -1,4 +1,4 @@
-"""Steps for mutation_threshold_cap.feature: a recorded baseline is capped at the threshold."""
+"""Steps for mutation_one_bar.feature: one threshold for every touched function."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-scenarios("mutation_threshold_cap.feature")
+scenarios("mutation_one_bar.feature")
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "check_mutation_ratchet.py"
 _SPEC = importlib.util.spec_from_file_location("check_mutation_ratchet_steps", _SCRIPT)
@@ -22,7 +22,7 @@ MUTANTS = 100
 
 @pytest.fixture
 def world():
-    return SimpleNamespace(threshold=0.0, baseline=0.0, violations=[])
+    return SimpleNamespace(threshold=0.0, violations=[])
 
 
 @given(parsers.parse("a threshold of {threshold:d} percent"))
@@ -30,17 +30,10 @@ def _threshold(world, threshold: int) -> None:
     world.threshold = float(threshold)
 
 
-@given(parsers.parse("a function recorded at {baseline:d} percent"))
-def _recorded(world, baseline: int) -> None:
-    world.baseline = float(baseline)
-
-
-@when(parsers.parse("the function now scores {score:d} percent"))
+@when(parsers.parse("the function scores {score:d} percent"))
 def _scores(world, score: int) -> None:
     counts = {"killed": score, "survived": MUTANTS - score, "no_tests": 0}
-    world.violations, _ = ratchet.evaluate_results(
-        {"f": counts}, {"f": world.baseline}, world.threshold, 20.0
-    )
+    world.violations = ratchet.evaluate_results({"f": counts}, world.threshold)
 
 
 @then("the ratchet accepts it")
