@@ -10,6 +10,10 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Fixed:** `templates/test-impact.yml` recorded the map on every event but a pull request, so a scheduled or
+  manual run could replace a good map. Only the merge queue and a push to the default branch record it.
+  `scripts/mutation_run.py` marks its `tomllib` import `# isort: skip`, so a project whose ruff targets
+  Python 3.10 and one that targets 3.11+ both accept the file as bootstrapped.
 - **Changed:** the test-impact map is keyed on the **tree** (the tested content) instead of the commit, and
   the merge queue records it, so the whole suite runs once per change. A push to the main branch finds the
   map of its own tree (`test-impact-map-<tree>`) and runs nothing more; without one (a push past the queue,
