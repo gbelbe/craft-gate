@@ -92,6 +92,7 @@ def make(changes, **overrides):
 
 CTX_KEY = ("ster.mcp_context", "overview")
 LOAD_KEY = ("ster.store._load_save", "load")
+PROMOTE_KEY = ("ster.store._load_save", "_promote_one")
 CTX_TESTS = {"tests/unit/test_ctx.py::test_c", "tests/unit/test_ctx.py::test_d"}
 
 
@@ -129,11 +130,24 @@ def test_a_change_touching_no_covered_function_re_tests_none_but_still_measures_
     }
 
 
-def test_when_the_touched_functions_are_not_known_nothing_is_narrowed() -> None:
+def test_when_the_touched_functions_are_not_known_nothing_is_narrowed_and_the_plan_says_so() -> (
+    None
+):
     plan = make([("M", "tests/unit/test_ctx.py")], touched=None)
 
     assert plan.reset_functions == tuple(sorted((CTX, LOAD)))
-    assert not any("not touched" in r for r in plan.reasons)
+    assert any("touched functions could not be told" in r for r in plan.reasons)
+    assert not any("not touched by the diff" in r for r in plan.reasons)
+
+
+def test_a_mangled_name_of_a_shape_it_does_not_know_is_never_narrowed_away() -> None:
+    assert mp.qualified_key("ster.mod.mystery") is None
+    assert mp._touched_only({"ster.mod.mystery", LOAD}, frozenset()) == {"ster.mod.mystery"}
+
+
+def test_the_qualified_key_of_a_function_and_of_a_method() -> None:
+    assert mp.qualified_key(LOAD) == LOAD_KEY
+    assert mp.qualified_key("ster.mcp_server.xǁHandlerǁrun") == ("ster.mcp_server", "Handler.run")
 
 
 def test_a_touched_function_is_re_tested_when_its_tests_change_even_if_its_hash_did_not() -> None:
@@ -141,9 +155,6 @@ def test_a_touched_function_is_re_tested_when_its_tests_change_even_if_its_hash_
     plan = make([("M", "tests/unit/test_promote.py")], touched=frozenset({PROMOTE_KEY}))
 
     assert plan.reset_functions == (PROMOTE,)
-
-
-PROMOTE_KEY = ("ster.store._load_save", "_promote_one")
 
 
 def test_a_method_is_matched_by_its_class_and_name() -> None:

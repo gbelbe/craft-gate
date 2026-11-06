@@ -58,15 +58,13 @@ def _cache(world) -> None:
     (world.mutants / "mutmut-stats.json").write_text(json.dumps(STATS))
 
 
-def move(world, *, edit: bool, touch: bool = False) -> None:
+def move(world, *, edit: bool) -> None:
     root = world.root
     (root / NEW).parent.mkdir(parents=True)
     git(root, "mv", OLD, NEW)
     if edit:
         with (root / NEW).open("a") as handle:
             handle.write("# edited\n")
-    if touch:
-        (root / "pkg/mod.py").write_text("def covered():\n    return 2\n")
     (root / "pyproject.toml").write_text(PYPROJECT.format(selected=NEW))
     git(root, "add", ".")
     inputs, old_args, new_args = mutation_plan.collect_inputs(root, "HEAD", world.mutants)
@@ -89,7 +87,8 @@ def _moved_and_edited(world) -> None:
     "and the function it covers is edited too"
 )
 def _moved_edited_and_function_touched(world) -> None:
-    move(world, edit=True, touch=True)
+    (world.root / "pkg/mod.py").write_text("def covered():\n    return 2\n")
+    move(world, edit=True)
 
 
 @then("the plan measures those tests again")
