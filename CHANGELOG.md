@@ -10,6 +10,11 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
+- **Changed:** `mutation_plan.py` re-tests only the functions the diff touches. A function that is merely
+  covered by an edited test, fixture, data file or unmutated module keeps its cached verdicts (it is not
+  judged any more); the tests the change staled are still measured again. A pull request that edits tests
+  no longer re-proves every function they cover. If git cannot say which functions are touched, the plan
+  stays as wide as before.
 - **Removed (breaking):** the mutation baseline, and with it the improvement rule and the regression
   floor. A touched function must score at least `[mutation] threshold` (80 by default), whether it is
   new or old, and nothing is compared with an earlier score or stored: `.mutation-baseline.json` is no

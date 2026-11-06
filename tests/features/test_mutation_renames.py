@@ -82,6 +82,20 @@ def _moved_and_edited(world) -> None:
     move(world, edit=True)
 
 
+@when(
+    "tests/unit/test_a.py is moved to tests/brick/test_a.py and edited, "
+    "and the function it covers is edited too"
+)
+def _moved_edited_and_function_touched(world) -> None:
+    (world.root / "pkg/mod.py").write_text("def covered():\n    return 2\n")
+    move(world, edit=True)
+
+
+@then("the plan measures those tests again")
+def _measured_again(world) -> None:
+    assert world.plan.stale_tests == (f"{OLD}::{TEST}",)  # the cache knows them by the old path
+
+
 @then("the plan re-tests no function")
 def _nothing(world) -> None:
     assert world.plan.mode == "incremental"
