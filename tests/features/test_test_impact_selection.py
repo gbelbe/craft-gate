@@ -40,12 +40,12 @@ EDITS = {
     "the lock file is edited": ("uv.lock", "x = 1\n"),
     "conftest.py is edited": ("tests/conftest.py", "x = 1\n"),
 }
-SELECTIONS = {
-    "the first test": {FIRST},
-    "both tests": {FIRST, SECOND},
-    "that test": {SECOND},
-    "no test": set(),
-    "every test": ti.ALL,
+SELECTIONS = {  # what `select` prints, one entry a line
+    "the first test": [FIRST],
+    "both tests": [FIRST, SECOND],
+    "that test": [SECOND],
+    "no test": [],
+    "every test": [ti.ALL],
 }
 
 
@@ -117,18 +117,7 @@ def _real_run(world) -> None:
 
 @then(parsers.parse("the pull request runs {selection}"))
 def _runs(world, selection: str) -> None:
-    out = _select(world).split()
-    expected = SELECTIONS[selection]
-    assert (
-        (out == [ti.ALL])
-        if expected == ti.ALL
-        else (set(out) == expected and len(out) == len(expected))
-    )
-
-
-@then("the pull request runs every test")
-def _runs_all(world) -> None:
-    assert _select(world).split() == [ti.ALL]
+    assert _select(world).split() == SELECTIONS[selection]
 
 
 @then("the map names each test file against the lines it ran")

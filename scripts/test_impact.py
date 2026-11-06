@@ -36,6 +36,7 @@ import sys
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parent)
@@ -160,63 +161,106 @@ def tests_for_source(entry: dict[str, list[list[int]]], lines: set[int]) -> set[
     return {test for test, ranges in entry.items() if covers(ranges, lines)}
 
 
-def changes_since(commit: str, root: Path) -> list[tuple[str, str, str]]:
-    """(status letter, old path, new path) of every file the working tree changed since *commit*.
+class Change(NamedTuple):
+    """A file the working tree changed since the map's commit: git's status letter, both paths."""
 
-    A file not yet added to git counts as added: a change run before it is committed misses nothing.
+    status: str
+    old: str
+    new: str
+
+
+NOTHING, ITSELF, SOURCE, EVERYTHING = (
+    "nothing",
+    "itself",
+    "source",
+    "everything",
+)  # what a change is
+
+
+def changes_since(commit: str, root: Path) -> list[Change]:
+    """Every file the working tree changed since *commit*; a failing git call raises.
+
+    A file not yet added to git counts as added: a check run before it is committed misses nothing.
     """
-    out = git(["diff", "--name-status", "-M", commit], cwd=root, check=False)
+    out = git(["diff", "--name-status", "-M", commit], cwd=root)
     rows = []
     for row in out.splitlines():
         fields = row.split("\t")
-        rows.append((fields[0][0], fields[1], fields[-1]))
-    untracked = git(["ls-files", "--others", "--exclude-standard"], cwd=root, check=False)
-    rows += [("A", path, path) for path in untracked.splitlines()]
-    return rows
+        rows.append(Change(fields[0][0], fields[1], fields[-1]))
+    untracked = git(["ls-files", "--others", "--exclude-standard"], cwd=root)
+    return rows + [Change("A", path, path) for path in untracked.splitlines()]
 
 
-def affected(root: Path, impact: dict, change: tuple[str, str, str]) -> set[str] | str:
-    """The test files one changed file can affect, or ALL."""
-    status, old, new = change
-    if is_documentation(new) and is_documentation(old):
+def classify(change: Change) -> str:
+    """What a change is to the selection: NOTHING to run, a test file that is ITSELF the answer,
+    a SOURCE file to read the diff of, or EVERYTHING when it cannot be placed."""
+    if is_documentation(change.new) and is_documentation(change.old):
+        return NOTHING
+    if not change.new.endswith(".py"):
+        return EVERYTHING
+    if not is_test_path(change.new):
+        return SOURCE
+    if change.status == "D":
+        return NOTHING
+    return ITSELF if _TEST_FILE.search(change.new) else EVERYTHING  # else conftest.py or a helper
+
+
+def affected(root: Path, impact: dict, change: Change) -> set[str] | None:
+    """The test files one changed file can affect; None when every test can be."""
+    kind = classify(change)
+    if kind == EVERYTHING:
+        return None
+    if kind == NOTHING:
         return set()
-    if not new.endswith(".py"):
-        return ALL
-    if is_test_path(new):
-        if status == "D":
-            return set()
-        return {new} if _TEST_FILE.search(new) else ALL  # else conftest.py, a helper or a fixture
-    entry = impact[SOURCES].get(old)
+    if kind == ITSELF:
+        return {change.new}
+    entry = impact[SOURCES].get(change.old)
     if entry is None:
         return set()  # never run by a test, or new: its tests are the changed ones
-    diff = git(["diff", "-U0", "--no-color", impact[COMMIT], "--", old, new], cwd=root, check=False)
+    diff = git(
+        ["diff", "-U0", "-M", "--no-color", impact[COMMIT], "--", change.old, change.new], cwd=root
+    )
     return tests_for_source(entry, old_side_lines(diff))
 
 
-def select(root: Path, impact: dict, ignore: frozenset[str] = frozenset()) -> set[str] | str:
-    """The test files to run for the working tree, or ALL; *ignore* names files that are no change.
+def select(root: Path, impact: dict, ignore: frozenset[str] = frozenset()) -> set[str] | None:
+    """The test files to run for the working tree; None when every test must run.
 
-    The map itself is one: a run restores it into the checkout, where git sees it as a new file.
+    *ignore* names files that are no change. The map itself is one: a run restores it into the
+    checkout, where git sees it as a new file.
     """
     chosen: set[str] = set()
     for change in changes_since(impact[COMMIT], root):
-        if change[2] in ignore:
+        if change.new in ignore:
             continue
         picked = affected(root, impact, change)
-        if picked == ALL:
-            return ALL
+        if picked is None:
+            return None
         chosen |= picked
     return chosen
 
 
-def _inside(path: Path, root: Path) -> str:
-    """*path* relative to *root*, or as given when it lies elsewhere (so it is no change)."""
+def ignore_key(path: Path, root: Path) -> str:
+    """*path* as a change would be named: relative to *root*, or as given when it lies elsewhere."""
     resolved = path.resolve()
     return resolved.relative_to(root).as_posix() if resolved.is_relative_to(root) else str(path)
 
 
 def commit_present(commit: str, root: Path) -> bool:
     return bool(git(["cat-file", "-t", commit], cwd=root, check=False).strip())
+
+
+def run_select(root: Path, map_path: Path, max_age_days: int, now: datetime) -> str:
+    """What `select` prints: ALL, or one test file a line. Anything that goes wrong is ALL."""
+    impact = load_map(map_path, max_age_days, now)
+    if impact is None or not commit_present(impact[COMMIT], root):
+        return ALL
+    try:
+        picked = select(root, impact, frozenset({ignore_key(map_path, root)}))
+    except SystemExit as failure:  # git could not say what changed: never read that as "nothing"
+        print(f"test_impact: {failure}\nrunning every test", file=sys.stderr)
+        return ALL
+    return ALL if picked is None else "\n".join(sorted(picked))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -238,13 +282,8 @@ def main(argv: list[str] | None = None) -> int:
     root = args.path.resolve()
     if args.command == "record":
         record(args.coverage, args.out, root)
-        return 0
-    impact = load_map(args.map, args.max_age_days, datetime.now(UTC))
-    if impact is None or not commit_present(impact[COMMIT], root):
-        print(ALL)
-        return 0
-    picked = select(root, impact, frozenset({_inside(args.map, root)}))
-    print(picked if picked == ALL else "\n".join(sorted(picked)))
+    else:
+        print(run_select(root, args.map, args.max_age_days, datetime.now(UTC)))
     return 0
 
 

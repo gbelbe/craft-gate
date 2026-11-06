@@ -17,6 +17,7 @@ EXPECTED = "expected"
 PLUS_ONE = "x + 1"
 TIMES_TWO = "x * 2"
 PLUS_TWO = "x + 2"
+README, LOCK, CONFTEST, A_TEST = "README.md", "uv.lock", "tests/conftest.py", "tests/test_a.py"
 NOW = datetime(2026, 1, 15, tzinfo=UTC)
 SOURCE = "pkg/mod.py"
 TEST_F, TEST_G = "tests/test_f.py", "tests/test_g.py"
@@ -159,7 +160,7 @@ def test_no_changed_line_chooses_nothing():
 @pytest.mark.parametrize(
     ("path", EXPECTED),
     [
-        ("README.md", True),
+        (README, True),
         ("docs/a/b.png", True),
         ("LICENSE", True),
         ("CHANGELOG.rst", True),
@@ -231,7 +232,7 @@ def test_the_line_numbers_of_the_map_commit_hold_after_main_moved_on(project):
 
 def test_a_documentation_change_selects_nothing(project):
     repo, impact = project
-    repo.write("README.md", "hello\n")
+    repo.write(README, "hello\n")
     repo.write("docs/x.md", "hello\n")
 
     assert _selected(repo, impact) == set()
@@ -251,7 +252,7 @@ def test_a_file_that_cannot_be_placed_selects_everything(project, path):
     repo, impact = project
     repo.write(path, "x = 1\n")
 
-    assert _selected(repo, impact) == ti.ALL
+    assert _selected(repo, impact) is None
 
 
 def test_a_changed_test_file_selects_itself(project):
@@ -357,3 +358,53 @@ def test_a_recorded_run_selects_what_a_real_pytest_run_executed(repo, tmp_path):
     assert set(sources[SOURCE]) == {TEST_F, TEST_G}
     repo.write(SOURCE, MODULE.replace(PLUS_ONE, PLUS_TWO))
     assert ti.select(repo.path, json.loads(out.read_text())) == {TEST_F}
+
+
+def _same(status, path):
+    return ti.Change(status, path, path)
+
+
+@pytest.mark.parametrize(
+    ("change", "kind"),
+    [
+        (_same("M", README), ti.NOTHING),
+        (_same("M", SOURCE), ti.SOURCE),
+        (_same("A", A_TEST), ti.ITSELF),
+        (_same("D", A_TEST), ti.NOTHING),
+        (_same("M", CONFTEST), ti.EVERYTHING),
+        (_same("M", LOCK), ti.EVERYTHING),
+        (ti.Change("R", "notes.md", "pkg/notes.py"), ti.SOURCE),
+        (ti.Change("R", "pkg/a.py", "docs/a.md"), ti.EVERYTHING),
+    ],
+)
+def test_a_change_is_told_by_its_paths_and_status(change, kind):
+    assert ti.classify(change) == kind
+
+
+def test_git_failing_to_say_what_changed_runs_every_test_and_says_so(
+    project, tmp_path, monkeypatch, capsys
+):
+    repo, impact = project
+    fresh = ti.build_map(EXECUTED, impact[ti.COMMIT], datetime.now(UTC))
+    path = tmp_path / IMPACT_FILE
+    path.write_text(json.dumps(fresh))
+    real = ti.git
+
+    def failing(args, **kwargs):
+        if args[0] == "diff":
+            raise SystemExit("✗ git diff failed:\nfatal: bad object")
+        return real(args, **kwargs)
+
+    monkeypatch.setattr(ti, "git", failing)
+
+    assert ti.run_select(repo.path, path, 14, datetime.now(UTC)) == ti.ALL
+    assert "bad object" in capsys.readouterr().err
+
+
+def test_a_map_path_outside_the_checkout_is_named_as_given(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    elsewhere = tmp_path / "elsewhere" / IMPACT_FILE
+
+    assert ti.ignore_key(root / IMPACT_FILE, root) == IMPACT_FILE
+    assert ti.ignore_key(elsewhere, root) == str(elsewhere)
