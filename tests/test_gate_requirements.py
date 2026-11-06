@@ -72,7 +72,3 @@ def test_the_local_runner_takes_the_tools_from_the_pinned_file_too() -> None:
 
     assert lines
     assert all(WITH_FILE in line for line in lines), lines
-
-
-def test_the_mutation_cache_is_dropped_when_the_pinned_tools_change() -> None:
-    assert "scripts/gate-requirements.txt'" in CI.split("mutmut-${{ runner.os }}-${{ hashFiles(")[1]

@@ -34,7 +34,7 @@ flowchart LR
     subgraph shared["Shared helpers"]
         GD[gitdiff.py]
         AF[astfuncs.py]
-        MP[mutation_plan.py]
+        MRUN[mutation_run.py]
     end
 
     CAT -- tools/render_catalog.py --> CRAFT
@@ -42,9 +42,9 @@ flowchart LR
     CRAFT -. procedure .-> AGENTS
     CC --> RF
     CC --> PC
-    GD --> RF & CX & MR & PC
+    GD --> RF & CX & MR & MRUN & PC
     AF --> CX & MR
-    MP -. plans which mutants to re-run .-> MR
+    MRUN -. chooses the mutants on changed lines .-> MR
     GC -. decides if they run .-> MR
     GC --> PC
     DR --> PC

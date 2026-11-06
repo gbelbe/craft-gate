@@ -143,28 +143,24 @@
 
 # The one gate here that doesn't call a script craft-gate ships either — it
 # wires up mutmut (github.com/boxed/mutmut), third-party, against *your own*
-# test suite. Reruns your tests once per mutant, so it's the most expensive
-# job in this file by a wide margin; the cache step below is what keeps
-# repeat runs fast (mutmut's own incremental caching does the rest). Fails
-# when a function *this diff touches* has a mutation score below
-# --threshold (80 is a starting point, not a mandate — see CRAFTSMANSHIP.md's
-# "Mutation ratchet"). No Tidy-Exempt: bypass, same reasoning as
-# patch-coverage; a genuinely equivalent mutant gets mutmut's own
-# `# pragma: no mutate` instead.
+# test suite. Reruns your tests once per mutant, so it runs only the mutants
+# that sit on lines *this diff changed*, from an empty `mutants/` every time:
+# mutmut's fixed start-up (a couple of minutes) plus those few mutants. Nothing
+# is cached between runs, so there is no stale verdict to trust. Fails when the
+# mutants on those lines are killed less often than --threshold (80 is a
+# starting point, not a mandate — see CRAFTSMANSHIP.md's "Mutation ratchet").
+# No Tidy-Exempt: bypass, same reasoning as patch-coverage; a genuinely
+# equivalent mutant gets mutmut's own `# pragma: no mutate` instead.
 #
 # Needs `[tool.mutmut]` in the consuming project's pyproject.toml: with the gate
 # on and that section missing, the job fails and says so (see "Test gates"
 # above); it no longer passes quietly. The dependency is part of the default dev
-# toolchain and the local runner uses the same cached `mutants/` directory.
+# toolchain and the local runner uses the same `mutants/` directory.
 # Recommended config:
 #   source_paths = ["your_package"]
 #   # Keep mutation runs focused; the normal CI test job still runs the full suite.
 #   pytest_add_cli_args_test_selection = ["tests/unit/test_feature.py", "-m", "mutation"]
 #   # Keep source_paths/only_mutate limited to the production contracts those tests cover.
-#   # scripts/mutation_plan.py decides what a change invalidates (an edited test re-tests the
-#   # functions it covers, not the whole campaign); mutmut's own blunt invalidation is turned
-#   # down so it does not reset everything first. No tests/**/*.py in cache_invalidation_files.
-#   on_dependency_change = "warn"
   mutation-ratchet:
     name: Mutation ratchet
     runs-on: ubuntu-latest
@@ -186,29 +182,20 @@
         if: steps.gate.outputs.status == 'run'
         run: uv sync --all-extras
 
-      - name: Cache mutmut results
+      # Only the mutants on the lines this diff changed, from an empty `mutants/`. See DESIGN.md,
+      # "Mutation runs on changed lines".
+      - name: mutmut run (the mutants on changed lines)
         if: steps.gate.outputs.status == 'run'
-        uses: actions/cache@v6
-        with:
-          path: mutants
-          key: mutmut-${{ runner.os }}-${{ hashFiles('**/*.py', 'pyproject.toml', 'uv.lock', 'scripts/gate-requirements.txt') }}
-          restore-keys: mutmut-${{ runner.os }}-
+        run: uv run --with-requirements scripts/gate-requirements.txt python3 scripts/mutation_run.py --base "origin/${{ github.base_ref || 'main' }}"
 
-      # Full campaign on first initialisation and on the few cache-wide causes (a lock file, the
-      # dependency list, pytest's own arguments, the root conftest); otherwise only what the diff
-      # can have changed. See DESIGN.md, "Diff-scoped mutation runs".
-      - name: mutmut run (diff-scoped)
-        if: steps.gate.outputs.status == 'run'
-        run: uv run --with-requirements scripts/gate-requirements.txt python3 scripts/mutation_plan.py run --base "origin/${{ github.base_ref || 'main' }}"
-
-      - name: "Mutation ratchet: touched functions' mutation score"
+      - name: "Mutation ratchet: the changed lines' mutation score"
         if: steps.gate.outputs.status == 'run'
         run: |
           uv run --with-requirements scripts/gate-requirements.txt python3 scripts/check_mutation_ratchet.py \
             --base "origin/${{ github.base_ref || 'main' }}" \
             --threshold ${{ steps.gate.outputs.threshold }}
 
-      # Where the time went: the planner's stages, then the tests that make every mutant slow.
+      # Where the time went: the run's stages, then the tests that make every mutant slow.
       - name: Where the mutation time went
         if: always() && steps.gate.outputs.status == 'run'
         run: |

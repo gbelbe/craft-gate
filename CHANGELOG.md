@@ -10,20 +10,23 @@ While the major version is 0, a breaking change bumps the minor version.
 
 ## Unreleased
 
-- **Changed:** `mutation_plan.py` re-tests only the functions the diff touches. A function that is merely
-  covered by an edited test, fixture, data file or unmutated module keeps its cached verdicts (it is not
-  judged any more); the tests the change staled are still measured again. A pull request that edits tests
-  no longer re-proves every function they cover. If git cannot say which functions are touched, the plan
-  stays as wide as before.
+- **Replaced (breaking):** the mutation planner. `scripts/mutation_run.py` empties `mutants/`, generates
+  every mutant, keeps those whose mutated line is a line the diff changed and has `mutmut run` test only them;
+  `check_mutation_ratchet.py` judges exactly those (it reads `mutants/mutation-selection.json`). Nothing is
+  cached between runs, so there is no stale verdict to trust; the cost is mutmut's fixed start-up plus the few
+  mutants chosen. `scripts/mutation_plan.py` is deleted, with the `dependency-change` and `unmutated-change`
+  settings (an unknown-key error names a repo that still sets one), the mutation cache step of the CI template
+  and the scheduled full campaign it needed. The local runner and the CI template call `mutation_run.py`.
+  A pull request that edits only tests, or touches no line that a mutation changes, starts no mutmut.
 - **Removed (breaking):** the mutation baseline, and with it the improvement rule and the regression
   floor. A touched function must score at least `[mutation] threshold` (80 by default), whether it is
   new or old, and nothing is compared with an earlier score or stored: `.mutation-baseline.json` is no
-  longer written, `check_mutation_ratchet.py` drops `--improvement`, `--baseline`,
-  `--regression-floor` and `--regression-tolerance`, and `mutation_plan.py` no longer writes
-  `mutants/mutation-plan.json`. A function re-tested only because its tests changed is not judged. The
-  keys `improvement` and `regression-floor` are gone from `craft-gate.toml` and `pyproject.toml`: a repo
-  that still sets one gets the "unknown key" error naming it, so delete the line (and the
-  `.mutation-baseline.json` file, and any step that commits it).
+  longer written, and `check_mutation_ratchet.py` drops `--improvement`, `--baseline`,
+  `--regression-floor` and `--regression-tolerance`. A function re-tested only because its tests changed is
+  not judged. The keys `improvement` and `regression-floor` are gone from `craft-gate.toml` and
+  `pyproject.toml`: a repo that still sets one gets the "unknown key" error naming it, so delete the line
+  (and the `.mutation-baseline.json` file, and any step that commits it). A chosen mutant with no verdict
+  refuses its function.
 - **Changed:** the complexity ratchet follows a file git sees as moved (`git diff -M`). Its functions,
   its invariant returns and its repeated literals are compared with what they were at the old path, and
   a move that changes nothing is not a touch, so moving a module into a folder no longer reads as

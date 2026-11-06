@@ -17,7 +17,7 @@ def test_local_runner_has_all_default_craft_gates() -> None:
         "check_complexity_ratchet.py",
         "check_tidy_ratchet.sh",
         "check_refactor_first.py",
-        "mutation_plan.py run",
+        "mutation_run.py",
         "check_mutation_ratchet.py",
         "craftcov_pr_comment.py",
         "--format sarif",
@@ -60,17 +60,13 @@ def test_ci_template_keeps_all_five_gates_and_two_reports() -> None:
         assert required in template, required
 
 
-def test_ci_template_uses_freshness_aware_mutation_cache() -> None:
+def test_ci_template_runs_the_mutants_on_changed_lines_from_a_clean_slate() -> None:
     template = (ROOT / "templates" / "ci-job.yml").read_text()
 
-    assert (
-        "hashFiles('**/*.py', 'pyproject.toml', 'uv.lock', 'scripts/gate-requirements.txt')"
-        in template
-    )
-    # mutation_plan.py decides what a test change invalidates; mutmut's own reset is turned down
-    assert 'on_dependency_change = "warn"' in template
-    assert "mutation_plan.py run" in template
-    assert 'cache_invalidation_files = ["tests/**/*.py"' not in template
+    assert "mutation_run.py" in template
+    assert "mutation_plan" not in template
+    assert "Cache mutmut results" not in template
+    assert "on_dependency_change" not in template
     assert "pytest_add_cli_args_test_selection" in template
 
 

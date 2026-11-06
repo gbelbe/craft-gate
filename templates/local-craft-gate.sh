@@ -69,7 +69,7 @@ if [[ $FAST -eq 0 ]]; then
   if gate_runs mutation; then
     if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
       threshold="$(gate_setting threshold)"
-      uv run --with-requirements scripts/gate-requirements.txt python scripts/mutation_plan.py run --base "$BASE"
+      uv run --with-requirements scripts/gate-requirements.txt python scripts/mutation_run.py --base "$BASE"
       uv run --with-requirements scripts/gate-requirements.txt python scripts/check_mutation_ratchet.py --base "$BASE" \
         --threshold "$threshold"
     else

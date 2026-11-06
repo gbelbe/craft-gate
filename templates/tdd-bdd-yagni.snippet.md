@@ -113,13 +113,13 @@ this loop:
 1. Map changed lines to changed functions.
 2. Map each function to the smallest focused behavioral test files.
 3. Mark those tests with `@pytest.mark.mutation` when the repository uses it.
-4. Run mutmut on the configured source/test scope (`scripts/mutation_plan.py run` re-tests only
-   what your change can have affected, a full campaign only on first initialisation).
+4. Run mutmut on the configured source/test scope (`scripts/mutation_run.py` tests only the
+   mutants on the lines your change touched, from a clean slate).
 5. Read survivors for changed functions and add the missing boundary/error
    assertion.
-6. Repeat until the function reaches 80%. (A function that already has a
-   recorded score may instead improve on it by 20%; a function with no recorded
-   score must reach 80%.)
+6. Repeat until the mutants on your changed lines reach 80%. (There is one bar:
+   new code and old code are judged the same way, and nothing is compared with an
+   earlier score.)
 
 Do not add duplicate assertions only to increase a number. Prefer one test
 that kills a specific survivor and names the business rule it protects.

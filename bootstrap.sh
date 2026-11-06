@@ -31,7 +31,7 @@ SHIPPED=(
   scripts/check_complexity_ratchet.py
   scripts/craftcov_pr_comment.py
   scripts/check_mutation_ratchet.py
-  scripts/mutation_plan.py
+  scripts/mutation_run.py
   scripts/gate_config.py
   scripts/design_review.py
   scripts/config_loosening.py

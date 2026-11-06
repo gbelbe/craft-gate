@@ -68,8 +68,6 @@ DIRECTION = {
     "exclude": "wider",
     "paths": "narrower",
     "per-file": "later",
-    "dependency-change": "kept",  # "keep" trusts cached verdicts across a dependency change
-    "unmutated-change": "deferred",  # "defer" leaves the verdicts it stales to the nightly run
 }
 NEUTRAL = frozenset({"reason", "source"})  # words and a path: neither makes a gate weaker
 

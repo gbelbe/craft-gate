@@ -50,6 +50,7 @@ from astfuncs import walk_functions  # noqa: E402
 from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
+SELECTION_FILE = "mutation-selection.json"  # in mutants/: the mutants mutation_run.py chose
 
 # mutmut's own exit-code -> outcome mapping (mutmut.stats.status_by_exit_code,
 # mirrored rather than imported: that module pulls in mutmut's full click/UI
@@ -121,15 +122,36 @@ def collect_touched_results(
             if qual is None or qual not in names:
                 continue
             full_name = f"{rel}::{qual}"
-            if full_name not in results:
-                results[full_name] = {
-                    "killed": 0,
-                    "survived": 0,
-                    "no_tests": 0,
-                    "other": 0,
-                    "pending": 0,
-                }
-            results[full_name][mutant_outcome(exit_code)] += 1
+            results.setdefault(full_name, _no_outcomes())[mutant_outcome(exit_code)] += 1
+    return results
+
+
+def _no_outcomes() -> dict[str, int]:
+    return {"killed": 0, "survived": 0, "no_tests": 0, "other": 0, "pending": 0}
+
+
+def load_selection(mutants_dir: Path) -> set[str] | None:
+    """The mutants mutation_run.py chose, or None when it left no selection (a plain mutmut run)."""
+    try:
+        return set(json.loads((mutants_dir / SELECTION_FILE).read_text())["mutants"])
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def collect_selected_results(mutants_dir: Path, selected: set[str]) -> dict[str, dict[str, int]]:
+    """Per function, the outcome counts of the *selected* mutants only."""
+    results: dict[str, dict[str, int]] = {}
+    for meta_path in sorted(mutants_dir.rglob("*.meta")):
+        rel = str(meta_path.relative_to(mutants_dir))[: -len(".meta")]
+        try:
+            meta = json.loads(meta_path.read_text())
+        except json.JSONDecodeError:
+            continue
+        for mutant_key, exit_code in meta.get("exit_code_by_key", {}).items():
+            qual = qualified_name_from_mutant_key(mutant_key) if mutant_key in selected else None
+            if qual is not None:
+                counts = results.setdefault(f"{rel}::{qual}", _no_outcomes())
+                counts[mutant_outcome(exit_code)] += 1
     return results
 
 
@@ -203,6 +225,22 @@ def group_by_file(names: set[str]) -> dict[str, set[str]]:
     return grouped
 
 
+def _touched_results(root: Path, mutants_dir: Path, base: str) -> dict[str, dict[str, int]] | None:
+    """Every mutant of the functions the diff touches (a plain `mutmut run`); None when none."""
+    all_ranges: dict[str, tuple[int, int]] = {}
+    for meta_path in sorted(mutants_dir.rglob("*.meta")):
+        rel = str(meta_path.relative_to(mutants_dir))[: -len(".meta")]
+        all_ranges.update(function_ranges(root, rel))
+    if not all_ranges:
+        print("Mutation ratchet: no mutated files with recoverable function ranges.")
+        return None
+    touched = touched_names(root, base, all_ranges)
+    if not touched:
+        print("Mutation ratchet: no touched functions with mutation data.")
+        return None
+    return collect_touched_results(root, mutants_dir, group_by_file(touched))
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
@@ -231,20 +269,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {mutants_dir} not found — run `mutmut run` first.", file=sys.stderr)
         return 2
 
-    all_ranges: dict[str, tuple[int, int]] = {}
-    for meta_path in sorted(mutants_dir.rglob("*.meta")):
-        rel = str(meta_path.relative_to(mutants_dir))[: -len(".meta")]
-        all_ranges.update(function_ranges(root, rel))
-    if not all_ranges:
-        print("Mutation ratchet: no mutated files with recoverable function ranges.")
-        return 0
-
-    touched = touched_names(root, args.base, all_ranges)
-    if not touched:
-        print("Mutation ratchet: no touched functions with mutation data.")
-        return 0
-
-    results = collect_touched_results(root, mutants_dir, group_by_file(touched))
+    selected = load_selection(mutants_dir)
+    if selected is not None:
+        if not selected:
+            print("Mutation ratchet: no mutant sits on a changed line; nothing to judge.")
+            return 0
+        results = collect_selected_results(mutants_dir, selected)
+    else:
+        results = _touched_results(root, mutants_dir, args.base)
+        if results is None:
+            return 0
     return _report(evaluate_results(results, args.threshold), args.threshold)
 
 
