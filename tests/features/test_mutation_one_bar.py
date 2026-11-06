@@ -1,4 +1,4 @@
-"""Steps for mutation_one_bar.feature: one threshold for every touched function, recorded or not."""
+"""Steps for mutation_one_bar.feature: one threshold for every touched function."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ MUTANTS = 100
 
 @pytest.fixture
 def world():
-    return SimpleNamespace(threshold=0.0, baseline={}, violations=[])
+    return SimpleNamespace(threshold=0.0, violations=[])
 
 
 @given(parsers.parse("a threshold of {threshold:d} percent"))
@@ -30,20 +30,10 @@ def _threshold(world, threshold: int) -> None:
     world.threshold = float(threshold)
 
 
-@given(parsers.parse("a function recorded at {baseline:d} percent"))
-def _recorded(world, baseline: int) -> None:
-    world.baseline = {"f": float(baseline)}
-
-
-@given("a function that was never recorded")
-def _never_recorded(world) -> None:
-    world.baseline = {}
-
-
-@when(parsers.parse("the function now scores {score:d} percent"))
+@when(parsers.parse("the function scores {score:d} percent"))
 def _scores(world, score: int) -> None:
     counts = {"killed": score, "survived": MUTANTS - score, "no_tests": 0}
-    world.violations, _ = ratchet.evaluate_results({"f": counts}, world.baseline, world.threshold)
+    world.violations = ratchet.evaluate_results({"f": counts}, world.threshold)
 
 
 @then("the ratchet accepts it")

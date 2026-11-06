@@ -35,9 +35,9 @@ The ratchet is per changed function, not aggregate, and the bar is one number: a
 touched function at or above 80% passes, below it is refused, whether the
 function is new or has been there for years. Nothing is compared with an earlier
 score for a touched function, so touching a function whose tests are weak means
-bringing them to the threshold. (`.mutation-baseline.json` still records scores,
-for the one other rule: a test change must not lower a function it covers; see
-`regression-floor`.)
+bringing them to the threshold. Nothing is stored between runs: there is no
+baseline file, and a function that was only re-tested because its tests changed
+is not judged.
 
 **Why a flat floor, not base-vs-head like the complexity ratchet.** That
 gate reruns fast, cheap checks (radon, an AST walk) against both refs — a
@@ -95,7 +95,7 @@ production contracts your focused tests cover, so the results stay actionable
 instead of reporting large numbers of untested legacy mutants.
 
 A changed function is accepted when its mutation score is `>= 80%`, and refused
-below it. There is no second path and no repository-wide aggregate baseline.
+below it. There is no second path, no stored score and no repository-wide aggregate.
 
 The gate is on by default. With no `[tool.mutmut]` section in `pyproject.toml` the
 job fails and says so, rather than passing with nothing to mutate; to run without

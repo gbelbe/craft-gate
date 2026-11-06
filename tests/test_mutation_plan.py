@@ -653,12 +653,12 @@ def test_the_summary_has_no_new_test_line_without_new_test_files() -> None:
 # -- preparing the cache and running mutmut, with the stages timed -------------------------------
 
 MUTANTS = "mutants"
-RUN_MUTMUT, APPLY, RECORD = "_mutmut_run", "apply", "record"
+RUN_MUTMUT, APPLY = "_mutmut_run", "apply"
 
 
 def stub_planning(monkeypatch, tmp_path, decided):
-    """collect_inputs/plan/apply/record_domain replaced; returns the calls apply and record saw."""
-    seen = {APPLY: 0, RECORD: []}
+    """collect_inputs/plan/apply replaced; returns how many times apply was called."""
+    seen = {APPLY: 0}
     monkeypatch.setattr(mp, "collect_inputs", lambda *_: (None, ["old"], ["new"]))
     monkeypatch.setattr(mp, "plan", lambda _inputs: decided)
 
@@ -667,9 +667,6 @@ def stub_planning(monkeypatch, tmp_path, decided):
         return 3
 
     monkeypatch.setattr(mp, APPLY, fake_apply)
-    monkeypatch.setattr(
-        mp, "record_domain", lambda _dir, functions, *, fresh: seen[RECORD].append(fresh)
-    )
     (tmp_path / MUTANTS).mkdir()
     return seen
 
@@ -688,18 +685,16 @@ def test_an_initial_plan_leaves_the_cache_alone(monkeypatch, tmp_path) -> None:
     mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
 
     assert (tmp_path / MUTANTS).exists()
-    assert seen == {APPLY: 0, RECORD: []}
+    assert seen == {APPLY: 0}
 
 
-def test_an_incremental_plan_drops_verdicts_and_records_the_domain(
-    monkeypatch, tmp_path, capsys
-) -> None:
+def test_an_incremental_plan_drops_verdicts_on_every_pass(monkeypatch, tmp_path, capsys) -> None:
     seen = stub_planning(monkeypatch, tmp_path, mp.Plan(mode=INCREMENTAL))
 
     mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)
     mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 2)
 
-    assert seen == {APPLY: 2, RECORD: [True, False]}
+    assert seen == {APPLY: 2}
     assert "dropped 3 cached verdict(s)" in capsys.readouterr().out
 
 
@@ -778,7 +773,6 @@ def test_the_second_pass_does_not_drop_again_what_the_first_one_re_tested(
     monkeypatch.setattr(mp, "collect_inputs", lambda *_: (inputs, [], []))
     monkeypatch.setattr(mp, "plan", lambda given: seen.append(given.changes) or first)
     monkeypatch.setattr(mp, "apply", lambda *_: 0)
-    monkeypatch.setattr(mp, "record_domain", lambda *_a, **_k: None)
     (tmp_path / MUTANTS).mkdir()
 
     mp._prepare(tmp_path, "main", tmp_path / MUTANTS, 1)

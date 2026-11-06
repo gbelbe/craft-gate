@@ -39,9 +39,7 @@ from __future__ import annotations
 
 import argparse
 import ast
-import hashlib
 import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -52,7 +50,6 @@ from astfuncs import walk_functions  # noqa: E402
 from gitdiff import touched_names  # noqa: E402
 
 DEFAULT_THRESHOLD = 80.0
-DEFAULT_REGRESSION_FLOOR = 100.0  # no excuse: any drop below the recorded score is refused
 
 # mutmut's own exit-code -> outcome mapping (mutmut.stats.status_by_exit_code,
 # mirrored rather than imported: that module pulls in mutmut's full click/UI
@@ -156,16 +153,9 @@ def find_violations(results: dict[str, dict[str, int]], threshold: float) -> lis
     return violations
 
 
-SCORE_DIGITS = 4  # the precision a score is stored with in .mutation-baseline.json
-
-
 def mutation_score(killed: int, tested: int) -> float:
-    """Percent of mutants killed, at the precision the baseline file stores.
-
-    Judging an exact ratio against a stored, rounded one refuses a function whose counts did not
-    change: 38 of 39 is 97.435897..., stored as 97.4359, and 97.435897 < 97.4359.
-    """
-    return round(100.0 * killed / tested, SCORE_DIGITS)
+    """Percent of the tested mutants that were killed."""
+    return 100.0 * killed / tested
 
 
 def _pct(score: float) -> str:
@@ -181,18 +171,13 @@ def _score_violation(name: str, score: float, needs: str) -> str:
 
 
 def evaluate_results(
-    results: dict[str, dict[str, int]],
-    baseline: dict[str, float],
-    threshold: float = DEFAULT_THRESHOLD,
-) -> tuple[list[str], dict[str, float]]:
+    results: dict[str, dict[str, int]], threshold: float = DEFAULT_THRESHOLD
+) -> list[str]:
     """Apply the one bar to every touched function: it must score at least *threshold*.
 
-    New or old makes no difference, and nothing is compared with an earlier score. The scores are
-    still recorded in *baseline*, which is what the functions re-tested because their tests changed
-    are judged against (see :func:`evaluate_domain`).
+    New or old makes no difference, and nothing is compared with an earlier score or stored.
     """
     violations: list[str] = []
-    updated = dict(baseline)
     for name, counts in sorted(results.items()):
         tested = counts["killed"] + counts["survived"]
         if not tested:
@@ -202,60 +187,7 @@ def evaluate_results(
         score = mutation_score(counts["killed"], tested)
         if score < threshold:
             violations.append(_score_violation(name, score, f"needs >= {_pct(threshold)}"))
-        updated[name] = score
-    return violations, updated
-
-
-def evaluate_domain(
-    results: dict[str, dict[str, int]],
-    baseline: dict[str, float],
-    tolerance: float = 0.0,
-    floor: float = DEFAULT_REGRESSION_FLOOR,
-) -> tuple[list[str], dict[str, float]]:
-    """Judge functions re-tested because their *tests* changed, not the function itself.
-
-    They are not held to the threshold (the diff did not touch them), but a test change must
-    not leave one weaker than its recorded score by more than *tolerance* points, unless it still
-    scores at least *floor*: a function recorded at 100% may then settle at 95% without failing a
-    change that did not touch it. A stronger score raises the baseline; a function with no
-    baseline is recorded. The baseline never goes down, so a weakened score is never recorded.
-    """
-    violations: list[str] = []
-    updated = dict(baseline)
-    for name, counts in sorted(results.items()):
-        if counts.get("pending"):
-            left = counts["pending"]
-            violations.append(
-                f"{name}: {left} mutant(s) were not re-tested after the plan reset them"
-            )
-            continue
-        tested = counts["killed"] + counts["survived"]
-        if not tested:
-            continue
-        score = mutation_score(counts["killed"], tested)
-        previous = baseline.get(name)
-        if previous is not None and score < previous - tolerance and score < floor:
-            was, now = _pct(previous), _pct(score)
-            violations.append(
-                f"{name}: a test change lowered its mutation score from {was} to {now}"
-            )
-            continue
-        updated[name] = max(score, previous or 0.0)
-    return violations, updated
-
-
-def diff_fingerprint(root: Path, base_ref: str) -> str:
-    diff = subprocess.run(
-        ["git", "-c", "core.quotepath=false", "diff", "--no-ext-diff", base_ref, "--", "*.py"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    return hashlib.sha256(diff.encode()).hexdigest()
-
-
-PLAN_FILE = "mutation-plan.json"  # written by mutation_plan.py: the functions it had re-tested
+    return violations
 
 
 def group_by_file(names: set[str]) -> dict[str, set[str]]:
@@ -267,47 +199,12 @@ def group_by_file(names: set[str]) -> dict[str, set[str]]:
     return grouped
 
 
-def load_baseline(path: Path) -> dict:
-    try:
-        return json.loads(path.read_text()) if path.exists() else {}
-    except json.JSONDecodeError:
-        return {}
-
-
-def planned_domain(mutants_dir: Path) -> set[str]:
-    """'rel::qual' for each function mutation_plan.py re-tested because its tests changed."""
-    try:
-        planned = json.loads((mutants_dir / PLAN_FILE).read_text()).get("reset_functions", [])
-    except (OSError, json.JSONDecodeError):
-        return set()
-    names: set[str] = set()
-    for mangled in planned:
-        module, _, _function = mangled.rpartition(".x")
-        qual = qualified_name_from_mutant_key(f"{mangled}__mutmut_1")
-        if module and qual:
-            names.add(f"{module.replace('.', '/')}.py::{qual}")
-    return names
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default="origin/main", help="git ref to compare against")
     parser.add_argument("--path", default=".", help="source directory to scan")
     parser.add_argument("--mutants-dir", default="mutants", help="mutmut's output directory")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
-    parser.add_argument("--baseline", default=".mutation-baseline.json")
-    parser.add_argument(
-        "--regression-tolerance",
-        type=float,
-        default=0.0,
-        help="points a re-tested function (tests changed, function untouched) may lose",
-    )
-    parser.add_argument(
-        "--regression-floor",
-        type=float,
-        default=DEFAULT_REGRESSION_FLOOR,
-        help="a re-tested function may drop below its recorded score while at or above this",
-    )
     args = parser.parse_args(argv)
 
     root = Path(args.path)
@@ -325,30 +222,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     touched = touched_names(root, args.base, all_ranges)
-    retested = (planned_domain(mutants_dir) & set(all_ranges)) - touched
-    if not touched and not retested:
+    if not touched:
         print("Mutation ratchet: no touched functions with mutation data.")
         return 0
 
-    baseline_path = root / args.baseline
-    baseline = load_baseline(baseline_path)
-    fingerprint = diff_fingerprint(root, args.base)
-    metadata = baseline.pop("__meta__", {})
-    if metadata.get("diff_fingerprint") == fingerprint:
-        violations, updated = [], {**baseline, "__meta__": metadata}
-    else:
-        results = collect_touched_results(root, mutants_dir, group_by_file(touched))
-        violations, updated = evaluate_results(results, baseline, args.threshold)
-        domain = collect_touched_results(root, mutants_dir, group_by_file(retested))
-        weaker, raised = evaluate_domain(
-            domain, baseline, args.regression_tolerance, args.regression_floor
-        )
-        violations += weaker
-        updated.update({k: v for k, v in raised.items() if k in domain})
-        updated["__meta__"] = {"diff_fingerprint": fingerprint}
-
-    if not violations:
-        baseline_path.write_text(json.dumps(updated, indent=2, sort_keys=True) + "\n")
+    results = collect_touched_results(root, mutants_dir, group_by_file(touched))
+    violations = evaluate_results(results, args.threshold)
 
     if violations:
         print(f"Mutation ratchet: {len(violations)} violation(s):", file=sys.stderr)

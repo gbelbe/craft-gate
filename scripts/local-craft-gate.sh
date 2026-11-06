@@ -69,10 +69,9 @@ if [[ $FAST -eq 0 ]]; then
   if gate_runs mutation; then
     if [[ "$MUTATION" == on || -n "$changed_python" ]]; then
       threshold="$(gate_setting threshold)"
-      floor="$(gate_setting regression-floor)"
       uv run --with-requirements scripts/gate-requirements.txt python scripts/mutation_plan.py run --base "$BASE"
       uv run --with-requirements scripts/gate-requirements.txt python scripts/check_mutation_ratchet.py --base "$BASE" \
-        --threshold "$threshold" --regression-floor "$floor"
+        --threshold "$threshold"
     else
       echo "mutation ratchet: skipped (no Python production or test changes)"
     fi

@@ -89,7 +89,7 @@ in a "Thresholds loosened" section, each value that makes the gates weaker, with
 | Value | Loosened when |
 |---|---|
 | `cyclomatic`, `cognitive`, `max-parameters`, `max-lines`, `duplicated-literal-occurrences`, `duplicated-literal-min-length` | it goes up |
-| `threshold`, `regression-floor` | it goes down |
+| `threshold` | it goes down |
 | `enabled` | `true` becomes `false` |
 | `exemptions.legacy-debt`, `exemptions.new-code` | `false` becomes `true` |
 | `refactor-first.per-file` | `must-decrease` becomes `must-not-increase` |

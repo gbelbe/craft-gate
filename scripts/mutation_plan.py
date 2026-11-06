@@ -716,24 +716,6 @@ def apply(
     return dropped
 
 
-def record_domain(mutants_dir: Path, functions: tuple[str, ...], *, fresh: bool) -> None:
-    """Write the functions re-tested for this change where the ratchet looks for them.
-
-    *fresh* starts the record over (first pass of a run); otherwise it is added to, so the second
-    pass of a run keeps what the first one reset. A cache restored from an earlier run must not
-    carry its list over.
-    """
-    path = mutants_dir / "mutation-plan.json"
-    previous: list[str] = []
-    if not fresh and path.exists():
-        try:
-            previous = json.loads(path.read_text()).get("reset_functions", [])
-        except json.JSONDecodeError:
-            previous = []
-    mutants_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"reset_functions": sorted({*previous, *functions})}, indent=2))
-
-
 def built_selection(root: Path, mutants_dir: Path) -> list[str]:
     """The test selection at the commit the cache was built from; empty when it cannot be told."""
     try:
@@ -772,7 +754,6 @@ def _prepare(
             built = built_selection(root, mutants_dir)
             dropped = apply(decided, mutants_dir, old_args, new_args, built)
             print(f"dropped {dropped} cached verdict(s)")
-            record_domain(mutants_dir, decided.reset_functions, fresh=attempt == 1)
     return decided
 
 
@@ -840,7 +821,6 @@ def main(argv: list[str] | None = None) -> int:
     if decided.mode == "incremental":
         built = built_selection(root, mutants_dir)
         print(f"dropped {apply(decided, mutants_dir, old_args, new_args, built)} cached verdict(s)")
-        record_domain(mutants_dir, decided.reset_functions, fresh=True)
     return 0
 
 
