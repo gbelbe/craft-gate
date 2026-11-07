@@ -86,7 +86,11 @@ def test_the_test_impact_template_runs_everything_when_the_selection_cannot_narr
 
 def test_the_test_impact_template_records_the_map_on_each_full_run() -> None:
     steps = _impact_steps()
-    full_run = "github.event_name != 'pull_request' && steps.tested.outputs.queued != 'true'"
+    full_run = (
+        "(github.event_name == 'merge_group' || (github.event_name == 'push'"
+        " && github.ref_name == github.event.repository.default_branch))"
+        " && steps.tested.outputs.queued != 'true'"
+    )
 
     assert steps["Record which test ran which line"]["if"] == full_run
     assert steps["Keep the map for the pull requests that follow"]["if"] == full_run
