@@ -104,4 +104,4 @@ def test_local_runner_runs_the_architecture_gate_only_when_the_repo_declares_one
     block = runner.split("if [[ -f architecture.yaml ]]; then")[1].split("fi\n")[0]
 
     assert "render_architecture.py --check" in block
-    assert "lint-imports" in block
+    assert "lint-imports --config .architecture.importlinter" in block

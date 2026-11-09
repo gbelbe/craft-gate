@@ -7,7 +7,11 @@ import render_architecture as arch
 from conftest import ROOT as ROOT_DIR
 
 ROOT, LAYERS, PATH, CHECK = "root_package", "layers", "--path", "--check"
-MINIMAL = {ROOT: "shop", LAYERS: ["adapters", "application", "domain"]}
+NAME, MODULES, DOMAIN = "name", "modules", "domain"
+NO_LAYERS = "'layers' must name at least one layer"
+NEEDS_MODULES = "layer 'a' needs a list of 'modules'"
+STACK = ["adapters", "application", DOMAIN]
+MINIMAL = {ROOT: "shop", LAYERS: STACK}
 
 
 def with_(**extra) -> dict:
@@ -26,11 +30,31 @@ def test_a_minimal_declaration_is_valid() -> None:
     [
         ({LAYERS: ["a"]}, "'root_package' is required"),
         ({ROOT: 3, LAYERS: ["a"]}, "'root_package' is required"),
-        ({ROOT: "s"}, "'layers' must name at least one layer"),
-        ({ROOT: "s", LAYERS: []}, "'layers' must name at least one layer"),
+        ({ROOT: "s"}, NO_LAYERS),
+        ({ROOT: "s", LAYERS: []}, NO_LAYERS),
         ({ROOT: "s", LAYERS: ["a", "a"]}, "'layers' lists a layer twice"),
-        ({ROOT: "s", LAYERS: "a"}, "'layers' must be a list of names"),
-        ({ROOT: "s", LAYERS: [1]}, "'layers' must be a list of names"),
+        ({ROOT: "s", LAYERS: "a"}, NO_LAYERS),
+        ({ROOT: "s", LAYERS: [1]}, "'layers' entries are a name or {name, modules}"),
+        (
+            {ROOT: "s", LAYERS: [{MODULES: ["x"]}]},
+            "'layers' entries are a name or {name, modules}",
+        ),
+        ({ROOT: "s", LAYERS: [{NAME: "a"}]}, NEEDS_MODULES),
+        (
+            {ROOT: "s", LAYERS: [{NAME: "a", MODULES: []}]},
+            NEEDS_MODULES,
+        ),
+        (
+            {ROOT: "s", LAYERS: [{NAME: "a", MODULES: [1]}]},
+            NEEDS_MODULES,
+        ),
+        (
+            {
+                ROOT: "s",
+                LAYERS: [{NAME: "a", MODULES: ["x", "y"]}, {NAME: "b", MODULES: ["y"]}],
+            },
+            "'layers' gives ['y'] to more than one layer",
+        ),
         (
             {ROOT: "s", LAYERS: ["a"], "independent": ["other.x"]},
             "'independent' module 'other.x' is not under 's'",
@@ -121,7 +145,7 @@ def test_main_writes_the_contracts_file(tmp_path, capsys) -> None:
     assert arch.main([PATH, str(tmp_path)]) == 0
 
     assert (tmp_path / arch.TARGET).read_text() == arch.render(arch.load(tmp_path / arch.SOURCE))
-    assert capsys.readouterr().out == "✓ wrote .importlinter\n"
+    assert capsys.readouterr().out == "✓ wrote .architecture.importlinter\n"
 
 
 def test_check_passes_when_the_file_is_current(tmp_path, capsys) -> None:
@@ -160,5 +184,19 @@ def test_the_starter_declaration_is_valid_and_renders() -> None:
     starter = arch.load(ROOT_DIR / "templates" / "architecture.yaml")
 
     assert arch.render(starter).startswith(arch.HEADER)
-    assert starter["layers"] == ["adapters", "application", "domain"]
-    assert set(starter["purposes"]) == set(starter["layers"])
+    assert starter[LAYERS] == STACK
+    assert set(starter["purposes"]) == set(starter[LAYERS])
+
+
+def test_a_layer_with_several_modules_becomes_one_line_of_siblings_that_may_import_each_other() -> (
+    None
+):
+    data = {ROOT: "shop", LAYERS: [{NAME: "edge", MODULES: ["cli", "api"]}, DOMAIN]}
+
+    text = arch.render(data)
+
+    assert "layers =\n    cli : api\n    domain\n" in text
+
+
+def test_the_contracts_file_is_not_the_one_import_linter_reads_first() -> None:
+    assert arch.TARGET == ".architecture.importlinter"

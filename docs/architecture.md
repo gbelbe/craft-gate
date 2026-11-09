@@ -62,8 +62,8 @@ needs.
 ## Architecture as code (for the application you build)
 
 `scripts/render_architecture.py` turns a repo's `architecture.yaml` (root package, layers outermost
-first, optional shared modules, independent adapters, known violations) into `.importlinter`, which
-[import-linter](https://import-linter.readthedocs.io/) enforces with `lint-imports`: imports must
+first, each owning one or several modules, optional shared modules, independent adapters, known violations) into `.architecture.importlinter`, which
+[import-linter](https://import-linter.readthedocs.io/) enforces with `lint-imports --config .architecture.importlinter` (a file of its own, so contracts you already keep in `pyproject.toml` keep running): imports must
 point inward, every module must belong to a layer (`exhaustive`), and the known-violations
 baseline can only shrink. With `docs: <dir>` set, it also writes `<dir>/overview.md` (`scripts/architecture_docs.py`):
 the declared layers, and a Mermaid graph of the imports between layers that

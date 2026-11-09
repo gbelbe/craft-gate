@@ -15,7 +15,8 @@ from pytest_bdd import given, parsers, scenarios, then, when
 scenarios("architecture_gate.feature")
 
 LINT_IMPORTS = Path(sys.executable).parent / "lint-imports"
-LAYERS = ["adapters", "application", "domain"]
+ADAPTERS, LAYERS_KEY = "adapters", "layers"
+LAYERS = [ADAPTERS, "application", "domain"]
 DOCS = "docs/architecture"
 BAD_IMPORT = "shop.domain.bad -> shop.adapters.db"
 
@@ -53,7 +54,7 @@ def _app(world) -> None:
         write(world, f"{package}/__init__.py")
     write(world, "shop/adapters/db.py")
     write(world, "shop/domain/model.py")
-    world.declaration = {"root_package": "shop", "layers": LAYERS}
+    world.declaration = {"root_package": "shop", LAYERS_KEY: LAYERS}
 
 
 @when("the application layer imports the domain")
@@ -85,7 +86,7 @@ def _shared(world) -> None:
 @when("the declaration gains a layer without re-rendering")
 def _stale(world) -> None:
     declare(world)
-    world.declaration["layers"] = ["interfaces", *LAYERS]
+    world.declaration[LAYERS_KEY] = ["interfaces", *LAYERS]
     (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
 
 
@@ -126,3 +127,42 @@ def _generate(world) -> None:
 @then(parsers.parse('the overview contains "{text}"'))
 def _overview_has(world, text: str) -> None:
     assert text in (world.root / DOCS / "overview.md").read_text()
+
+
+@given("the adapters layer owns the cli and api modules")
+def _multi(world) -> None:
+    write(world, "shop/cli.py")
+    write(world, "shop/api.py")
+    world.declaration[LAYERS_KEY] = [
+        {"name": ADAPTERS, "modules": [ADAPTERS, "cli", "api"]},
+        *LAYERS[1:],
+    ]
+
+
+@when("the cli module imports the api module")
+def _sibling(world) -> None:
+    write(world, "shop/cli.py", "from shop import api\n")
+
+
+@given("the repository keeps a contract of its own in pyproject.toml")
+def _own_contract(world) -> None:
+    write(
+        world,
+        "pyproject.toml",
+        '[tool.importlinter]\nroot_packages = ["shop"]\n\n[[tool.importlinter.contracts]]\n'
+        'name = "own"\ntype = "forbidden"\nsource_modules = ["shop.application"]\n'
+        'forbidden_modules = ["shop.domain"]\n',
+    )
+    write(world, "shop/application/svc.py", "from shop.domain import model\n")
+
+
+@then("the repository's own contract is still checked")
+def _own_checked(world) -> None:
+    result = subprocess.run(
+        [str(LINT_IMPORTS)],
+        cwd=world.root,
+        env={"PYTHONPATH": str(world.root), "PATH": ""},
+        capture_output=True,
+        text=True,
+    )
+    assert "own BROKEN" in result.stdout, result.stdout

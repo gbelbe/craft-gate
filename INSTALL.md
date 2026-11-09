@@ -125,7 +125,7 @@ from Code Owners" in branch protection.
 
 ```bash
 cp $CRAFT_GATE/templates/architecture.yaml architecture.yaml     # declare your layers, then edit
-python3 scripts/render_architecture.py                            # writes .importlinter and docs/architecture/
+python3 scripts/render_architecture.py                            # writes .architecture.importlinter and docs/architecture/
 ```
 
 Paste `templates/architecture.yml` under your workflow's `jobs:`. It fails a PR when the imports

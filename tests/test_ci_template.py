@@ -174,7 +174,7 @@ def test_the_architecture_job_checks_the_generated_files_and_the_imports() -> No
     runs = [step["run"] for step in ARCHITECTURE["steps"] if "run" in step]
 
     assert any("render_architecture.py --check" in run for run in runs)
-    assert any(run.endswith("lint-imports") for run in runs)
+    assert any(run.endswith("lint-imports --config .architecture.importlinter") for run in runs)
 
 
 def test_the_architecture_job_takes_its_tools_from_the_pinned_file_and_skips_bots() -> None:

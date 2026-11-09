@@ -7,8 +7,10 @@ import grimp
 import pytest
 
 ADAPTERS, APPLICATION, DOMAIN, UTILS = "adapters", "application", "domain", "utils"
+ADAPTER_MODULE, DOMAIN_MODULE = "shop.adapters.a", "shop.domain.m"
+ROOT_KEY, LAYERS_KEY = "root_package", "layers"
 LAYERS = [ADAPTERS, APPLICATION, DOMAIN]
-DATA = {"root_package": "shop", "layers": LAYERS, "shared": [UTILS], "docs": "docs/architecture"}
+DATA = {ROOT_KEY: "shop", LAYERS_KEY: LAYERS, "shared": [UTILS], "docs": "docs/architecture"}
 
 
 # -- layer_of ---------------------------------------------------------------------
@@ -81,7 +83,8 @@ def test_edges_count_imports_between_layers_and_ignore_the_rest(tmp_path) -> Non
         },
     )
 
-    edges = docs.layer_edges(docs.build_graph(DATA, tmp_path), DATA)
+    imports = docs.cross_layer_imports(docs.build_graph(DATA, tmp_path), DATA)
+    edges = docs.layer_edges(imports)
 
     assert edges == {
         (ADAPTERS, APPLICATION): 2,
@@ -105,26 +108,27 @@ def test_build_graph_honours_the_source_root_and_leaves_no_cache(tmp_path, monke
 
 
 def test_the_overview_declares_the_stack_and_a_purpose_per_layer() -> None:
-    text = docs.render_overview({**DATA, "purposes": {DOMAIN: "business rules"}}, {})
+    text = docs.render_overview({**DATA, "purposes": {DOMAIN: "business rules"}}, [])
 
     assert text.startswith(docs.HEADER)
     assert "    adapters --> application --> domain\n" in text
-    assert "| `shop.adapters` | - | `application`, `domain` |" in text
-    assert "| `shop.application` | - | `domain` |" in text
-    assert "| `shop.domain` | business rules | nothing |" in text
+    assert "| **adapters** | - | `shop.adapters` | `application`, `domain` |" in text
+    assert "| **application** | - | `shop.application` | `domain` |" in text
+    assert "| **domain** | business rules | `shop.domain` | nothing |" in text
 
 
 def test_the_overview_draws_inward_imports_solid_and_outward_ones_dashed() -> None:
-    edges = {(ADAPTERS, DOMAIN): 3, (DOMAIN, ADAPTERS): 1}
+    imports = [docs.CrossImport(ADAPTER_MODULE, DOMAIN_MODULE, ADAPTERS, DOMAIN)] * 3
+    imports.append(docs.CrossImport(DOMAIN_MODULE, ADAPTER_MODULE, DOMAIN, ADAPTERS))
 
-    text = docs.render_overview(DATA, edges)
+    text = docs.render_overview(DATA, imports)
 
     assert "    adapters -->|3| domain\n" in text
     assert "    domain -.->|1 against the rule| adapters\n" in text
 
 
 def test_the_overview_says_so_when_layers_do_not_import_each_other() -> None:
-    assert "    none[no imports between layers]\n" in docs.render_overview(DATA, {})
+    assert "    none[no imports between layers]\n" in docs.render_overview(DATA, [])
 
 
 def test_render_docs_keys_the_overview_by_its_path(tmp_path) -> None:
@@ -133,3 +137,53 @@ def test_render_docs_keys_the_overview_by_its_path(tmp_path) -> None:
     rendered = docs.render_docs(DATA, tmp_path)
 
     assert list(rendered) == ["docs/architecture/overview.md"]
+
+
+def test_the_overview_lists_each_import_that_breaks_the_rule_by_module() -> None:
+    imports = [docs.CrossImport(DOMAIN_MODULE, "shop.adapters.db", DOMAIN, ADAPTERS)]
+
+    text = docs.render_overview(DATA, imports)
+
+    assert "- `shop.domain.m` (domain) imports `shop.adapters.db` (adapters)\n" in text
+
+
+def test_the_overview_says_none_when_every_import_points_inward() -> None:
+    imports = [docs.CrossImport(ADAPTER_MODULE, DOMAIN_MODULE, ADAPTERS, DOMAIN)]
+
+    text = docs.render_overview(DATA, imports)
+
+    assert "None: every import between layers points inward." in text
+
+
+# -- layers that own several modules ----------------------------------------------
+
+MULTI = {
+    ROOT_KEY: "shop",
+    LAYERS_KEY: [{"name": "edge", "modules": ["cli", "api"]}, DOMAIN],
+    "shared": [UTILS],
+}
+
+
+def test_a_layer_may_own_several_modules_and_a_bare_name_owns_the_module_of_that_name() -> None:
+    assert docs.layer_modules(MULTI) == {"edge": ["cli", "api"], DOMAIN: [DOMAIN]}
+    assert docs.layer_names(MULTI) == ["edge", DOMAIN]
+
+
+@pytest.mark.parametrize(
+    ("module", "layer"),
+    [
+        ("shop.cli", "edge"),
+        ("shop.api.routes", "edge"),
+        (DOMAIN_MODULE, DOMAIN),
+        ("shop.utils", UTILS),
+        ("shop.other", None),
+    ],
+)
+def test_a_module_belongs_to_the_layer_that_owns_its_package(module, layer) -> None:
+    assert docs.layer_of(module, MULTI) == layer
+
+
+def test_the_table_lists_every_module_a_layer_owns() -> None:
+    text = docs.render_overview(MULTI, [])
+
+    assert "| **edge** | - | `shop.cli`, `shop.api` | `domain` |" in text

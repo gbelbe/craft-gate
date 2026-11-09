@@ -18,6 +18,7 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import grimp
 
@@ -31,25 +32,60 @@ ROOT_KEY = "root_package"
 LAYERS_KEY = "layers"
 
 
+def layer_modules(data: dict) -> dict[str, list[str]]:
+    """Each layer's modules, relative to the root package. A layer written as a bare name is
+    the one module of that name; one written as ``{name, modules}`` owns several."""
+    layers: dict[str, list[str]] = {}
+    for entry in data[LAYERS_KEY]:
+        name, modules = (
+            (entry, [entry]) if isinstance(entry, str) else (entry["name"], entry["modules"])
+        )
+        layers[name] = list(modules)
+    return layers
+
+
+def layer_names(data: dict) -> list[str]:
+    return list(layer_modules(data))
+
+
 def layer_of(module: str, data: dict) -> str | None:
     """The layer (or shared module) a dotted module name sits in, if any."""
     root = data[ROOT_KEY]
-    for name in [*data[LAYERS_KEY], *(data.get("shared") or [])]:
-        prefix = f"{root}.{name}"
-        if module == prefix or module.startswith(prefix + "."):
-            return name
+    owners = {**layer_modules(data), **{name: [name] for name in data.get("shared") or []}}
+    for name, modules in owners.items():
+        for relative in modules:
+            prefix = f"{root}.{relative}"
+            if module == prefix or module.startswith(prefix + "."):
+                return name
     return None
 
 
-def layer_edges(graph, data: dict) -> dict[tuple[str, str], int]:
-    """How many imports run from one layer to another, per (from, to) pair."""
-    edges: dict[tuple[str, str], int] = {}
+class CrossImport(NamedTuple):
+    """One import that runs from a module of one layer to a module of another."""
+
+    module: str
+    imported: str
+    source: str
+    target: str
+
+
+def cross_layer_imports(graph, data: dict) -> list[CrossImport]:
+    found: list[CrossImport] = []
     for module in sorted(graph.modules):
         source = layer_of(module, data)
         for imported in sorted(graph.find_modules_directly_imported_by(module)):
             target = layer_of(imported, data)
             if source and target and source != target:
-                edges[(source, target)] = edges.get((source, target), 0) + 1
+                found.append(CrossImport(module, imported, source, target))
+    return found
+
+
+def layer_edges(imports: list[CrossImport]) -> dict[tuple[str, str], int]:
+    """How many imports run from one layer to another, per (from, to) pair."""
+    edges: dict[tuple[str, str], int] = {}
+    for found in imports:
+        pair = (found.source, found.target)
+        edges[pair] = edges.get(pair, 0) + 1
     return edges
 
 
@@ -78,16 +114,27 @@ def _actual_diagram(edges: dict[tuple[str, str], int], layers: list[str]) -> str
 
 
 def _table(data: dict) -> str:
-    layers, purposes = data[LAYERS_KEY], data.get("purposes") or {}
-    rows = ["| Layer | Purpose | May import |", "|---|---|---|"]
-    for position, name in enumerate(layers):
-        inward = ", ".join(f"`{inner}`" for inner in layers[position + 1 :]) or "nothing"
-        rows.append(f"| `{data[ROOT_KEY]}.{name}` | {purposes.get(name, NO_PURPOSE)} | {inward} |")
+    layers, purposes, root = layer_modules(data), data.get("purposes") or {}, data[ROOT_KEY]
+    names = list(layers)
+    rows = ["| Layer | Purpose | Modules | May import |", "|---|---|---|---|"]
+    for position, name in enumerate(names):
+        modules = ", ".join(f"`{root}.{m}`" for m in layers[name])
+        inward = ", ".join(f"`{inner}`" for inner in names[position + 1 :]) or "nothing"
+        rows.append(f"| **{name}** | {purposes.get(name, NO_PURPOSE)} | {modules} | {inward} |")
     return "\n".join(rows)
 
 
-def render_overview(data: dict, edges: dict[tuple[str, str], int]) -> str:
-    layers = data[LAYERS_KEY]
+def _breaches(imports: list[CrossImport], layers: list[str]) -> str:
+    outward = [i for i in imports if points_outward(i.source, i.target, layers)]
+    if not outward:
+        return "None: every import between layers points inward."
+    lines = [f"- `{i.module}` ({i.source}) imports `{i.imported}` ({i.target})" for i in outward]
+    return "\n".join(lines)
+
+
+def render_overview(data: dict, imports: list[CrossImport]) -> str:
+    layers = layer_names(data)
+    edges = layer_edges(imports)
     return "\n".join(
         [
             HEADER,
@@ -108,6 +155,10 @@ def render_overview(data: dict, edges: dict[tuple[str, str], int]) -> str:
             "",
             _actual_diagram(edges, layers),
             "",
+            "## Imports that break the rule",
+            "",
+            _breaches(imports, layers),
+            "",
         ]
     )
 
@@ -124,5 +175,5 @@ def build_graph(data: dict, project: Path):
 
 def render_docs(data: dict, project: Path) -> dict[str, str]:
     """Each generated document, keyed by its path relative to the repository root."""
-    edges = layer_edges(build_graph(data, project), data)
-    return {f"{data['docs']}/{OVERVIEW}": render_overview(data, edges)}
+    imports = cross_layer_imports(build_graph(data, project), data)
+    return {f"{data['docs']}/{OVERVIEW}": render_overview(data, imports)}
