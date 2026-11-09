@@ -1,0 +1,27 @@
+# Keep the application's architecture honest. A fragment to merge into your CI workflow's `jobs:`,
+# not a complete file; opt in once the repo has an architecture.yaml (templates/architecture.yaml).
+#
+# Two checks, both from the pinned tools in scripts/gate-requirements.txt:
+#   - render_architecture.py --check: .importlinter and the generated docs match architecture.yaml
+#     and the code's actual imports, so the documentation cannot be out of date;
+#   - lint-imports (import-linter): imports point inward, every module belongs to a layer, and the
+#     baseline of known violations has no stale line.
+#
+# lint-imports finds the package on PYTHONPATH. For a src layout, set it to `src` below.
+
+  architecture:
+    name: Architecture
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: "Architecture docs and contracts match architecture.yaml and the code"
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/render_architecture.py --check
+
+      - name: "Architecture: imports point inward (import-linter)"
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt lint-imports

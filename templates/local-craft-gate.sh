@@ -23,6 +23,11 @@ done
 
 uv run --with-requirements scripts/gate-requirements.txt python scripts/check_complexity_ratchet.py --path . --base "$BASE"
 bash scripts/check_tidy_ratchet.sh --base "$BASE"
+# The architecture gate is opt-in: it runs once the repo declares its layers.
+if [[ -f architecture.yaml ]]; then
+  uv run --no-project --with-requirements scripts/gate-requirements.txt python scripts/render_architecture.py --check
+  PYTHONPATH=. uv run --no-project --with-requirements scripts/gate-requirements.txt lint-imports
+fi
 uv run --with-requirements scripts/gate-requirements.txt python scripts/check_refactor_first.py --base "$BASE"
 
 # Whether a test gate applies here is scripts/gate_config.py's call (pyproject.toml's

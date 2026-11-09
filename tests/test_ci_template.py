@@ -163,3 +163,26 @@ def test_the_test_impact_template_names_the_merge_queue() -> None:
 
     assert "merge_group:" in text
     assert "fetch-depth: 0" in text
+
+
+ARCHITECTURE = yaml.safe_load("jobs:\n" + (ROOT / "templates" / "architecture.yml").read_text())[
+    "jobs"
+]["architecture"]
+
+
+def test_the_architecture_job_checks_the_generated_files_and_the_imports() -> None:
+    runs = [step["run"] for step in ARCHITECTURE["steps"] if "run" in step]
+
+    assert any("render_architecture.py --check" in run for run in runs)
+    assert any(run.endswith("lint-imports") for run in runs)
+
+
+def test_the_architecture_job_takes_its_tools_from_the_pinned_file_and_skips_bots() -> None:
+    runs = [step["run"] for step in ARCHITECTURE["steps"] if "run" in step]
+
+    assert all("--with-requirements scripts/gate-requirements.txt" in run for run in runs)
+    assert "[bot]" in ARCHITECTURE["if"]
+
+
+def test_the_architecture_job_puts_the_package_on_the_python_path() -> None:
+    assert ARCHITECTURE["env"] == {"PYTHONPATH": "."}

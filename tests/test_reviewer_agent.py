@@ -78,3 +78,8 @@ def test_every_shipped_skill_and_agent_has_valid_yaml_frontmatter(path) -> None:
 
     assert meta["name"] == (path.parent.name if path.name == "SKILL.md" else path.stem)
     assert meta["description"].strip()
+
+
+def test_the_reviewer_checks_the_layer_a_change_puts_code_in() -> None:
+    assert "architecture.yaml" in AGENT
+    assert "known_violations" in AGENT

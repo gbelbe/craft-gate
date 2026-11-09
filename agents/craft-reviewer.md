@@ -61,6 +61,15 @@ second `#`; a regular expression with adjacent `\s*`-style groups or a repeated 
 redundancy; an `http://` literal that is not an RDF identifier; an unused parameter with no `# NOSONAR`
 reason. Quote the line; these are findings even though no linter here reports them.
 
+## Architecture
+
+If the repo has an `architecture.yaml`, read it and `docs/architecture/overview.md` first. Then ask,
+for each file the change adds or moves: is it in the layer whose purpose it matches (business rules
+in the domain, orchestration in the application, I/O in an adapter)? Does it reach across a layer by
+a path the import checker cannot see (a dynamic import, a framework object passed inward, a domain
+type that is really a database row)? Is a line added to `known_violations` where the code should
+have moved? Quote the line and cite the purpose the file's layer declares.
+
 ## What to look for
 
 - A function that does more than one thing, or that you can only describe with "and".

@@ -1,0 +1,25 @@
+# The application's hexagon, declared. Copy to the root of your repo, edit, then run
+#   python3 scripts/render_architecture.py
+# which writes .importlinter (enforced by `lint-imports`) and the docs below. Commit all three.
+
+root_package: myapp            # the top-level package, importable from source_root
+
+layers:                        # outermost first: each layer may import only the ones after it
+  - adapters                   # drivers and driven adapters: HTTP, CLI, database, queues
+  - application                # use cases; orchestrates the domain through ports
+  - domain                     # business rules; imports nothing of the above
+
+purposes:                      # one line per layer, shown in the generated docs
+  adapters: Talks to the outside world and implements the ports the application defines
+  application: Use cases; depends on the domain and on ports, never on a concrete adapter
+  domain: Business rules and types; no I/O, no framework
+
+# shared: [utils]              # modules outside the layering that every layer may use
+# independent:                 # adapters that must not import each other
+#   - myapp.adapters.web
+#   - myapp.adapters.db
+# source_root: src             # where root_package lives (default .)
+# known_violations:            # imports that break the rule today; may only shrink
+#   - myapp.domain.pricing -> myapp.adapters.db
+
+docs: docs/architecture        # also generate the diagrams and the layer table here

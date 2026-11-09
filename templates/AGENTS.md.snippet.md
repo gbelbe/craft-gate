@@ -148,3 +148,12 @@ have caught it if one exists and adds no violation to the repo, otherwise a diff
 project's parity script (`CRAFTSMANSHIP.md`, "Close the loop"). Never raise a shared setting such as
 `max-args` to match Sonar: craftCov reads it. A false positive gets its documented suppression, not a rule.
 Repositories without SonarQube ignore this section entirely.
+
+## Architecture (when the repo has an `architecture.yaml`)
+
+`architecture.yaml` declares the application's layers; `docs/architecture/` is generated from it and
+from the code's real imports; `lint-imports` enforces it. Read `docs/architecture/overview.md` before
+you touch a layer, and put new code in the layer whose purpose it matches. Imports point inward only: a
+layer may import the layers listed after it, never one above. Never add a line to `known_violations`
+to make a check pass: move the code. After any change to the layers or the imports, run
+`python3 scripts/render_architecture.py` and commit what it writes; `--check` fails CI otherwise.

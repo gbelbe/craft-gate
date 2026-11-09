@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import render_architecture as arch
+from conftest import ROOT as ROOT_DIR
 
 ROOT, LAYERS, PATH, CHECK = "root_package", "layers", "--path", "--check"
 MINIMAL = {ROOT: "shop", LAYERS: ["adapters", "application", "domain"]}
@@ -153,3 +154,11 @@ def test_main_reports_a_bad_declaration_and_exits_2(tmp_path, capsys) -> None:
 
     assert arch.main([PATH, str(tmp_path)]) == arch.ERROR_EXIT
     assert capsys.readouterr().err == "✗ 'root_package' is required\n"
+
+
+def test_the_starter_declaration_is_valid_and_renders() -> None:
+    starter = arch.load(ROOT_DIR / "templates" / "architecture.yaml")
+
+    assert arch.render(starter).startswith(arch.HEADER)
+    assert starter["layers"] == ["adapters", "application", "domain"]
+    assert set(starter["purposes"]) == set(starter["layers"])
