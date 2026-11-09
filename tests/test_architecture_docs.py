@@ -10,6 +10,7 @@ ADAPTERS, APPLICATION, DOMAIN, UTILS = "adapters", "application", "domain", "uti
 DOMAIN_INIT = "shop/domain/__init__.py"
 ADAPTER_MODULE, DOMAIN_MODULE = "shop.adapters.a", "shop.domain.m"
 ROOT_KEY, LAYERS_KEY = "root_package", "layers"
+DRIVING, DRIVEN, MODULES_KEY = "driving", "driven", "modules"
 LAYERS = [ADAPTERS, APPLICATION, DOMAIN]
 DATA = {ROOT_KEY: "shop", LAYERS_KEY: LAYERS, "shared": [UTILS], "docs": "docs/architecture"}
 
@@ -53,7 +54,7 @@ def test_layer_of_works_without_shared_modules() -> None:
     ],
 )
 def test_only_an_import_of_a_layer_stacked_above_points_outward(source, target, outward) -> None:
-    assert docs.points_outward(source, target, LAYERS) is outward
+    assert docs.points_outward(source, target, [[name] for name in LAYERS]) is outward
 
 
 # -- layer_edges (a real grimp graph) ---------------------------------------------
@@ -153,14 +154,14 @@ def test_the_overview_says_none_when_every_import_points_inward() -> None:
 
     text = docs.render_overview(DATA, imports)
 
-    assert "None: every import between layers points inward." in text
+    assert "None: every import between layers follows the rule." in text
 
 
 # -- layers that own several modules ----------------------------------------------
 
 MULTI = {
     ROOT_KEY: "shop",
-    LAYERS_KEY: [{"name": "edge", "modules": ["cli", "api"]}, DOMAIN],
+    LAYERS_KEY: [{"name": "edge", MODULES_KEY: ["cli", "api"]}, DOMAIN],
     "shared": [UTILS],
 }
 
@@ -213,7 +214,7 @@ def test_breach_lines_are_the_outward_imports_once_each_in_the_baseline_form() -
     inward = docs.CrossImport(ADAPTER_MODULE, DOMAIN_MODULE, ADAPTERS, DOMAIN)
     outward = docs.CrossImport(DOMAIN_MODULE, ADAPTER_MODULE, DOMAIN, ADAPTERS)
 
-    lines = docs.breach_lines([inward, outward, outward], LAYERS)
+    lines = docs.breach_lines([inward, outward, outward], [[name] for name in LAYERS])
 
     assert lines == ["shop.domain.m -> shop.adapters.a"]
 
@@ -230,3 +231,62 @@ def test_current_breaches_reads_them_from_the_code(tmp_path) -> None:
     )
 
     assert docs.current_breaches(DATA, tmp_path) == ["shop.domain.m -> shop.adapters.db"]
+
+
+# -- tiers of sibling layers --------------------------------------------------------
+
+TIERED = {
+    ROOT_KEY: "shop",
+    LAYERS_KEY: [
+        "main",
+        [{"name": DRIVING, MODULES_KEY: ["cli", "api"]}, {"name": DRIVEN, MODULES_KEY: ["db"]}],
+        DOMAIN,
+    ],
+}
+
+
+def test_a_list_in_the_layers_is_one_tier_of_sibling_layers() -> None:
+    assert docs.layer_tiers(TIERED) == [["main"], [DRIVING, DRIVEN], [DOMAIN]]
+    assert docs.layer_names(TIERED) == ["main", DRIVING, DRIVEN, DOMAIN]
+    assert docs.layer_modules(TIERED)[DRIVING] == ["cli", "api"]
+
+
+@pytest.mark.parametrize(
+    ("source", "target", "outward"),
+    [
+        (DRIVING, DRIVEN, True),
+        (DRIVEN, DRIVING, True),
+        (DRIVING, DOMAIN, False),
+        (DRIVEN, DOMAIN, False),
+        ("main", DRIVING, False),
+        (DOMAIN, DRIVEN, True),
+        (DRIVING, "main", True),
+    ],
+)
+def test_a_sibling_in_the_same_tier_is_as_forbidden_as_a_layer_above(
+    source, target, outward
+) -> None:
+    assert docs.points_outward(source, target, docs.layer_tiers(TIERED)) is outward
+
+
+def test_the_declared_diagram_puts_siblings_side_by_side() -> None:
+    text = docs.render_overview(TIERED, [])
+
+    assert "    main --> driving & driven --> domain\n" in text
+
+
+def test_siblings_may_import_what_lies_beyond_their_tier_but_not_each_other() -> None:
+    text = docs.render_overview(TIERED, [])
+
+    assert "| **driving** | - | `shop.cli`, `shop.api` | `domain` |" in text
+    assert "| **driven** | - | `shop.db` | `domain` |" in text
+    assert "| **main** | - | `shop.main` | `driving`, `driven`, `domain` |" in text
+
+
+def test_an_import_between_siblings_is_listed_as_a_breach() -> None:
+    imports = [docs.CrossImport("shop.cli", "shop.db", DRIVING, DRIVEN)]
+
+    text = docs.render_overview(TIERED, imports)
+
+    assert "    driving -.->|1 against the rule| driven\n" in text
+    assert "- `shop.cli` (driving) imports `shop.db` (driven)\n" in text

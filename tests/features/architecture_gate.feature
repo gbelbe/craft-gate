@@ -66,3 +66,14 @@ Feature: The declared hexagon is enforced on the real imports
     Given the domain imports an adapter
     When the breaches are listed
     Then the breach "shop.domain.bad -> shop.adapters.db" is printed
+
+  Scenario: adapters of the two sides may not import each other
+    Given the adapters layer is split into a driving and a driven side
+    When the driving side imports the driven side
+    Then the architecture check fails
+    And the report names the import "shop.web -> shop.db"
+
+  Scenario: both sides may import the domain
+    Given the adapters layer is split into a driving and a driven side
+    When both sides import the domain
+    Then the architecture check passes

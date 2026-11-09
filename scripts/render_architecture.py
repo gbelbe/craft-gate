@@ -6,6 +6,8 @@
     layers:                                   # outermost first; each imports only what follows
       - {name: adapters, modules: [cli, api]} # a layer may own several modules or packages
       - application                           # a bare name is the module of that name
+      - [{name: web, modules: [http]}, {name: db, modules: [sql]}]   # siblings: may not import
+                                              # each other (a list is one tier)
       - domain
     shared: [utils]                           # optional: modules outside the layering
     independent: [shop.adapters.web, shop.adapters.db]   # optional: may not import each other
@@ -47,6 +49,7 @@ from architecture_docs import (  # noqa: E402
     current_breaches,
     layer_modules,
     layer_names,
+    layer_tiers,
     render_docs,
 )
 
@@ -56,6 +59,7 @@ HEADER = (
     f"# Generated from {SOURCE} by scripts/render_architecture.py; edit that file, not this one.\n"
 )
 ERROR_EXIT = 2
+KNOWN_KEY = "known_violations"
 
 
 class ArchitectureError(Exception):
@@ -73,9 +77,10 @@ def _check_layers(data: dict) -> None:
     entries = data.get(LAYERS_KEY)
     if not isinstance(entries, list) or not entries:
         raise ArchitectureError(f"'{LAYERS_KEY}' must name at least one layer")
-    for entry in entries:
-        _check_layer_entry(entry)
-    names = [e if isinstance(e, str) else e["name"] for e in entries]
+    for item in entries:
+        for entry in item if isinstance(item, list) else [item]:
+            _check_layer_entry(entry)
+    names = layer_names(data)
     if len(set(names)) != len(names):
         raise ArchitectureError(f"'{LAYERS_KEY}' lists a layer twice")
     owned = [m for modules in layer_modules(data).values() for m in modules]
@@ -104,7 +109,7 @@ def validate(data: dict) -> None:
         if not module.startswith(root + "."):
             raise ArchitectureError(f"'independent' module '{module}' is not under '{root}'")
     _names(data, "shared")
-    _names(data, "known_violations")
+    _names(data, KNOWN_KEY)
     _check_purposes(data)
 
 
@@ -120,16 +125,49 @@ def _lines(key: str, values: list[str]) -> list[str]:
     return [f"{key} =", *(f"    {value}" for value in values)] if values else []
 
 
+def _layer_lines(data: dict) -> list[str]:
+    """One line per tier. The siblings of a tier share a line: import-linter will not mix
+    independent and non-independent modules in one, so their independence is a contract of its
+    own (see `_sibling_contracts`)."""
+    modules = layer_modules(data)
+    return [" : ".join(m for name in tier for m in modules[name]) for tier in layer_tiers(data)]
+
+
+def _qualified(data: dict, names: list[str]) -> list[str]:
+    modules = layer_modules(data)
+    return [f"{data[ROOT_KEY]}.{m}" for name in names for m in modules[name]]
+
+
+def _sibling_contracts(data: dict) -> list[str]:
+    """For each layer that has siblings, a contract that it imports none of them directly. The
+    indirect path through the layers below stays allowed: that is how siblings meet."""
+    lines: list[str] = []
+    for tier in layer_tiers(data):
+        for name in tier if len(tier) > 1 else []:
+            others = [other for other in tier if other != name]
+            lines += [
+                "",
+                f"[importlinter:contract:siblings-{name}]",
+                f"name = {name} does not import its sibling layers directly",
+                "type = forbidden",
+                *_lines("source_modules", _qualified(data, [name])),
+                *_lines("forbidden_modules", _qualified(data, others)),
+                "allow_indirect_imports = true",
+                *_lines("ignore_imports", _names(data, KNOWN_KEY)),
+            ]
+    return lines
+
+
 def _layers_contract(data: dict) -> list[str]:
     return [
         "[importlinter:contract:layers]",
         "name = Hexagonal layers: imports point inward",
         "type = layers",
         f"containers = {data[ROOT_KEY]}",
-        *_lines(LAYERS_KEY, [" : ".join(m) for m in layer_modules(data).values()]),
+        *_lines(LAYERS_KEY, _layer_lines(data)),
         "exhaustive = true",
         *_lines("exhaustive_ignores", _names(data, "shared")),
-        *_lines("ignore_imports", _names(data, "known_violations")),
+        *_lines("ignore_imports", _names(data, KNOWN_KEY)),
     ]
 
 
@@ -155,6 +193,7 @@ def render(data: dict) -> str:
         f"root_package = {data[ROOT_KEY]}",
         "",
         *_layers_contract(data),
+        *_sibling_contracts(data),
         *_independence_contract(data),
     ]
     return "\n".join(lines) + "\n"

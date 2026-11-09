@@ -224,3 +224,54 @@ def test_breaches_reports_a_bad_declaration_and_exits_2(tmp_path, capsys) -> Non
 
     assert arch.main([PATH, str(tmp_path), "--breaches"]) == arch.ERROR_EXIT
     assert capsys.readouterr().err == "✗ 'root_package' is required\n"
+
+
+def test_the_siblings_of_a_tier_share_one_line_of_the_layers_contract() -> None:
+    data = {ROOT: "shop", LAYERS: ["main", [sibling("a", "x", "y"), sibling("b", "z")], DOMAIN]}
+
+    text = arch.render(data)
+
+    assert "layers =\n    main\n    x : y : z\n    domain\n" in text
+
+
+def sibling(name: str, *modules: str) -> dict:
+    return {NAME: name, MODULES: list(modules)}
+
+
+def test_each_sibling_may_not_import_the_others_directly_but_may_through_the_layers_below() -> None:
+    data = {ROOT: "shop", LAYERS: [[sibling("a", "x", "y"), sibling("b", "z")], DOMAIN]}
+
+    text = arch.render(data)
+
+    assert (
+        "[importlinter:contract:siblings-a]\n"
+        "name = a does not import its sibling layers directly\n"
+        "type = forbidden\n"
+        "source_modules =\n    shop.x\n    shop.y\n"
+        "forbidden_modules =\n    shop.z\n"
+        "allow_indirect_imports = true\n"
+    ) in text
+    assert "source_modules =\n    shop.z\nforbidden_modules =\n    shop.x\n    shop.y\n" in text
+
+
+def test_siblings_carry_the_known_violations_too() -> None:
+    data = {
+        ROOT: "shop",
+        LAYERS: [[sibling("a", "x"), sibling("b", "z")], DOMAIN],
+        "known_violations": ["shop.x -> shop.z"],
+    }
+
+    assert arch.render(data).count("ignore_imports =\n    shop.x -> shop.z\n") == 3
+
+
+def test_a_tier_of_one_layer_has_no_sibling_contract() -> None:
+    assert "siblings" not in arch.render(MINIMAL)
+
+
+def test_a_sibling_cannot_be_named_twice_across_tiers() -> None:
+    data = {ROOT: "s", LAYERS: ["a", [{NAME: "a", MODULES: ["x"]}, "b"]]}
+
+    with pytest.raises(arch.ArchitectureError) as error:
+        arch.validate(data)
+
+    assert str(error.value) == "'layers' lists a layer twice"

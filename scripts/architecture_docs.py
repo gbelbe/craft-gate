@@ -32,20 +32,30 @@ ROOT_KEY = "root_package"
 LAYERS_KEY = "layers"
 
 
+def _tiers_of_entries(data: dict) -> list[list]:
+    """The declared tiers, outermost first: a plain entry is a tier of one layer, a list of
+    entries is a tier of sibling layers that sit at the same depth."""
+    return [item if isinstance(item, list) else [item] for item in data[LAYERS_KEY]]
+
+
+def _name_and_modules(entry: str | dict) -> tuple[str, list[str]]:
+    return (entry, [entry]) if isinstance(entry, str) else (entry["name"], list(entry["modules"]))
+
+
 def layer_modules(data: dict) -> dict[str, list[str]]:
     """Each layer's modules, relative to the root package. A layer written as a bare name is
     the one module of that name; one written as ``{name, modules}`` owns several."""
-    layers: dict[str, list[str]] = {}
-    for entry in data[LAYERS_KEY]:
-        name, modules = (
-            (entry, [entry]) if isinstance(entry, str) else (entry["name"], entry["modules"])
-        )
-        layers[name] = list(modules)
-    return layers
+    pairs = (_name_and_modules(entry) for tier in _tiers_of_entries(data) for entry in tier)
+    return dict(pairs)
+
+
+def layer_tiers(data: dict) -> list[list[str]]:
+    """The layer names grouped by tier, outermost first."""
+    return [[_name_and_modules(entry)[0] for entry in tier] for tier in _tiers_of_entries(data)]
 
 
 def layer_names(data: dict) -> list[str]:
-    return list(layer_modules(data))
+    return [name for tier in layer_tiers(data) for name in tier]
 
 
 def layer_of(module: str, data: dict) -> str | None:
@@ -89,25 +99,29 @@ def layer_edges(imports: list[CrossImport]) -> dict[tuple[str, str], int]:
     return edges
 
 
-def points_outward(source: str, target: str, layers: list[str]) -> bool:
-    """True when *source* imports a layer stacked above it (shared modules are never outward)."""
-    return source in layers and target in layers and layers.index(target) < layers.index(source)
+def points_outward(source: str, target: str, tiers: list[list[str]]) -> bool:
+    """True when *source* imports a layer it may not: one in a tier above it, or a sibling in its
+    own tier (shared modules are never outward)."""
+    depth = {name: position for position, tier in enumerate(tiers) for name in tier}
+    if source not in depth or target not in depth:
+        return False
+    return depth[target] < depth[source] or (depth[target] == depth[source] and source != target)
 
 
-def _declared_diagram(layers: list[str]) -> str:
-    chain = " --> ".join(layers)
+def _declared_diagram(tiers: list[list[str]]) -> str:
+    chain = " --> ".join(" & ".join(tier) for tier in tiers)
     return f"```mermaid\nflowchart TB\n    {chain}\n```"
 
 
-def _edge_line(pair: tuple[str, str], count: int, layers: list[str]) -> str:
+def _edge_line(pair: tuple[str, str], count: int, tiers: list[list[str]]) -> str:
     source, target = pair
-    if points_outward(source, target, layers):
+    if points_outward(source, target, tiers):
         return f"    {source} -.->|{count} against the rule| {target}"
     return f"    {source} -->|{count}| {target}"
 
 
-def _actual_diagram(edges: dict[tuple[str, str], int], layers: list[str]) -> str:
-    lines = [_edge_line(pair, count, layers) for pair, count in sorted(edges.items())]
+def _actual_diagram(edges: dict[tuple[str, str], int], tiers: list[list[str]]) -> str:
+    lines = [_edge_line(pair, count, tiers) for pair, count in sorted(edges.items())]
     return "\n".join(
         ["```mermaid", "flowchart TB", *(lines or ["    none[no imports between layers]"]), "```"]
     )
@@ -115,31 +129,33 @@ def _actual_diagram(edges: dict[tuple[str, str], int], layers: list[str]) -> str
 
 def _table(data: dict) -> str:
     layers, purposes, root = layer_modules(data), data.get("purposes") or {}, data[ROOT_KEY]
-    names = list(layers)
+    tiers = layer_tiers(data)
     rows = ["| Layer | Purpose | Modules | May import |", "|---|---|---|---|"]
-    for position, name in enumerate(names):
-        modules = ", ".join(f"`{root}.{m}`" for m in layers[name])
-        inward = ", ".join(f"`{inner}`" for inner in names[position + 1 :]) or "nothing"
-        rows.append(f"| **{name}** | {purposes.get(name, NO_PURPOSE)} | {modules} | {inward} |")
+    for position, tier in enumerate(tiers):
+        inner = [name for deeper in tiers[position + 1 :] for name in deeper]
+        inward = ", ".join(f"`{name}`" for name in inner) or "nothing"
+        for name in tier:
+            modules = ", ".join(f"`{root}.{m}`" for m in layers[name])
+            rows.append(f"| **{name}** | {purposes.get(name, NO_PURPOSE)} | {modules} | {inward} |")
     return "\n".join(rows)
 
 
-def _breaches(imports: list[CrossImport], layers: list[str]) -> str:
-    outward = [i for i in imports if _outward(i, layers)]
+def _breaches(imports: list[CrossImport], tiers: list[list[str]]) -> str:
+    outward = [i for i in imports if _outward(i, tiers)]
     if not outward:
-        return "None: every import between layers points inward."
+        return "None: every import between layers follows the rule."
     lines = [f"- `{i.module}` ({i.source}) imports `{i.imported}` ({i.target})" for i in outward]
     return "\n".join(lines)
 
 
-def breach_lines(imports: list[CrossImport], layers: list[str]) -> list[str]:
+def breach_lines(imports: list[CrossImport], tiers: list[list[str]]) -> list[str]:
     """Each module-to-module import that points outward, as ``importer -> imported`` (the form
     ``known_violations`` takes), once each."""
-    return sorted({f"{i.module} -> {i.imported}" for i in imports if _outward(i, layers)})
+    return sorted({f"{i.module} -> {i.imported}" for i in imports if _outward(i, tiers)})
 
 
-def _outward(found: CrossImport, layers: list[str]) -> bool:
-    return points_outward(found.source, found.target, layers)
+def _outward(found: CrossImport, tiers: list[list[str]]) -> bool:
+    return points_outward(found.source, found.target, tiers)
 
 
 def _shared_line(data: dict) -> str:
@@ -151,7 +167,7 @@ def _shared_line(data: dict) -> str:
 
 
 def render_overview(data: dict, imports: list[CrossImport]) -> str:
-    layers = layer_names(data)
+    tiers, layers = layer_tiers(data), layer_names(data)
     edges = {
         pair: count
         for pair, count in layer_edges(imports).items()
@@ -162,12 +178,13 @@ def render_overview(data: dict, imports: list[CrossImport]) -> str:
             HEADER,
             "# Architecture",
             "",
-            f"Root package `{data[ROOT_KEY]}`. Imports point inward: a layer may import "
-            "only the layers listed after it in the table below.",
+            f"Root package `{data[ROOT_KEY]}`. Imports point inward: a layer may import only the "
+            "layers in the tiers after its own, never a sibling in its tier. The table below "
+            "says which.",
             "",
             "## Layers, as declared",
             "",
-            _declared_diagram(layers),
+            _declared_diagram(tiers),
             "",
             _table(data),
             "",
@@ -176,11 +193,11 @@ def render_overview(data: dict, imports: list[CrossImport]) -> str:
             "",
             "A dashed arrow is an import that breaks the rule.",
             "",
-            _actual_diagram(edges, layers),
+            _actual_diagram(edges, tiers),
             "",
             "## Imports that break the rule",
             "",
-            _breaches(imports, layers),
+            _breaches(imports, tiers),
             "",
         ]
     )
@@ -199,7 +216,7 @@ def build_graph(data: dict, project: Path):
 def current_breaches(data: dict, project: Path) -> list[str]:
     """The outward imports the code has today, for seeding ``known_violations``."""
     imports = cross_layer_imports(build_graph(data, project), data)
-    return breach_lines(imports, layer_names(data))
+    return breach_lines(imports, layer_tiers(data))
 
 
 def render_docs(data: dict, project: Path) -> dict[str, str]:

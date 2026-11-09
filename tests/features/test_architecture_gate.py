@@ -19,6 +19,9 @@ ADAPTERS, LAYERS_KEY = "adapters", "layers"
 LAYERS = [ADAPTERS, "application", "domain"]
 DOCS = "docs/architecture"
 PATH_FLAG = "--path"
+TO_DOMAIN = "from shop.domain import model\n"
+WEB_FILE = "shop/web.py"
+MODULES_KEY = "modules"
 BAD_IMPORT = "shop.domain.bad -> shop.adapters.db"
 
 
@@ -60,7 +63,7 @@ def _app(world) -> None:
 
 @when("the application layer imports the domain")
 def _inward(world) -> None:
-    write(world, "shop/application/svc.py", "from shop.domain import model\n")
+    write(world, "shop/application/svc.py", TO_DOMAIN)
 
 
 @when("the domain imports an adapter")
@@ -135,7 +138,7 @@ def _multi(world) -> None:
     write(world, "shop/cli.py")
     write(world, "shop/api.py")
     world.declaration[LAYERS_KEY] = [
-        {"name": ADAPTERS, "modules": [ADAPTERS, "cli", "api"]},
+        {"name": ADAPTERS, MODULES_KEY: [ADAPTERS, "cli", "api"]},
         *LAYERS[1:],
     ]
 
@@ -154,7 +157,7 @@ def _own_contract(world) -> None:
         'name = "own"\ntype = "forbidden"\nsource_modules = ["shop.application"]\n'
         'forbidden_modules = ["shop.domain"]\n',
     )
-    write(world, "shop/application/svc.py", "from shop.domain import model\n")
+    write(world, "shop/application/svc.py", TO_DOMAIN)
 
 
 @then("the repository's own contract is still checked")
@@ -179,3 +182,26 @@ def _list_breaches(world, capsys) -> None:
 @then(parsers.parse('the breach "{edge}" is printed'))
 def _breach_printed(world, edge: str) -> None:
     assert f"  - {edge}\n" in world.result.stdout
+
+
+@given("the adapters layer is split into a driving and a driven side")
+def _sides(world) -> None:
+    write(world, WEB_FILE)
+    write(world, "shop/db.py")
+    world.declaration["shared"] = [ADAPTERS]  # the background's package is not part of this split
+    world.declaration[LAYERS_KEY] = [
+        [{"name": "driving", MODULES_KEY: ["web"]}, {"name": "driven", MODULES_KEY: ["db"]}],
+        "application",
+        "domain",
+    ]
+
+
+@when("the driving side imports the driven side")
+def _sideways(world) -> None:
+    write(world, WEB_FILE, "from shop import db\n")
+
+
+@when("both sides import the domain")
+def _both_inward(world) -> None:
+    write(world, WEB_FILE, TO_DOMAIN)
+    write(world, "shop/db.py", TO_DOMAIN)
