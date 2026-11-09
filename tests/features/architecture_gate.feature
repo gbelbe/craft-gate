@@ -37,3 +37,15 @@ Feature: The declared hexagon is enforced on the real imports
   Scenario: the contracts file must match the declaration
     When the declaration gains a layer without re-rendering
     Then the render check fails
+
+  Scenario: the generated overview shows an import that breaks the rule
+    Given the architecture documentation is requested
+    And the domain imports an adapter
+    When the documentation is generated
+    Then the overview contains "domain -.->|1 against the rule| adapters"
+
+  Scenario: the documentation goes stale when the code changes
+    Given the architecture documentation is requested
+    And the documentation is generated
+    When the domain imports an adapter
+    Then the render check fails

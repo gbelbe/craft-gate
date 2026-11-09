@@ -27,6 +27,7 @@ SHIPPED = [
     "scripts/test_impact.py",
     "scripts/gate_config.py",
     "scripts/render_architecture.py",
+    "scripts/architecture_docs.py",
     "scripts/design_review.py",
     "scripts/config_loosening.py",
     "scripts/gate-requirements.txt",

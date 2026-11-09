@@ -16,6 +16,7 @@ scenarios("architecture_gate.feature")
 
 LINT_IMPORTS = Path(sys.executable).parent / "lint-imports"
 LAYERS = ["adapters", "application", "domain"]
+DOCS = "docs/architecture"
 BAD_IMPORT = "shop.domain.bad -> shop.adapters.db"
 
 
@@ -109,3 +110,19 @@ def _named(world, edge: str) -> None:
 @then("the render check fails")
 def _render_fails(world) -> None:
     assert arch.main(["--path", str(world.root), "--check"]) == 1
+
+
+@given("the architecture documentation is requested")
+def _docs_requested(world) -> None:
+    world.declaration["docs"] = DOCS
+
+
+@given("the documentation is generated")
+@when("the documentation is generated")
+def _generate(world) -> None:
+    declare(world)
+
+
+@then(parsers.parse('the overview contains "{text}"'))
+def _overview_has(world, text: str) -> None:
+    assert text in (world.root / DOCS / "overview.md").read_text()
