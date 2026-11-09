@@ -7,6 +7,7 @@ import grimp
 import pytest
 
 ADAPTERS, APPLICATION, DOMAIN, UTILS = "adapters", "application", "domain", "utils"
+DOMAIN_INIT = "shop/domain/__init__.py"
 ADAPTER_MODULE, DOMAIN_MODULE = "shop.adapters.a", "shop.domain.m"
 ROOT_KEY, LAYERS_KEY = "root_package", "layers"
 LAYERS = [ADAPTERS, APPLICATION, DOMAIN]
@@ -76,7 +77,7 @@ def test_edges_count_imports_between_layers_and_ignore_the_rest(tmp_path) -> Non
             "shop/application/__init__.py": "",
             "shop/application/a.py": "from shop.domain import m\nfrom shop.application import b\n",
             "shop/application/b.py": "",
-            "shop/domain/__init__.py": "",
+            DOMAIN_INIT: "",
             "shop/domain/m.py": "from shop.utils import u\n",
             "shop/utils/__init__.py": "",
             "shop/utils/u.py": "",
@@ -132,7 +133,7 @@ def test_the_overview_says_so_when_layers_do_not_import_each_other() -> None:
 
 
 def test_render_docs_keys_the_overview_by_its_path(tmp_path) -> None:
-    package(tmp_path, {"shop/domain/__init__.py": ""})
+    package(tmp_path, {DOMAIN_INIT: ""})
 
     rendered = docs.render_docs(DATA, tmp_path)
 
@@ -187,3 +188,45 @@ def test_the_table_lists_every_module_a_layer_owns() -> None:
     text = docs.render_overview(MULTI, [])
 
     assert "| **edge** | - | `shop.cli`, `shop.api` | `domain` |" in text
+
+
+# -- shared modules, and the baseline lines ---------------------------------------
+
+
+def test_the_overview_names_shared_modules_and_leaves_them_out_of_the_diagram() -> None:
+    imports = [docs.CrossImport(ADAPTER_MODULE, "shop.utils.text", ADAPTERS, UTILS)]
+
+    text = docs.render_overview(DATA, imports)
+
+    assert "Shared by every layer, outside the layering: `shop.utils`.\n" in text
+    assert "-->|1| utils" not in text
+    assert "none[no imports between layers]" in text
+
+
+def test_without_shared_modules_the_overview_has_no_shared_line() -> None:
+    data = {ROOT_KEY: "shop", LAYERS_KEY: LAYERS}
+
+    assert "Shared by every layer" not in docs.render_overview(data, [])
+
+
+def test_breach_lines_are_the_outward_imports_once_each_in_the_baseline_form() -> None:
+    inward = docs.CrossImport(ADAPTER_MODULE, DOMAIN_MODULE, ADAPTERS, DOMAIN)
+    outward = docs.CrossImport(DOMAIN_MODULE, ADAPTER_MODULE, DOMAIN, ADAPTERS)
+
+    lines = docs.breach_lines([inward, outward, outward], LAYERS)
+
+    assert lines == ["shop.domain.m -> shop.adapters.a"]
+
+
+def test_current_breaches_reads_them_from_the_code(tmp_path) -> None:
+    package(
+        tmp_path,
+        {
+            DOMAIN_INIT: "",
+            "shop/domain/m.py": "from shop.adapters import db\n",
+            "shop/adapters/__init__.py": "",
+            "shop/adapters/db.py": "",
+        },
+    )
+
+    assert docs.current_breaches(DATA, tmp_path) == ["shop.domain.m -> shop.adapters.db"]

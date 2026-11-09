@@ -125,16 +125,38 @@ def _table(data: dict) -> str:
 
 
 def _breaches(imports: list[CrossImport], layers: list[str]) -> str:
-    outward = [i for i in imports if points_outward(i.source, i.target, layers)]
+    outward = [i for i in imports if _outward(i, layers)]
     if not outward:
         return "None: every import between layers points inward."
     lines = [f"- `{i.module}` ({i.source}) imports `{i.imported}` ({i.target})" for i in outward]
     return "\n".join(lines)
 
 
+def breach_lines(imports: list[CrossImport], layers: list[str]) -> list[str]:
+    """Each module-to-module import that points outward, as ``importer -> imported`` (the form
+    ``known_violations`` takes), once each."""
+    return sorted({f"{i.module} -> {i.imported}" for i in imports if _outward(i, layers)})
+
+
+def _outward(found: CrossImport, layers: list[str]) -> bool:
+    return points_outward(found.source, found.target, layers)
+
+
+def _shared_line(data: dict) -> str:
+    shared = data.get("shared") or []
+    if not shared:
+        return ""
+    modules = ", ".join(f"`{data[ROOT_KEY]}.{name}`" for name in shared)
+    return f"Shared by every layer, outside the layering: {modules}.\n"
+
+
 def render_overview(data: dict, imports: list[CrossImport]) -> str:
     layers = layer_names(data)
-    edges = layer_edges(imports)
+    edges = {
+        pair: count
+        for pair, count in layer_edges(imports).items()
+        if pair[0] in layers and pair[1] in layers
+    }
     return "\n".join(
         [
             HEADER,
@@ -149,6 +171,7 @@ def render_overview(data: dict, imports: list[CrossImport]) -> str:
             "",
             _table(data),
             "",
+            _shared_line(data),
             "## Imports between layers, as they are in the code",
             "",
             "A dashed arrow is an import that breaks the rule.",
@@ -171,6 +194,12 @@ def build_graph(data: dict, project: Path):
         return grimp.build_graph(data[ROOT_KEY], cache_dir=None)  # no cache in your repo
     finally:
         sys.path.pop(0)
+
+
+def current_breaches(data: dict, project: Path) -> list[str]:
+    """The outward imports the code has today, for seeding ``known_violations``."""
+    imports = cross_layer_imports(build_graph(data, project), data)
+    return breach_lines(imports, layer_names(data))
 
 
 def render_docs(data: dict, project: Path) -> dict[str, str]:

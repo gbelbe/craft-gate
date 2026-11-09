@@ -27,6 +27,7 @@ so the list can only shrink.
 Usage:
     python scripts/render_architecture.py [--path .]            # write the generated files
     python scripts/render_architecture.py [--path .] --check    # exit 1 if it is out of date
+    python scripts/render_architecture.py [--path .] --breaches # today's breaches, for the baseline
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ sys.path.insert(
 from architecture_docs import (  # noqa: E402
     LAYERS_KEY,
     ROOT_KEY,
+    current_breaches,
     layer_modules,
     layer_names,
     render_docs,
@@ -183,6 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--path", default=".", help="repository root (default: .)")
     parser.add_argument("--check", action="store_true", help="fail if a generated file is stale")
+    parser.add_argument(
+        "--breaches",
+        action="store_true",
+        help="print today's outward imports, ready to paste under known_violations",
+    )
     args = parser.parse_args(argv)
     root = Path(args.path)
     try:
@@ -190,12 +197,26 @@ def main(argv: list[str] | None = None) -> int:
     except ArchitectureError as error:
         print(f"✗ {error}", file=sys.stderr)
         return ERROR_EXIT
+    if args.breaches:
+        return print_breaches(root)
     if args.check:
         return report_stale(stale(files), root)
     for path, text in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     print("✓ wrote " + ", ".join(p.relative_to(root).as_posix() for p in files))
+    return 0
+
+
+def print_breaches(root: Path) -> int:
+    try:
+        data = load(root / SOURCE)
+        validate(data)
+    except ArchitectureError as error:
+        print(f"✗ {error}", file=sys.stderr)
+        return ERROR_EXIT
+    for line in current_breaches(data, root.resolve()):
+        print(f"  - {line}")
     return 0
 
 

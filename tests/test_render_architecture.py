@@ -200,3 +200,27 @@ def test_a_layer_with_several_modules_becomes_one_line_of_siblings_that_may_impo
 
 def test_the_contracts_file_is_not_the_one_import_linter_reads_first() -> None:
     assert arch.TARGET == ".architecture.importlinter"
+
+
+def test_breaches_prints_baseline_lines_ready_to_paste(tmp_path, capsys) -> None:
+    (tmp_path / "shop" / "domain").mkdir(parents=True)
+    (tmp_path / "shop" / "adapters").mkdir()
+    for rel, text in {
+        "shop/__init__.py": "",
+        "shop/domain/__init__.py": "from shop.adapters import db\n",
+        "shop/adapters/__init__.py": "",
+        "shop/adapters/db.py": "",
+    }.items():
+        (tmp_path / rel).write_text(text)
+    write_source(tmp_path, f"{ROOT}: shop\n{LAYERS}: [adapters, domain]\n")
+
+    assert arch.main([PATH, str(tmp_path), "--breaches"]) == 0
+
+    assert capsys.readouterr().out == "  - shop.domain -> shop.adapters.db\n"
+
+
+def test_breaches_reports_a_bad_declaration_and_exits_2(tmp_path, capsys) -> None:
+    write_source(tmp_path, "layers: [a]\n")
+
+    assert arch.main([PATH, str(tmp_path), "--breaches"]) == arch.ERROR_EXIT
+    assert capsys.readouterr().err == "✗ 'root_package' is required\n"

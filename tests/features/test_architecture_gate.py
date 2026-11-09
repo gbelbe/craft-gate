@@ -18,6 +18,7 @@ LINT_IMPORTS = Path(sys.executable).parent / "lint-imports"
 ADAPTERS, LAYERS_KEY = "adapters", "layers"
 LAYERS = [ADAPTERS, "application", "domain"]
 DOCS = "docs/architecture"
+PATH_FLAG = "--path"
 BAD_IMPORT = "shop.domain.bad -> shop.adapters.db"
 
 
@@ -34,7 +35,7 @@ def write(world, rel: str, text: str = "") -> None:
 
 def declare(world) -> None:
     (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
-    arch.main(["--path", str(world.root)])
+    arch.main([PATH_FLAG, str(world.root)])
 
 
 def lint(world) -> subprocess.CompletedProcess[str]:
@@ -110,7 +111,7 @@ def _named(world, edge: str) -> None:
 
 @then("the render check fails")
 def _render_fails(world) -> None:
-    assert arch.main(["--path", str(world.root), "--check"]) == 1
+    assert arch.main([PATH_FLAG, str(world.root), "--check"]) == 1
 
 
 @given("the architecture documentation is requested")
@@ -166,3 +167,15 @@ def _own_checked(world) -> None:
         text=True,
     )
     assert "own BROKEN" in result.stdout, result.stdout
+
+
+@when("the breaches are listed")
+def _list_breaches(world, capsys) -> None:
+    (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
+    arch.main([PATH_FLAG, str(world.root), "--breaches"])
+    world.result = SimpleNamespace(stdout=capsys.readouterr().out)
+
+
+@then(parsers.parse('the breach "{edge}" is printed'))
+def _breach_printed(world, edge: str) -> None:
+    assert f"  - {edge}\n" in world.result.stdout

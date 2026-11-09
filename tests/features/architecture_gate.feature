@@ -61,3 +61,8 @@ Feature: The declared hexagon is enforced on the real imports
     And that import is listed as a known violation
     When the documentation is generated
     Then the repository's own contract is still checked
+
+  Scenario: the breaches an adopter must list are printed ready to paste
+    Given the domain imports an adapter
+    When the breaches are listed
+    Then the breach "shop.domain.bad -> shop.adapters.db" is printed
