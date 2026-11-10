@@ -65,8 +65,11 @@ needs.
 first, optional shared modules, independent adapters, known violations) into `.importlinter`, which
 [import-linter](https://import-linter.readthedocs.io/) enforces with `lint-imports`: imports must
 point inward, every module must belong to a layer (`exhaustive`), and the known-violations
-baseline can only shrink. `--check` fails when the generated file is stale. Generated diagrams and
-the agent wiring come in later slices.
+baseline can only shrink. With `docs: <dir>` set, it also writes `<dir>/overview.md` (`scripts/architecture_docs.py`):
+the declared layers, and a Mermaid graph of the imports between layers that
+[grimp](https://grimp.readthedocs.io/) reads from the code, outward ones dashed. `--check` fails when
+any generated file is stale, so the documentation cannot drift from the code. The agent wiring
+comes in a later slice.
 
 ## Two directories, one rule
 

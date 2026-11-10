@@ -129,7 +129,7 @@ def test_check_passes_when_the_file_is_current(tmp_path, capsys) -> None:
     capsys.readouterr()
 
     assert arch.main([PATH, str(tmp_path), CHECK]) == 0
-    assert capsys.readouterr().out == "✓ .importlinter matches architecture.yaml\n"
+    assert capsys.readouterr().out == "✓ generated files match architecture.yaml\n"
 
 
 def test_check_fails_when_the_declaration_moved_on(tmp_path, capsys) -> None:

@@ -8,6 +8,9 @@
     independent: [shop.adapters.web, shop.adapters.db]   # optional: may not import each other
     known_violations:                         # optional baseline: imports that break it today
       - shop.domain.pricing -> shop.adapters.db
+    purposes: {domain: "business rules, no I/O"}   # optional: one line per layer, shown in the docs
+    docs: docs/architecture                   # optional: also generate the diagrams here
+    source_root: src                          # optional: where root_package lives (default .)
 
 From it this writes `.importlinter`, which `lint-imports` (import-linter) enforces. A layers
 contract makes the direction of imports the architecture's rule; `exhaustive` makes a module that
@@ -16,7 +19,7 @@ lets the rule be adopted on code that breaks it: anything new fails, and a basel
 longer matches an import fails too (import-linter's own check), so the list can only shrink.
 
 Usage:
-    python scripts/render_architecture.py [--path .]            # write .importlinter
+    python scripts/render_architecture.py [--path .]            # write the generated files
     python scripts/render_architecture.py [--path .] --check    # exit 1 if it is out of date
 """
 
@@ -28,14 +31,17 @@ from pathlib import Path
 
 import yaml
 
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+from architecture_docs import LAYERS_KEY, ROOT_KEY, render_docs  # noqa: E402
+
 SOURCE = "architecture.yaml"
 TARGET = ".importlinter"
 HEADER = (
     f"# Generated from {SOURCE} by scripts/render_architecture.py; edit that file, not this one.\n"
 )
 ERROR_EXIT = 2
-ROOT_KEY = "root_package"
-LAYERS_KEY = "layers"
 
 
 class ArchitectureError(Exception):
@@ -64,6 +70,14 @@ def validate(data: dict) -> None:
             raise ArchitectureError(f"'independent' module '{module}' is not under '{root}'")
     _names(data, "shared")
     _names(data, "known_violations")
+    _check_purposes(data)
+
+
+def _check_purposes(data: dict) -> None:
+    purposes = data.get("purposes") or {}
+    unknown = sorted(set(purposes) - set(data[LAYERS_KEY]))
+    if not isinstance(purposes, dict) or unknown:
+        raise ArchitectureError(f"'purposes' must describe declared layers, not {unknown}")
 
 
 def _lines(key: str, values: list[str]) -> list[str]:
@@ -117,30 +131,48 @@ def load(path: Path) -> dict:
     return yaml.safe_load(path.read_text()) or {}
 
 
+def outputs(root: Path) -> dict[Path, str]:
+    """Every file the declaration determines: the contracts, and the docs when `docs` is set."""
+    data = load(root / SOURCE)
+    files = {root / TARGET: render(data)}
+    if data.get("docs"):
+        files |= {root / rel: text for rel, text in render_docs(data, root.resolve()).items()}
+    return files
+
+
+def stale(files: dict[Path, str]) -> list[Path]:
+    return [p for p, text in files.items() if not p.is_file() or p.read_text() != text]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--path", default=".", help="repository root (default: .)")
-    parser.add_argument("--check", action="store_true", help="fail if .importlinter is stale")
+    parser.add_argument("--check", action="store_true", help="fail if a generated file is stale")
     args = parser.parse_args(argv)
     root = Path(args.path)
     try:
-        wanted = render(load(root / SOURCE))
+        files = outputs(root)
     except ArchitectureError as error:
         print(f"✗ {error}", file=sys.stderr)
         return ERROR_EXIT
-    target = root / TARGET
-    current = target.read_text() if target.is_file() else None
     if args.check:
-        if current != wanted:
-            print(f"✗ {TARGET} is out of date; run scripts/render_architecture.py")
-            return 1
-        print(f"✓ {TARGET} matches {SOURCE}")
-        return 0
-    target.write_text(wanted)
-    print(f"✓ wrote {TARGET}")
+        return report_stale(stale(files), root)
+    for path, text in files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    print("✓ wrote " + ", ".join(p.relative_to(root).as_posix() for p in files))
     return 0
+
+
+def report_stale(paths: list[Path], root: Path) -> int:
+    for path in paths:
+        name = path.relative_to(root).as_posix()
+        print(f"✗ {name} is out of date; run scripts/render_architecture.py")
+    if not paths:
+        print(f"✓ generated files match {SOURCE}")
+    return 1 if paths else 0
 
 
 if __name__ == "__main__":
