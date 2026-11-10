@@ -20,7 +20,7 @@ LOCKED = {p["name"]: p["version"] for p in tomllib.loads((ROOT / "uv.lock").read
 PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text())
 DECLARED = [
     Requirement(spec)
-    for extra in ("craftcov", "complexity", "mutation", "dev")
+    for extra in ("craftcov", "complexity", "mutation", "architecture", "dev")
     for spec in PYPROJECT["project"]["optional-dependencies"][extra]
     if not spec.startswith(("pytest>", "pytest-bdd"))
 ]
@@ -56,7 +56,7 @@ def test_the_pin_satisfies_what_pyproject_declares_for_the_tool(declared) -> Non
 
 
 def test_a_repo_needs_no_extras_of_its_own_for_the_craft_gate_tools() -> None:
-    assert not re.search(r"--extra (craftcov|complexity|mutation|dev)\b", CI + LOCAL)
+    assert not re.search(r"--extra (craftcov|complexity|mutation|architecture|dev)\b", CI + LOCAL)
 
 
 def test_every_job_that_runs_uv_takes_the_tools_from_the_pinned_file() -> None:

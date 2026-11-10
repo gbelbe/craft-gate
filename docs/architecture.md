@@ -59,6 +59,15 @@ gates together is `gate_config.py`, which reads `[tool.craft-gate]` and decides
 whether each runs, is skipped on purpose, or fails because the repo lacks what it
 needs.
 
+## Architecture as code (for the application you build)
+
+`scripts/render_architecture.py` turns a repo's `architecture.yaml` (root package, layers outermost
+first, optional shared modules, independent adapters, known violations) into `.importlinter`, which
+[import-linter](https://import-linter.readthedocs.io/) enforces with `lint-imports`: imports must
+point inward, every module must belong to a layer (`exhaustive`), and the known-violations
+baseline can only shrink. `--check` fails when the generated file is stale. Generated diagrams and
+the agent wiring come in later slices.
+
 ## Two directories, one rule
 
 | Directory | Holds | Rule |

@@ -19,6 +19,7 @@ SCRIPTS = [
     "design_review.py",
     "config_loosening.py",
     "ci_history.py",
+    "render_architecture.py",
 ]
 
 
