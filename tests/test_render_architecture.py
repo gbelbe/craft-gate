@@ -261,7 +261,12 @@ def test_siblings_carry_the_known_violations_too() -> None:
         "known_violations": ["shop.x -> shop.z"],
     }
 
-    assert arch.render(data).count("ignore_imports =\n    shop.x -> shop.z\n") == 3
+    layers_contract_and_one_per_sibling = 3
+
+    assert (
+        arch.render(data).count("ignore_imports =\n    shop.x -> shop.z\n")
+        == layers_contract_and_one_per_sibling
+    )
 
 
 def test_a_tier_of_one_layer_has_no_sibling_contract() -> None:
