@@ -49,3 +49,31 @@ Feature: The declared hexagon is enforced on the real imports
     And the documentation is generated
     When the domain imports an adapter
     Then the render check fails
+
+  Scenario: a layer may own several modules, which may import each other
+    Given the adapters layer owns the cli and api modules
+    When the cli module imports the api module
+    Then the architecture check passes
+
+  Scenario: the generated contracts do not replace the repository's own
+    Given the repository keeps a contract of its own in pyproject.toml
+    And the domain imports an adapter
+    And that import is listed as a known violation
+    When the documentation is generated
+    Then the repository's own contract is still checked
+
+  Scenario: the breaches an adopter must list are printed ready to paste
+    Given the domain imports an adapter
+    When the breaches are listed
+    Then the breach "shop.domain.bad -> shop.adapters.db" is printed
+
+  Scenario: adapters of the two sides may not import each other
+    Given the adapters layer is split into a driving and a driven side
+    When the driving side imports the driven side
+    Then the architecture check fails
+    And the report names the import "shop.web -> shop.db"
+
+  Scenario: both sides may import the domain
+    Given the adapters layer is split into a driving and a driven side
+    When both sides import the domain
+    Then the architecture check passes

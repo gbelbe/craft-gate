@@ -120,3 +120,16 @@ cat $CRAFT_GATE/templates/CODEOWNERS.snippet
 
 Add it to `.github/CODEOWNERS` with your handle, and turn on "Require review
 from Code Owners" in branch protection.
+
+## 8. Architecture as code (optional)
+
+```bash
+cp $CRAFT_GATE/templates/architecture.yaml architecture.yaml     # declare your layers, then edit
+python3 scripts/render_architecture.py                            # writes .architecture.importlinter and docs/architecture/
+```
+
+Paste `templates/architecture.yml` under your workflow's `jobs:`. It fails a PR when the imports
+break the declared layers, a module belongs to no layer, or the generated docs no longer match the
+code. Start on an existing codebase by listing today's violations under `known_violations`; the list
+can only shrink. `bootstrap.sh` already installs `scripts/render_architecture.py` and the AGENTS.md
+snippet carries the instructions agents follow. See `docs/architecture.md`.

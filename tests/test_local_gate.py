@@ -97,3 +97,11 @@ def test_local_runner_leaves_test_files_out_of_both_coverage_numbers() -> None:
 
     assert runner.count("$(exclude_args)") == COVERAGE_CHECKS
     assert "gate_setting exclude" in runner
+
+
+def test_local_runner_runs_the_architecture_gate_only_when_the_repo_declares_one() -> None:
+    runner = RUNNER.read_text()
+    block = runner.split("if [[ -f architecture.yaml ]]; then")[1].split("fi\n")[0]
+
+    assert "render_architecture.py --check" in block
+    assert "lint-imports --config .architecture.importlinter" in block

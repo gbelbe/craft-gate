@@ -15,8 +15,13 @@ from pytest_bdd import given, parsers, scenarios, then, when
 scenarios("architecture_gate.feature")
 
 LINT_IMPORTS = Path(sys.executable).parent / "lint-imports"
-LAYERS = ["adapters", "application", "domain"]
+ADAPTERS, LAYERS_KEY = "adapters", "layers"
+LAYERS = [ADAPTERS, "application", "domain"]
 DOCS = "docs/architecture"
+PATH_FLAG = "--path"
+TO_DOMAIN = "from shop.domain import model\n"
+WEB_FILE = "shop/web.py"
+MODULES_KEY = "modules"
 BAD_IMPORT = "shop.domain.bad -> shop.adapters.db"
 
 
@@ -33,7 +38,7 @@ def write(world, rel: str, text: str = "") -> None:
 
 def declare(world) -> None:
     (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
-    arch.main(["--path", str(world.root)])
+    arch.main([PATH_FLAG, str(world.root)])
 
 
 def lint(world) -> subprocess.CompletedProcess[str]:
@@ -53,12 +58,12 @@ def _app(world) -> None:
         write(world, f"{package}/__init__.py")
     write(world, "shop/adapters/db.py")
     write(world, "shop/domain/model.py")
-    world.declaration = {"root_package": "shop", "layers": LAYERS}
+    world.declaration = {"root_package": "shop", LAYERS_KEY: LAYERS}
 
 
 @when("the application layer imports the domain")
 def _inward(world) -> None:
-    write(world, "shop/application/svc.py", "from shop.domain import model\n")
+    write(world, "shop/application/svc.py", TO_DOMAIN)
 
 
 @when("the domain imports an adapter")
@@ -85,7 +90,7 @@ def _shared(world) -> None:
 @when("the declaration gains a layer without re-rendering")
 def _stale(world) -> None:
     declare(world)
-    world.declaration["layers"] = ["interfaces", *LAYERS]
+    world.declaration[LAYERS_KEY] = ["interfaces", *LAYERS]
     (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
 
 
@@ -109,7 +114,7 @@ def _named(world, edge: str) -> None:
 
 @then("the render check fails")
 def _render_fails(world) -> None:
-    assert arch.main(["--path", str(world.root), "--check"]) == 1
+    assert arch.main([PATH_FLAG, str(world.root), "--check"]) == 1
 
 
 @given("the architecture documentation is requested")
@@ -126,3 +131,77 @@ def _generate(world) -> None:
 @then(parsers.parse('the overview contains "{text}"'))
 def _overview_has(world, text: str) -> None:
     assert text in (world.root / DOCS / "overview.md").read_text()
+
+
+@given("the adapters layer owns the cli and api modules")
+def _multi(world) -> None:
+    write(world, "shop/cli.py")
+    write(world, "shop/api.py")
+    world.declaration[LAYERS_KEY] = [
+        {"name": ADAPTERS, MODULES_KEY: [ADAPTERS, "cli", "api"]},
+        *LAYERS[1:],
+    ]
+
+
+@when("the cli module imports the api module")
+def _sibling(world) -> None:
+    write(world, "shop/cli.py", "from shop import api\n")
+
+
+@given("the repository keeps a contract of its own in pyproject.toml")
+def _own_contract(world) -> None:
+    write(
+        world,
+        "pyproject.toml",
+        '[tool.importlinter]\nroot_packages = ["shop"]\n\n[[tool.importlinter.contracts]]\n'
+        'name = "own"\ntype = "forbidden"\nsource_modules = ["shop.application"]\n'
+        'forbidden_modules = ["shop.domain"]\n',
+    )
+    write(world, "shop/application/svc.py", TO_DOMAIN)
+
+
+@then("the repository's own contract is still checked")
+def _own_checked(world) -> None:
+    result = subprocess.run(
+        [str(LINT_IMPORTS)],
+        cwd=world.root,
+        env={"PYTHONPATH": str(world.root), "PATH": ""},
+        capture_output=True,
+        text=True,
+    )
+    assert "own BROKEN" in result.stdout, result.stdout
+
+
+@when("the breaches are listed")
+def _list_breaches(world, capsys) -> None:
+    (world.root / arch.SOURCE).write_text(yaml.safe_dump(world.declaration))
+    arch.main([PATH_FLAG, str(world.root), "--breaches"])
+    world.result = SimpleNamespace(stdout=capsys.readouterr().out)
+
+
+@then(parsers.parse('the breach "{edge}" is printed'))
+def _breach_printed(world, edge: str) -> None:
+    assert f"  - {edge}\n" in world.result.stdout
+
+
+@given("the adapters layer is split into a driving and a driven side")
+def _sides(world) -> None:
+    write(world, WEB_FILE)
+    write(world, "shop/db.py")
+    world.declaration["shared"] = [ADAPTERS]  # the background's package is not part of this split
+    world.declaration[LAYERS_KEY] = [
+        [{"name": "driving", MODULES_KEY: ["web"]}, {"name": "driven", MODULES_KEY: ["db"]}],
+        "application",
+        "domain",
+    ]
+
+
+@when("the driving side imports the driven side")
+def _sideways(world) -> None:
+    write(world, WEB_FILE, "from shop import db\n")
+
+
+@when("both sides import the domain")
+def _both_inward(world) -> None:
+    write(world, WEB_FILE, TO_DOMAIN)
+    write(world, "shop/db.py", TO_DOMAIN)
