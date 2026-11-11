@@ -68,7 +68,7 @@ for each file the change adds or moves: is it in the layer whose purpose it matc
 in the domain, orchestration in the application, I/O in an adapter)? Does it reach across a layer by
 a path the import checker cannot see (a dynamic import, a framework object passed inward, a domain
 type that is really a database row)? Is a line added to `known_violations` where the code should
-have moved? Quote the line and cite the purpose the file's layer declares.
+have moved? Does a touched module that carries known violations leave them as they were? Quote the line and cite the purpose the file's layer declares.
 
 ## What to look for
 

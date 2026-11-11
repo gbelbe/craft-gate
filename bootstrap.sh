@@ -37,6 +37,7 @@ SHIPPED=(
   scripts/design_review.py
   scripts/config_loosening.py
   scripts/render_architecture.py
+  scripts/check_architecture_ratchet.py
   scripts/architecture_docs.py
   # helpers the gate scripts import — they must travel with them
   scripts/gate-requirements.txt

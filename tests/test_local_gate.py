@@ -105,3 +105,10 @@ def test_local_runner_runs_the_architecture_gate_only_when_the_repo_declares_one
 
     assert "render_architecture.py --check" in block
     assert "lint-imports --config .architecture.importlinter" in block
+
+
+def test_local_runner_runs_the_architecture_ratchet_with_the_other_architecture_checks() -> None:
+    runner = RUNNER.read_text()
+    block = runner.split("if [[ -f architecture.yaml ]]; then")[1].split("fi\n")[0]
+
+    assert 'check_architecture_ratchet.py --base "$BASE"' in block

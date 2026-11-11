@@ -183,3 +183,5 @@ you touch a layer, and put new code in the layer whose purpose it matches. Impor
 layer may import the layers listed after it, never one above. Never add a line to `known_violations`
 to make a check pass: move the code. After any change to the layers or the imports, run
 `python3 scripts/render_architecture.py` and commit what it writes; `--check` fails CI otherwise.
+When you edit a module that appears as the importer in `known_violations`, move code so at least one of
+its listed imports goes away and delete that line; `scripts/check_architecture_ratchet.py` fails the PR otherwise.
