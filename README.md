@@ -44,6 +44,18 @@ It answers two separate questions, on purpose:
 
   All six skip bot-authored PRs (dependabot, renovate, ...). The reasoning
   behind each is in [DESIGN.md](DESIGN.md).
+- **Architecture as code** (opt-in, Python) — you declare your hexagon in
+  `architecture.yaml` (layers outermost first, driving and driven adapters as siblings). craft-gate
+  renders [import-linter](https://import-linter.readthedocs.io/) contracts from it and, reading the
+  real imports with [grimp](https://grimp.readthedocs.io/), generates `docs/architecture/overview.md`
+  for humans and agents: the declared layers, the imports that actually run between them, and the
+  ones that break the rule. CI fails when an import points the wrong way, a module belongs to no
+  layer, or the generated docs are stale. An existing codebase adopts it with a baseline
+  (`known_violations`) that may only shrink, and a PR that touches a module carrying baseline
+  breaches must remove at least one. See [docs/architecture.md](docs/architecture.md).
+- **An independent review** — the `craft-review` skill hands your diff to the `craft-reviewer`
+  subagent, a lead-developer reviewer that knows nothing of how the code was written, for the
+  judgement calls no gate makes ([docs/design/reviewer.md](docs/design/reviewer.md)). Advisory.
 - **Two reporting jobs** — a sticky PR comment and a GitHub code-scanning
   (SARIF) export. Neither blocks a merge. The SARIF one needs a public repo or
   GitHub Advanced Security, the only reason to skip it.
@@ -75,6 +87,7 @@ much per project to merge automatically:
 | 5 | PR labels for review (optional) | `templates/label-tidy-prs.yml` | `.github/workflows/craft-gate-label.yml` |
 | 6 | PR checklist for judgement calls (optional) | `templates/PULL_REQUEST_TEMPLATE.md` | `.github/PULL_REQUEST_TEMPLATE.md` |
 | 7 | Review gate changes (optional) | `templates/CODEOWNERS.snippet` | `.github/CODEOWNERS` |
+| 8 | Architecture as code (optional) | `templates/architecture.yaml`, `templates/architecture.yml` | `architecture.yaml`, a job under `.github/workflows/ci.yml` |
 
 Step 4 matters most in practice; without it, staying current means remembering
 to re-run `bootstrap.sh`. The tools the gates run (ruff, pylint, vulture, radon, mutmut,
@@ -121,7 +134,7 @@ scripts/report_tidy_history.sh
 |---|---|
 | [CRAFTSMANSHIP.md](CRAFTSMANSHIP.md) | The catalog, the commit convention, the legacy-code method, the mechanical thresholds |
 | [INSTALL.md](INSTALL.md) | The manual wiring steps after `bootstrap.sh` |
-| [docs/architecture.md](docs/architecture.md) | How the pieces fit, with a diagram and a repo map |
+| [docs/architecture.md](docs/architecture.md) | How the pieces fit, with a diagram and a repo map; architecture as code for the application you build |
 | [DESIGN.md](DESIGN.md) | Why each gate works the way it does (calibration, engines, what's grandfathered) |
 | [docs/operating.md](docs/operating.md) | Staying current, reviewing what craft-gate changed, the badge |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Adding a heuristic or rule; development setup |
