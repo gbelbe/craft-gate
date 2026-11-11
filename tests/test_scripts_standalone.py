@@ -20,6 +20,7 @@ SCRIPTS = [
     "config_loosening.py",
     "ci_history.py",
     "render_architecture.py",
+    "check_architecture_ratchet.py",
 ]
 
 

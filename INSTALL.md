@@ -131,5 +131,6 @@ python3 scripts/render_architecture.py                            # writes .arch
 Paste `templates/architecture.yml` under your workflow's `jobs:`. It fails a PR when the imports
 break the declared layers, a module belongs to no layer, or the generated docs no longer match the
 code. Start on an existing codebase by listing today's violations under `known_violations`; the list
-can only shrink. `bootstrap.sh` already installs `scripts/render_architecture.py` and the AGENTS.md
+can only shrink, and a PR that touches a module owning some of them must remove at least one
+(`scripts/check_architecture_ratchet.py`; a `Tidy-Exempt:` trailer waives it). `bootstrap.sh` already installs `scripts/render_architecture.py` and the AGENTS.md
 snippet carries the instructions agents follow. See `docs/architecture.md`.

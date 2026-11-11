@@ -72,7 +72,11 @@ any generated file is stale, so the documentation cannot drift from the code. Op
 `templates/architecture.yaml` (the starter declaration), `templates/architecture.yml` (the CI job) and
 the `local-craft-gate.sh` step that runs once `architecture.yaml` exists. Agents are pointed at
 `docs/architecture/overview.md` by the AGENTS.md snippet, and `craft-reviewer` checks which layer a
-change puts its code in.
+change puts its code in. `scripts/check_architecture_ratchet.py` makes the baseline shrink: it reads
+`architecture.yaml` at the merge-base and at the head, and fails when a touched `.py` file's module is
+the importer of known violations and the head lists no fewer of them than the base did (a rename is
+judged by the old module's count against the new one's). One fewer is enough; `Tidy-Exempt:` waives
+it, like the other legacy-debt rules.
 
 ## Two directories, one rule
 

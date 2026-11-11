@@ -186,3 +186,14 @@ def test_the_architecture_job_takes_its_tools_from_the_pinned_file_and_skips_bot
 
 def test_the_architecture_job_puts_the_package_on_the_python_path() -> None:
     assert ARCHITECTURE["env"] == {"PYTHONPATH": "."}
+
+
+def test_the_architecture_job_runs_the_ratchet_against_the_base_with_full_history() -> None:
+    checkout = ARCHITECTURE["steps"][0]
+    runs = [step["run"] for step in ARCHITECTURE["steps"] if "run" in step]
+
+    assert checkout["with"] == {"fetch-depth": 0}
+    assert any(
+        run.endswith('check_architecture_ratchet.py --base "origin/${{ github.base_ref }}"')
+        for run in runs
+    )
