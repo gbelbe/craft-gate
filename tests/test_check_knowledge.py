@@ -1,4 +1,4 @@
-"""check_knowledge.py: each rule catches the drift it exists for, and this repo's documents hold."""
+"""check_knowledge.py: each rule catches the drift it exists for, and this repo's bundle holds."""
 
 from __future__ import annotations
 
@@ -7,165 +7,185 @@ import pytest
 from conftest import ROOT
 
 SCRIPTS = "scripts"
-ALPHA_NAME = "Alpha"
-MENTION_ALPHA = "[[Alpha]]\n"
-DOC = "a.md"
-OTHER_DOC = "b.md"
-HEADER = "::config\ngate: rectangle, #2196F3, 100\n"
-ALPHA = "Alpha: type=gate, path=scripts/alpha.py\n"
-BETA = "Beta: type=gate, path=scripts/beta.py\n"
+ALPHA, BETA = "/g/alpha.md", "/g/beta.md"
+HUB = "/g/index.md"
+ALPHA_CODE, BETA_CODE = "scripts/alpha.py", "scripts/beta.py"
+TYPE_GATE = "Gate"
+FORMAT, LINKS, IMPORTS = "format", "links", "imports"
 
 
-def document(*lines: str) -> str:
-    return HEADER + "".join(lines) + "::\n"
+def concept(code: str | None, relations: dict[str, list[str]] | None = None, text: str = "") -> str:
+    lines = ["---", f"type: {TYPE_GATE}"]
+    if code:
+        lines += ["code:", f"- {code}"]
+    for kind, targets in (relations or {}).items():
+        lines += ["relations:", f"  {kind}:", *(f"  - {t}" for t in targets)]
+    return "\n".join([*lines, "---", text, ""])
+
+
+def link(target: str) -> str:
+    return f"[x]({target})"
 
 
 @pytest.fixture
 def project(tmp_path):
-    """A repo with two scripts, an installer, and a docs/knowledge folder to fill."""
+    """A repo with two scripts (alpha imports beta), an installer, and an empty bundle."""
     (tmp_path / SCRIPTS).mkdir()
-    (tmp_path / SCRIPTS / "alpha.py").write_text("import beta\n")
-    (tmp_path / SCRIPTS / "beta.py").write_text("")
-    (tmp_path / knowledge.INSTALLER).write_text("scripts/alpha.py\n")
-    (tmp_path / knowledge.DOCS).mkdir(parents=True)
+    (tmp_path / ALPHA_CODE).write_text("import beta\n")
+    (tmp_path / BETA_CODE).write_text("")
+    (tmp_path / knowledge.INSTALLER).write_text(f"{ALPHA_CODE}\n")
+    (tmp_path / knowledge.DOCS / "g").mkdir(parents=True)
     return tmp_path
 
 
-def write(project, name: str, text: str) -> None:
-    (project / knowledge.DOCS / name).write_text(text)
+def write(project, path: str, text: str) -> None:
+    (project / knowledge.DOCS / path.lstrip("/")).write_text(text)
 
 
-def faithful(project) -> None:
-    write(project, DOC, document(ALPHA, BETA) + "[[Alpha]] and [[Beta]].\n")
+def faithful(project, alpha: str | None = None) -> None:
+    write(project, ALPHA, alpha or concept(ALPHA_CODE))
+    write(project, BETA, concept(BETA_CODE))
+    write(project, HUB, f"{link(ALPHA)} {link(BETA)}\n")
 
 
-def test_a_faithful_project_has_no_problem(project) -> None:
+def test_a_faithful_bundle_has_no_problem(project) -> None:
     faithful(project)
 
     assert knowledge.problems_in(project) == []
 
 
-def test_parse_reads_entities_edges_and_mentions_but_not_type_definitions() -> None:
-    text = document(ALPHA) + "Prose [[Alpha]].\n::rel Alpha <- Beta [uses] ::\n"
+def test_parse_reads_the_frontmatter_and_the_links_of_the_text() -> None:
+    text = concept(ALPHA_CODE, {IMPORTS: [BETA]}, text=f"See {link(BETA)}.")
 
-    parsed = knowledge.parse(text, DOC)
+    doc = knowledge.parse(text, ALPHA)
 
-    assert parsed.entities == [knowledge.Entity(ALPHA_NAME, DOC, ("scripts/alpha.py",))]
-    assert parsed.edges == [knowledge.Edge("Beta", ALPHA_NAME, "uses", DOC)]
-    assert parsed.mentions == {ALPHA_NAME}
+    assert doc.code == (ALPHA_CODE,)
+    assert doc.relations == {IMPORTS: (BETA,)}
+    assert doc.links == {BETA}
+    assert doc.targets == {BETA}
 
 
-def test_parse_skips_fenced_examples_of_the_syntax() -> None:
-    text = "```\n::config\nGhost: type=gate\n::\n[[Ghost]]\n```\n"
+def test_parse_ignores_links_in_fenced_examples_and_reads_a_file_with_no_frontmatter() -> None:
+    doc = knowledge.parse(f"```\n{link(BETA)}\n```\n", HUB)
 
-    assert knowledge.parse(text, DOC) == knowledge.Parsed([], [], set())
+    assert doc.meta == {}
+    assert doc.links == frozenset()
+
+
+def test_only_index_files_are_not_concepts() -> None:
+    assert knowledge.parse("", HUB).is_concept is False
+    assert knowledge.parse("", ALPHA).is_concept is True
+
+
+def test_a_concept_without_a_type_is_reported(project) -> None:
+    faithful(project)
+    write(project, ALPHA, "---\ncode:\n- scripts/alpha.py\n---\n")
+
+    assert knowledge.problems_in(project) == [f"{FORMAT}: {ALPHA} has no type"]
+
+
+def test_an_unknown_relation_is_reported(project) -> None:
+    faithful(project, concept(ALPHA_CODE, {"befriends": [BETA]}, text=link(BETA)))
+
+    assert knowledge.problems_in(project) == [
+        f"{FORMAT}: {ALPHA} uses the unknown relation 'befriends'"
+    ]
+
+
+def test_relations_that_are_not_a_mapping_are_reported(project) -> None:
+    faithful(project)
+    write(project, ALPHA, f"---\ntype: {TYPE_GATE}\ncode:\n- {ALPHA_CODE}\nrelations: [x]\n---\n")
+
+    assert knowledge.problems_in(project) == [
+        f"{FORMAT}: {ALPHA} relations must map a relation to a list"
+    ]
 
 
 def test_an_anchor_to_a_missing_path_is_reported(project) -> None:
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA, "Gone: type=gate, path=scripts/gone.py\n")
-        + "[[Alpha]] [[Beta]] [[Gone]]\n",
-    )
+    faithful(project)
+    write(project, "/g/gone.md", concept("scripts/gone.py"))
+    write(project, HUB, f"{link(ALPHA)} {link(BETA)} {link('/g/gone.md')}\n")
 
     assert knowledge.problems_in(project) == [
-        f"anchor: Gone ({DOC}) points at scripts/gone.py, which does not exist"
+        "anchor: /g/gone.md points at scripts/gone.py, which does not exist"
     ]
 
 
-def test_a_file_no_entity_owns_is_reported(project) -> None:
-    write(project, DOC, document(ALPHA) + MENTION_ALPHA)
+def test_a_file_no_concept_owns_is_reported(project) -> None:
+    faithful(project)
+    (project / SCRIPTS / "new.py").write_text("")
 
-    assert knowledge.problems_in(project) == ["coverage: scripts/beta.py belongs to no entity"]
+    assert knowledge.problems_in(project) == ["coverage: scripts/new.py belongs to no concept"]
 
 
-def test_a_directory_path_owns_the_files_below_it(project) -> None:
+def test_a_directory_in_code_owns_the_files_below_it(project) -> None:
+    faithful(project)
     (project / SCRIPTS / "pkg").mkdir()
     (project / SCRIPTS / "pkg" / "mod.py").write_text("")
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA, "Pkg: type=gate, path=scripts/pkg\n")
-        + "[[Alpha]] [[Beta]] [[Pkg]]\n",
-    )
+    write(project, "/g/pkg.md", concept("scripts/pkg"))
+    write(project, HUB, f"{link(ALPHA)} {link(BETA)} {link('/g/pkg.md')}\n")
 
     assert knowledge.problems_in(project) == []
 
 
-def test_an_entity_defined_in_two_documents_is_reported(project) -> None:
-    write(project, DOC, document(ALPHA, BETA) + "[[Alpha]] [[Beta]]\n")
-    write(project, OTHER_DOC, document("Alpha: type=gate\n") + MENTION_ALPHA)
+def test_a_link_to_a_missing_file_is_reported(project) -> None:
+    faithful(project)
+    write(project, HUB, f"{link(ALPHA)} {link(BETA)} {link('/g/nowhere.md')}\n")
 
     assert knowledge.problems_in(project) == [
-        f"links: Alpha is defined 2 times ({DOC}, {OTHER_DOC})"
+        f"{LINKS}: {HUB} links to /g/nowhere.md, which does not exist"
     ]
 
 
-def test_an_entity_defined_twice_in_one_document_is_reported(project) -> None:
-    write(project, DOC, document(ALPHA, ALPHA, BETA) + "[[Alpha]] [[Beta]]\n")
+def test_a_concept_nothing_links_to_is_reported(project) -> None:
+    faithful(project)
+    write(project, HUB, f"{link(ALPHA)}\n")
 
-    assert knowledge.problems_in(project) == [f"links: Alpha is defined 2 times ({DOC}, {DOC})"]
-
-
-def test_a_reference_to_an_undefined_entity_is_reported(project) -> None:
-    write(project, DOC, document(ALPHA, BETA) + "[[Alpha]] [[Beta]] [[Nowhere]]\n")
-
-    assert knowledge.problems_in(project) == ["links: Nowhere is used but defined nowhere"]
+    assert knowledge.problems_in(project) == [f"{LINKS}: {BETA} is linked from nowhere"]
 
 
-def test_an_edge_to_an_undefined_entity_is_reported(project) -> None:
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA) + "[[Alpha]] [[Beta]]\n::rel Alpha -> Nowhere [uses] ::\n",
-    )
+def test_a_concept_that_only_links_to_itself_is_still_an_orphan(project) -> None:
+    faithful(project)
+    write(project, BETA, concept(BETA_CODE, text=link(BETA)))
+    write(project, HUB, f"{link(ALPHA)}\n")
 
-    assert knowledge.problems_in(project) == ["links: Nowhere is used but defined nowhere"]
+    assert knowledge.problems_in(project) == [f"{LINKS}: {BETA} is linked from nowhere"]
 
 
-def test_an_entity_nobody_mentions_is_reported(project) -> None:
-    write(project, DOC, document(ALPHA, BETA) + MENTION_ALPHA)
-
-    assert knowledge.problems_in(project) == ["links: Beta is defined but never mentioned"]
-
-
-def test_a_true_imports_edge_passes_and_a_false_one_is_reported(project) -> None:
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA) + "[[Alpha]] [[Beta]]\n::rel Alpha -> Beta [imports] ::\n",
-    )
-    assert knowledge.problems_in(project) == []
-
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA) + "[[Alpha]] [[Beta]]\n::rel Beta -> Alpha [imports] ::\n",
-    )
-    assert knowledge.problems_in(project) == [f"imports: Beta does not import Alpha ({DOC})"]
-
-
-def test_an_installs_edge_must_name_something_the_installer_lists(project) -> None:
-    write(
-        project,
-        DOC,
-        document(ALPHA, BETA, "Boot: type=gate\n")
-        + "[[Boot]] [[Alpha]] [[Beta]]\n"
-        + "::rel Boot -> Alpha [installs] ::\n"
-        + "::rel Boot -> Beta [installs] ::\n",
-    )
+def test_a_relation_the_text_never_links_to_is_reported(project) -> None:
+    faithful(project, concept(ALPHA_CODE, {IMPORTS: [BETA]}))
 
     assert knowledge.problems_in(project) == [
-        f"installs: {knowledge.INSTALLER} does not list Beta ({DOC})"
+        f"prose: {ALPHA} declares imports {BETA} but its text never links to it"
+    ]
+
+
+def test_a_true_imports_relation_passes_and_a_false_one_is_reported(project) -> None:
+    faithful(project, concept(ALPHA_CODE, {IMPORTS: [BETA]}, text=link(BETA)))
+    assert knowledge.problems_in(project) == []
+
+    faithful(project, concept(ALPHA_CODE))
+    write(project, BETA, concept(BETA_CODE, {IMPORTS: [ALPHA]}, text=link(ALPHA)))
+    assert knowledge.problems_in(project) == [f"{IMPORTS}: {BETA} does not import {ALPHA}"]
+
+
+def test_an_installs_relation_must_name_something_the_installer_lists(project) -> None:
+    boot = "/g/boot.md"
+    faithful(project)
+    write(project, boot, concept(None, {"installs": [ALPHA, BETA]}, text=link(ALPHA) + link(BETA)))
+    write(project, HUB, f"{link(ALPHA)} {link(BETA)} {link(boot)}\n")
+
+    assert knowledge.problems_in(project) == [
+        f"installs: {knowledge.INSTALLER} does not list {BETA} (from {boot})"
     ]
 
 
 def test_main_exits_one_and_prints_each_problem(project, capsys) -> None:
-    write(project, DOC, document(ALPHA) + MENTION_ALPHA)
+    faithful(project)
+    (project / SCRIPTS / "new.py").write_text("")
 
     assert knowledge.main(["--path", str(project)]) == 1
-    assert "✗ coverage: scripts/beta.py belongs to no entity" in capsys.readouterr().err
+    assert "✗ coverage: scripts/new.py belongs to no concept" in capsys.readouterr().err
 
 
 def test_main_exits_zero_when_faithful(project, capsys) -> None:
@@ -175,5 +195,5 @@ def test_main_exits_zero_when_faithful(project, capsys) -> None:
     assert "✓" in capsys.readouterr().out
 
 
-def test_this_repos_own_documents_match_the_repo() -> None:
+def test_this_repos_own_bundle_matches_the_repo() -> None:
     assert knowledge.problems_in(ROOT) == []

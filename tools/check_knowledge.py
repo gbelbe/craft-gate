@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
-"""Keep the DOT-LD knowledge documents faithful to the repository (a spike).
+"""Keep the OKF knowledge bundle faithful to the repository (a spike).
 
-`docs/knowledge/*.md` describe the project in DOT-LD, a markdown extension: `::config` blocks give
-each entity a type and, here, the code it stands for (`path=a.py;dir`); `[[Name]]` mentions an
-entity in prose; `::rel A -> B [label] ::` is an edge. Documents link by name, so a name must mean
-one thing.
+`docs/knowledge/` is an Open Knowledge Format bundle: one markdown file per concept, YAML
+frontmatter for what a machine reads, prose and ordinary links for what a person reads. Beyond
+OKF's own `type`, a concept here carries:
+
+    code:       the files or folders it stands for
+    relations:  typed edges to other concepts, a mapping of relation -> list of links
+
+A link is `[Title](/folder/concept.md)`, rooted at the bundle. `index.md` files are hubs: they link
+but are not concepts.
 
 Rules, each a way for the documents to drift from the code:
 
-  anchor    every `path=` exists
-  coverage  every file under the covered roots belongs to some entity's path
-  links     every `[[Name]]` and every edge end is defined, in exactly one document; every entity
-            is mentioned somewhere (an orphan is documentation nobody reaches)
-  imports   an edge labelled `imports` is a real `import` between the two entities' Python files
-  installs  an edge labelled `installs` names something bootstrap.sh really lists
+  format     a concept has a `type`; `relations` maps a known relation to a list
+  anchor     every `code` path exists
+  coverage   every file under the covered roots belongs to some concept's `code`
+  links      every link and relation target exists; every concept is linked from somewhere
+  prose      every relation target is also linked in the concept's text, so the two cannot diverge
+  imports    an `imports` relation is a real `import` between the concepts' Python files
+  installs   an `installs` relation names something bootstrap.sh really lists
 
 Usage:
     python3 tools/check_knowledge.py [--path .]
@@ -25,88 +31,99 @@ import argparse
 import ast
 import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
+
+import yaml
 
 DOCS = "docs/knowledge"
 COVERED = ("scripts", "tools", "templates", "agents", "skills")
 INSTALLER = "bootstrap.sh"
+INDEX = "index.md"
 IMPORTS, INSTALLS = "imports", "installs"
-NAME = r"[A-Za-z][\w-]*"
+FORMAT, LINKS = "format", "links"
+RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
+TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
+FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
 FENCE = re.compile(r"^```.*?^```", re.S | re.M)
-CONFIG = re.compile(r"^::config\s*\n(.*?)^::\s*$", re.S | re.M)
-REL = re.compile(rf"^::rel\s+({NAME})\s+(->|<-|<->)\s+({NAME})\s+\[([^\]]*)\]\s*::\s*$", re.M)
-REF = re.compile(rf"\[\[({NAME})\]\]")
-ASSIGNMENT = re.compile(rf"^({NAME}):\s*(.+)$")
-SEPARATOR = ";"
+LINK = re.compile(r"\]\((/[^)\s#]+\.md)\)")
 
 
-class Entity(NamedTuple):
-    name: str
-    document: str
-    paths: tuple[str, ...]
+class Doc(NamedTuple):
+    path: str  # rooted at the bundle: /gates/refactor-first.md
+    meta: dict
+    links: frozenset[str]  # what the text links to
+
+    @property
+    def is_concept(self) -> bool:
+        return not self.path.endswith("/" + INDEX)
+
+    @property
+    def code(self) -> tuple[str, ...]:
+        return _strings(self.meta.get(CODE_KEY))
+
+    @property
+    def relations(self) -> dict[str, tuple[str, ...]]:
+        raw = self.meta.get(RELATIONS_KEY)
+        return (
+            {str(kind): _strings(to) for kind, to in raw.items()} if isinstance(raw, dict) else {}
+        )
+
+    @property
+    def targets(self) -> set[str]:
+        return set(self.links).union(*self.relations.values())
 
 
-class Edge(NamedTuple):
-    source: str
-    target: str
-    label: str
-    document: str
+def _strings(value: object) -> tuple[str, ...]:
+    return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
 
-class Parsed(NamedTuple):
-    entities: list[Entity]
-    edges: list[Edge]
-    mentions: set[str]
-
-
-def _assignment(line: str, document: str) -> Entity | None:
-    found = ASSIGNMENT.match(line.strip())
-    if not found or "type=" not in found.group(2):
-        return None  # a type definition, a comment or a blank line
-    pairs = (part.split("=", 1) for part in found.group(2).split(",") if "=" in part)
-    props = {key.strip(): value.strip() for key, value in pairs}
-    paths = tuple(p for p in props.get("path", "").split(SEPARATOR) if p)
-    return Entity(found.group(1), document, paths)
-
-
-def _edge(match: re.Match[str], document: str) -> Edge:
-    left, arrow, right, label = match.groups()
-    source, target = (right, left) if arrow == "<-" else (left, right)
-    return Edge(source, target, label.strip(), document)
-
-
-def parse(text: str, document: str) -> Parsed:
-    """Entities, edges and mentions of one document; fenced examples of the syntax are skipped."""
-    body = FENCE.sub("", text)
-    lines = (line for block in CONFIG.findall(body) for line in block.splitlines())
-    entities = [e for e in (_assignment(line, document) for line in lines) if e]
-    edges = [_edge(m, document) for m in REL.finditer(body)]
-    prose = REL.sub("", CONFIG.sub("", body))
-    return Parsed(entities, edges, set(REF.findall(prose)))
-
-
-def load(root: Path) -> Parsed:
-    parts = [parse(p.read_text(), p.name) for p in sorted((root / DOCS).glob("*.md"))]
-    return Parsed(
-        [e for part in parts for e in part.entities],
-        [e for part in parts for e in part.edges],
-        set().union(*(part.mentions for part in parts)),
+def parse(text: str, path: str) -> Doc:
+    """One file: its frontmatter, and the links in its text (fenced examples are skipped)."""
+    found = FRONT.match(text)
+    meta = yaml.safe_load(found.group(1)) if found else None
+    body = found.group(2) if found else text
+    return Doc(
+        path, meta if isinstance(meta, dict) else {}, frozenset(LINK.findall(FENCE.sub("", body)))
     )
 
 
-def anchor_problems(entities: list[Entity], root: Path) -> list[str]:
+def load(root: Path) -> list[Doc]:
+    base = root / DOCS
     return [
-        f"anchor: {e.name} ({e.document}) points at {path}, which does not exist"
-        for e in entities
-        for path in e.paths
+        parse(p.read_text(), "/" + p.relative_to(base).as_posix())
+        for p in sorted(base.rglob("*.md"))
+    ]
+
+
+def format_problems(docs: list[Doc]) -> list[str]:
+    problems = []
+    for doc in (d for d in docs if d.is_concept):
+        if not doc.meta.get(TYPE_KEY):
+            problems.append(f"{FORMAT}: {doc.path} has no {TYPE_KEY}")
+        if doc.meta.get(RELATIONS_KEY) is not None and not isinstance(
+            doc.meta[RELATIONS_KEY], dict
+        ):
+            problems.append(f"{FORMAT}: {doc.path} {RELATIONS_KEY} must map a relation to a list")
+        problems += [
+            f"{FORMAT}: {doc.path} uses the unknown relation '{kind}'"
+            for kind in doc.relations
+            if kind not in RELATIONS
+        ]
+    return problems
+
+
+def anchor_problems(docs: list[Doc], root: Path) -> list[str]:
+    return [
+        f"anchor: {doc.path} points at {path}, which does not exist"
+        for doc in docs
+        for path in doc.code
         if not (root / path).exists()
     ]
 
 
-def _owned(path: str, entities: list[Entity]) -> bool:
-    return any(path == p or path.startswith(p + "/") for e in entities for p in e.paths)
+def _owned(path: str, docs: list[Doc]) -> bool:
+    return any(path == p or path.startswith(p + "/") for d in docs for p in d.code)
 
 
 def covered_files(root: Path) -> list[str]:
@@ -114,37 +131,42 @@ def covered_files(root: Path) -> list[str]:
     return [str(p.relative_to(root)) for p in files if "__pycache__" not in p.parts]
 
 
-def coverage_problems(entities: list[Entity], root: Path) -> list[str]:
+def coverage_problems(docs: list[Doc], root: Path) -> list[str]:
     return [
-        f"coverage: {path} belongs to no entity"
+        f"coverage: {path} belongs to no concept"
         for path in covered_files(root)
-        if not _owned(path, entities)
+        if not _owned(path, docs)
     ]
 
 
-def _link(text: str) -> str:
-    return f"links: {text}"
+def link_problems(docs: list[Doc]) -> list[str]:
+    known = {d.path for d in docs}
+    missing = [
+        f"{LINKS}: {doc.path} links to {target}, which does not exist"
+        for doc in docs
+        for target in sorted(doc.targets - known)
+    ]
+    reached = {t for d in docs for t in d.targets if t != d.path}
+    orphans = [
+        f"{LINKS}: {d.path} is linked from nowhere"
+        for d in docs
+        if d.is_concept and d.path not in reached
+    ]
+    return missing + orphans
 
 
-def link_problems(parsed: Parsed) -> list[str]:
-    homes: dict[str, list[str]] = defaultdict(list)  # name -> the document of each definition
-    for entity in parsed.entities:
-        homes[entity.name].append(entity.document)
-    ends = {end for edge in parsed.edges for end in (edge.source, edge.target)}
-    used, defined = ends | parsed.mentions, set(homes)
+def prose_problems(docs: list[Doc]) -> list[str]:
     return [
-        *(
-            _link(f"{name} is defined {len(docs)} times ({', '.join(sorted(docs))})")
-            for name, docs in homes.items()
-            if len(docs) > 1
-        ),
-        *(_link(f"{name} is used but defined nowhere") for name in sorted(used - defined)),
-        *(_link(f"{name} is defined but never mentioned") for name in sorted(defined - used)),
+        f"prose: {doc.path} declares {kind} {target} but its text never links to it"
+        for doc in docs
+        for kind, targets in doc.relations.items()
+        for target in targets
+        if target not in doc.links
     ]
 
 
-def _python_file(entity: Entity | None) -> str | None:
-    only = [p for p in entity.paths if p.endswith(".py")] if entity else []
+def _python_file(doc: Doc | None) -> str | None:
+    only = [p for p in doc.code if p.endswith(".py")] if doc else []
     return only[0] if only else None
 
 
@@ -158,37 +180,39 @@ def _imported_modules(path: Path) -> set[str]:
     return found
 
 
-def imports_problems(parsed: Parsed, root: Path) -> list[str]:
-    by_name = {e.name: e for e in parsed.entities}
+def _relations_of(docs: list[Doc], kind: str) -> list[tuple[Doc, Doc | None]]:
+    by_path = {d.path: d for d in docs}
+    return [(d, by_path.get(t)) for d in docs for t in d.relations.get(kind, ())]
+
+
+def imports_problems(docs: list[Doc], root: Path) -> list[str]:
     problems = []
-    for edge in (e for e in parsed.edges if e.label == IMPORTS):
-        source, target = (_python_file(by_name.get(n)) for n in (edge.source, edge.target))
-        if source and target and Path(target).stem not in _imported_modules(root / source):
-            problems.append(
-                f"imports: {edge.source} does not import {edge.target} ({edge.document})"
-            )
+    for source, target in _relations_of(docs, IMPORTS):
+        origin, wanted = _python_file(source), _python_file(target)
+        if origin and wanted and Path(wanted).stem not in _imported_modules(root / origin):
+            problems.append(f"{IMPORTS}: {source.path} does not import {target.path}")
     return problems
 
 
-def installs_problems(parsed: Parsed, root: Path) -> list[str]:
+def installs_problems(docs: list[Doc], root: Path) -> list[str]:
     installer = (root / INSTALLER).read_text()
-    by_name = {e.name: e for e in parsed.entities}
-    problems = []
-    for edge in (e for e in parsed.edges if e.label == INSTALLS):
-        target = by_name.get(edge.target)
-        if target and target.paths and not any(p in installer for p in target.paths):
-            problems.append(f"installs: {INSTALLER} does not list {edge.target} ({edge.document})")
-    return problems
+    return [
+        f"installs: {INSTALLER} does not list {target.path} (from {source.path})"
+        for source, target in _relations_of(docs, INSTALLS)
+        if target and target.code and not any(p in installer for p in target.code)
+    ]
 
 
 def problems_in(root: Path) -> list[str]:
-    parsed = load(root)
+    docs = load(root)
     return [
-        *anchor_problems(parsed.entities, root),
-        *coverage_problems(parsed.entities, root),
-        *link_problems(parsed),
-        *imports_problems(parsed, root),
-        *installs_problems(parsed, root),
+        *format_problems(docs),
+        *anchor_problems(docs, root),
+        *coverage_problems(docs, root),
+        *link_problems(docs),
+        *prose_problems(docs),
+        *imports_problems(docs, root),
+        *installs_problems(docs, root),
     ]
 
 
@@ -201,7 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     for problem in problems:
         print(f"✗ {problem}", file=sys.stderr)
     if not problems:
-        print("✓ knowledge documents match the repository")
+        print("✓ knowledge bundle matches the repository")
     return 1 if problems else 0
 
 
