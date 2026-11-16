@@ -262,6 +262,20 @@ jobs:
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
+  # Diff-aware: a file a docs/knowledge page describes must not change without its page. Warning
+  # only for now; drop --warn-only to make it block.
+  knowledge-touch:
+    name: Docs touch (dogfood, warning only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: "A modified file's docs/knowledge page changes with it, or a Docs-Exempt trailer says why"
+        run: python3 tools/check_knowledge_touch.py --base "origin/${{ github.base_ref }}" --warn-only
+
   # Diff-aware like `tidy` above, but a mechanical count check rather than a
   # commit-message pattern — needs the full craftcov toolchain (it re-scans
   # both the PR head and the merge-base tree), so it's its own job rather
