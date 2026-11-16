@@ -15,7 +15,9 @@ visualizer draws no edge for any other kind); `relations` name their targets roo
 
 Rules, each a way for the documents to drift from the code:
 
-  format     a concept has a `type`; `relations` maps a known relation to a list
+  format     the frontmatter is valid YAML; a concept has a `type`; `relations` maps a known
+             relation to a list
+  todo       no concept still has the placeholder description `tools/sync_knowledge.py` writes
   anchor     every `code` path exists
   coverage   every file under the covered roots belongs to some concept's `code`
   links      every link and relation target exists; every concept is linked from somewhere
@@ -45,6 +47,8 @@ INSTALLER = "bootstrap.sh"
 INDEX = "index.md"
 IMPORTS, INSTALLS = "imports", "installs"
 FORMAT, LINKS = "format", "links"
+PLACEHOLDER = "TODO: say what this does."
+DESCRIPTION_KEY = "description"
 RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
 TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
 FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
@@ -56,6 +60,7 @@ class Doc(NamedTuple):
     path: str  # rooted at the bundle: /gates/refactor-first.md
     meta: dict
     links: frozenset[str]  # what the text links to
+    invalid: bool = False  # the frontmatter is not valid YAML
 
     @property
     def is_concept(self) -> bool:
@@ -89,23 +94,30 @@ def _rooted(target: str, path: str) -> str:
 def parse(text: str, path: str) -> Doc:
     """One file: its frontmatter, and the links in its text (fenced examples are skipped)."""
     found = FRONT.match(text)
-    meta = yaml.safe_load(found.group(1)) if found else None
     body = found.group(2) if found else text
     links = frozenset(_rooted(target, path) for target in LINK.findall(FENCE.sub("", body)))
+    try:
+        meta = yaml.safe_load(found.group(1)) if found else None
+    except yaml.YAMLError:
+        return Doc(path, {}, links, invalid=True)
     return Doc(path, meta if isinstance(meta, dict) else {}, links)
 
 
-def load(root: Path) -> list[Doc]:
+def read_bundle(root: Path) -> dict[str, str]:
+    """Every markdown file of the bundle, by its bundle-rooted path."""
     base = root / DOCS
-    return [
-        parse(p.read_text(), "/" + p.relative_to(base).as_posix())
-        for p in sorted(base.rglob("*.md"))
-    ]
+    return {"/" + p.relative_to(base).as_posix(): p.read_text() for p in sorted(base.rglob("*.md"))}
+
+
+def load(root: Path) -> list[Doc]:
+    return [parse(text, path) for path, text in read_bundle(root).items()]
 
 
 def format_problems(docs: list[Doc]) -> list[str]:
     problems = []
-    for doc in (d for d in docs if d.is_concept):
+    for doc in (d for d in docs if d.is_concept and d.invalid):
+        problems.append(f"{FORMAT}: {doc.path} has frontmatter that is not valid YAML")
+    for doc in (d for d in docs if d.is_concept and not d.invalid):
         if not doc.meta.get(TYPE_KEY):
             problems.append(f"{FORMAT}: {doc.path} has no {TYPE_KEY}")
         if doc.meta.get(RELATIONS_KEY) is not None and not isinstance(
@@ -120,6 +132,14 @@ def format_problems(docs: list[Doc]) -> list[str]:
     return problems
 
 
+def todo_problems(docs: list[Doc]) -> list[str]:
+    return [
+        f"todo: {doc.path} still has the placeholder description"
+        for doc in docs
+        if doc.is_concept and doc.meta.get(DESCRIPTION_KEY) == PLACEHOLDER
+    ]
+
+
 def anchor_problems(docs: list[Doc], root: Path) -> list[str]:
     return [
         f"anchor: {doc.path} points at {path}, which does not exist"
@@ -129,7 +149,7 @@ def anchor_problems(docs: list[Doc], root: Path) -> list[str]:
     ]
 
 
-def _owned(path: str, docs: list[Doc]) -> bool:
+def owned(path: str, docs: list[Doc]) -> bool:
     return any(path == p or path.startswith(p + "/") for d in docs for p in d.code)
 
 
@@ -142,7 +162,7 @@ def coverage_problems(docs: list[Doc], root: Path) -> list[str]:
     return [
         f"coverage: {path} belongs to no concept"
         for path in covered_files(root)
-        if not _owned(path, docs)
+        if not owned(path, docs)
     ]
 
 
@@ -172,12 +192,12 @@ def prose_problems(docs: list[Doc]) -> list[str]:
     ]
 
 
-def _python_file(doc: Doc | None) -> str | None:
+def python_file(doc: Doc | None) -> str | None:
     only = [p for p in doc.code if p.endswith(".py")] if doc else []
     return only[0] if only else None
 
 
-def _imported_modules(path: Path) -> set[str]:
+def imported_modules(path: Path) -> set[str]:
     found: set[str] = set()
     for node in ast.walk(ast.parse(path.read_text())):
         if isinstance(node, ast.ImportFrom) and node.module:
@@ -195,8 +215,8 @@ def _relations_of(docs: list[Doc], kind: str) -> list[tuple[Doc, Doc | None]]:
 def imports_problems(docs: list[Doc], root: Path) -> list[str]:
     problems = []
     for source, target in _relations_of(docs, IMPORTS):
-        origin, wanted = _python_file(source), _python_file(target)
-        if origin and wanted and Path(wanted).stem not in _imported_modules(root / origin):
+        origin, wanted = python_file(source), python_file(target)
+        if origin and wanted and Path(wanted).stem not in imported_modules(root / origin):
             problems.append(f"{IMPORTS}: {source.path} does not import {target.path}")
     return problems
 
@@ -214,6 +234,7 @@ def problems_in(root: Path) -> list[str]:
     docs = load(root)
     return [
         *format_problems(docs),
+        *todo_problems(docs),
         *anchor_problems(docs, root),
         *coverage_problems(docs, root),
         *link_problems(docs),
