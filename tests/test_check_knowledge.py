@@ -6,6 +6,7 @@ import posixpath
 
 import check_knowledge as knowledge
 import pytest
+import yaml
 from conftest import ROOT
 
 SCRIPTS = "scripts"
@@ -205,3 +206,17 @@ def test_main_exits_zero_when_faithful(project, capsys) -> None:
 
 def test_this_repos_own_bundle_matches_the_repo() -> None:
     assert knowledge.problems_in(ROOT) == []
+
+
+CHECK_COMMAND = "python3 tools/check_knowledge.py"
+
+
+def test_ci_runs_the_checker_in_this_repo() -> None:
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    runs = [s["run"] for job in workflow["jobs"].values() for s in job["steps"] if "run" in s]
+
+    assert CHECK_COMMAND in runs
+
+
+def test_the_agents_guidance_lists_the_checker_among_the_commands_to_run_before_a_commit() -> None:
+    assert CHECK_COMMAND in (ROOT / "AGENTS.md").read_text()

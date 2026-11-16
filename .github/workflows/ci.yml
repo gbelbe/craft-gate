@@ -55,6 +55,11 @@ jobs:
       - name: CRAFTSMANSHIP.md is regenerated from catalog.yaml
         run: python3 tools/render_catalog.py --check
 
+      - name: docs/knowledge matches the repository
+        # The OKF bundle describes scripts/, tools/, templates/, agents/ and skills/; a file added,
+        # removed or re-wired without its concept page fails here, naming the rule.
+        run: python3 tools/check_knowledge.py
+
       - name: craftcov.py compiles, catalog detector rules are well-formed
         run: |
           python3 -m py_compile scripts/craftcov.py
