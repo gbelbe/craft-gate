@@ -25,6 +25,7 @@ commands on a PR, and they work locally too):
 ```bash
 uv run --extra dev python3 scripts/check_refactor_first.py --base origin/main
 uv run --extra dev python3 scripts/check_complexity_ratchet.py --base origin/main --path .
+python3 tools/check_knowledge_touch.py --base origin/main      # a changed file's docs/knowledge page changes with it
 ```
 
 CI's `validate`, `craftcov`, `tidy`, `refactor-first` and `complexity` jobs
@@ -167,12 +168,19 @@ Mutation-quality rule for new tests:
 - `scripts/` is exactly what `bootstrap.sh` installs into other repos; this
   repo's own tooling goes in `tools/`. Files in `scripts/` import each other by
   bare name and must work when run by path from any directory.
+- **Before you propose or design a change, read `docs/knowledge/index.md`** and the page of every file
+  you expect to touch, plus the pages it links to and the pages that link to it: that is what
+  already exists and what a change to it can break. Say in your proposal which pages you read and
+  which ones the change makes untrue.
 - `docs/knowledge/` is an OKF bundle with one page per file or folder under `scripts/`, `tools/`,
   `templates/`, `agents/` and `skills/`. Add, remove or re-wire one of those and the matching page
   changes with it (its `code`, its typed `relations`, its text). `python3 tools/sync_knowledge.py`
   writes the `imports` and `installs` relations and a stub page for a new file; you write the
   stub's description and move it where it belongs. `python3 tools/check_knowledge.py` names what
-  is left, and CI runs both.
+  is left, and CI runs both. When you modify a file, read its page against your change and update
+  what is no longer true: CI warns (`tools/check_knowledge_touch.py`) when the page is not in the
+  change, and the `craft-reviewer` reads the page for a sentence your change made false. A change
+  that needs no page edit says why in a `Docs-Exempt: <reason>` trailer.
 - `skills/tidy-first/SKILL.md` is the distributable template — its wording
   is written to be correct once copied to `.claude/skills/tidy-first/` in
   *any* repo (including this one), not just as read in place. Don't add a

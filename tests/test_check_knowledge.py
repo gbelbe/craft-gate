@@ -233,18 +233,26 @@ def test_this_repos_own_bundle_matches_the_repo() -> None:
 
 CHECK_COMMAND = "python3 tools/check_knowledge.py"
 SYNC_COMMAND = "python3 tools/sync_knowledge.py --check"
+TOUCH_COMMAND = "python3 tools/check_knowledge_touch.py"
+WORKFLOW = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
+
+
+def steps_of(job: dict) -> list[dict]:
+    return job["steps"]
+
+
+def runs_of(job: dict) -> list[str]:
+    return [step["run"] for step in steps_of(job) if "run" in step]
 
 
 def test_ci_runs_the_checker_in_this_repo() -> None:
-    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    runs = [s["run"] for job in workflow["jobs"].values() for s in job["steps"] if "run" in s]
+    runs = [run for job in WORKFLOW["jobs"].values() for run in runs_of(job)]
 
     assert CHECK_COMMAND in runs
 
 
 def test_ci_checks_that_the_relations_are_in_sync() -> None:
-    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    runs = [s["run"] for job in workflow["jobs"].values() for s in job["steps"] if "run" in s]
+    runs = [run for job in WORKFLOW["jobs"].values() for run in runs_of(job)]
 
     assert SYNC_COMMAND in runs
 
@@ -254,3 +262,24 @@ def test_the_agents_guidance_lists_both_commands_among_those_to_run_before_a_com
 
     assert CHECK_COMMAND in guidance
     assert SYNC_COMMAND in guidance
+
+
+def test_ci_warns_on_a_modified_file_whose_page_was_not_touched_and_only_for_pull_requests() -> (
+    None
+):
+    job = WORKFLOW["jobs"]["knowledge-touch"]
+    (run,) = runs_of(job)
+
+    assert run.startswith(TOUCH_COMMAND)
+    assert "--warn-only" in run
+    assert "github.base_ref" in run
+    assert "pull_request" in job["if"]
+    assert {"fetch-depth": 0} in [step.get("with") for step in steps_of(job)]
+
+
+def test_the_agents_guidance_tells_the_author_to_update_the_page_or_say_why_not() -> None:
+    guidance = (ROOT / "AGENTS.md").read_text()
+
+    assert TOUCH_COMMAND in guidance
+    assert "Docs-Exempt:" in guidance
+    assert "Before you propose or design a change, read `docs/knowledge/index.md`" in guidance

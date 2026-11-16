@@ -83,3 +83,12 @@ def test_every_shipped_skill_and_agent_has_valid_yaml_frontmatter(path) -> None:
 def test_the_reviewer_checks_the_layer_a_change_puts_code_in() -> None:
     assert "architecture.yaml" in AGENT
     assert "known_violations" in AGENT
+
+
+def test_the_reviewer_reads_the_page_of_each_modified_file_when_the_repo_has_a_bundle() -> None:
+    section = AGENT.split("## Documentation")[1].split("## What to look for")[0]
+
+    assert "If the repo has a `docs/knowledge/` folder" in section
+    assert "modifies" in section
+    assert "`DOC`" in section
+    assert "do not report them" in section
