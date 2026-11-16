@@ -8,8 +8,10 @@ OKF's own `type`, a concept here carries:
     code:       the files or folders it stands for
     relations:  typed edges to other concepts, a mapping of relation -> list of links
 
-A link is `[Title](/folder/concept.md)`, rooted at the bundle. `index.md` files are hubs: they link
-but are not concepts.
+A link in the text is an ordinary relative one, `[Title](../folder/concept.md)` (OKF's
+visualizer draws no edge for any other kind); `relations` name their targets rooted at the bundle,
+`/folder/concept.md`.
+`index.md` files are hubs: they link but are not concepts.
 
 Rules, each a way for the documents to drift from the code:
 
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -46,7 +49,7 @@ RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
 TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
 FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
 FENCE = re.compile(r"^```.*?^```", re.S | re.M)
-LINK = re.compile(r"\]\((/[^)\s#]+\.md)\)")
+LINK = re.compile(r"\]\(([^)\s#:]+\.md)\)")  # no scheme: not an external link
 
 
 class Doc(NamedTuple):
@@ -78,14 +81,18 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
 
+def _rooted(target: str, path: str) -> str:
+    """A link target as the bundle-rooted path it points at, from the file at *path*."""
+    return posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
+
+
 def parse(text: str, path: str) -> Doc:
     """One file: its frontmatter, and the links in its text (fenced examples are skipped)."""
     found = FRONT.match(text)
     meta = yaml.safe_load(found.group(1)) if found else None
     body = found.group(2) if found else text
-    return Doc(
-        path, meta if isinstance(meta, dict) else {}, frozenset(LINK.findall(FENCE.sub("", body)))
-    )
+    links = frozenset(_rooted(target, path) for target in LINK.findall(FENCE.sub("", body)))
+    return Doc(path, meta if isinstance(meta, dict) else {}, links)
 
 
 def load(root: Path) -> list[Doc]:

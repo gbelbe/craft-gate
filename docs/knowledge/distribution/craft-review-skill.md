@@ -14,6 +14,6 @@ relations:
 
 Hands the diff to the reviewer subagent and runs the design-review prompts.
 
-Calls: [Craft Reviewer](/distribution/craft-reviewer.md).
+Calls: [Craft Reviewer](craft-reviewer.md).
 
-Runs: [Design Review](/tooling/design-review.md).
+Runs: [Design Review](../tooling/design-review.md).

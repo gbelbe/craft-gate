@@ -13,4 +13,4 @@ relations:
 
 Finds the values in `craft-gate.toml` a change makes looser, so a person decides.
 
-Imports: [Gate Config](/tooling/gate-config.md), [Git Diff](/tooling/git-diff.md).
+Imports: [Gate Config](gate-config.md), [Git Diff](git-diff.md).

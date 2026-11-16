@@ -14,4 +14,4 @@ relations:
 
 Chooses which mutants to run for a diff.
 
-Imports: [Gate Timing](/tooling/gate-timing.md), [Git Diff](/tooling/git-diff.md), [Mutation Ratchet](/gates/mutation-ratchet.md).
+Imports: [Gate Timing](../tooling/gate-timing.md), [Git Diff](../tooling/git-diff.md), [Mutation Ratchet](mutation-ratchet.md).

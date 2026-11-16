@@ -13,4 +13,4 @@ relations:
 
 Turns `architecture.yaml` into import-linter contracts and, through Architecture Docs, into the generated overview. `--check` fails when either is stale.
 
-Imports: [Architecture Docs](/gates/architecture-docs.md).
+Imports: [Architecture Docs](architecture-docs.md).

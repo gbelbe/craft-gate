@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import posixpath
+
 import check_knowledge as knowledge
 import pytest
 from conftest import ROOT
@@ -23,8 +25,8 @@ def concept(code: str | None, relations: dict[str, list[str]] | None = None, tex
     return "\n".join([*lines, "---", text, ""])
 
 
-def link(target: str) -> str:
-    return f"[x]({target})"
+def link(target: str, start: str = "/g") -> str:
+    return f"[x]({posixpath.relpath(target, start)})"
 
 
 @pytest.fixture
@@ -63,6 +65,12 @@ def test_parse_reads_the_frontmatter_and_the_links_of_the_text() -> None:
     assert doc.relations == {IMPORTS: (BETA,)}
     assert doc.links == {BETA}
     assert doc.targets == {BETA}
+
+
+def test_a_link_is_read_relative_to_its_file_and_an_external_one_is_not_a_link() -> None:
+    text = "[a](../t/x.md) [b](y.md) [c](https://example.com/z.md)"
+
+    assert knowledge.parse(text, "/g/a.md").links == {"/t/x.md", "/g/y.md"}
 
 
 def test_parse_ignores_links_in_fenced_examples_and_reads_a_file_with_no_frontmatter() -> None:

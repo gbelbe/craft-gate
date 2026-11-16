@@ -12,4 +12,4 @@ relations:
 
 Generates `CRAFTSMANSHIP.md`, its tables, counts and the README badge, from `catalog.yaml`.
 
-Writes: [Craftsmanship](/distribution/craftsmanship.md).
+Writes: [Craftsmanship](craftsmanship.md).

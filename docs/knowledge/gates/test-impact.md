@@ -12,4 +12,4 @@ relations:
 
 Maps a diff to the tests it can affect.
 
-Imports: [Git Diff](/tooling/git-diff.md).
+Imports: [Git Diff](../tooling/git-diff.md).

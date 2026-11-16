@@ -14,4 +14,4 @@ relations:
 
 Makes the list of known violations in `architecture.yaml` shrink: a touched module that is the importer of some must lose at least one.
 
-Imports: [Gate Config](/tooling/gate-config.md), [Git Diff](/tooling/git-diff.md).
+Imports: [Gate Config](../tooling/gate-config.md), [Git Diff](../tooling/git-diff.md).

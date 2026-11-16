@@ -14,4 +14,4 @@ relations:
 
 Prints design prompts about the diff for the author to answer before the independent review.
 
-Imports: [Ast Funcs](/tooling/ast-funcs.md), [Gate Config](/tooling/gate-config.md), [Git Diff](/tooling/git-diff.md).
+Imports: [Ast Funcs](ast-funcs.md), [Gate Config](gate-config.md), [Git Diff](git-diff.md).

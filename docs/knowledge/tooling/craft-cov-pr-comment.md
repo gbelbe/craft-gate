@@ -17,4 +17,4 @@ relations:
 
 Turns the gates' results into the sticky pull-request comment, with design-review prompts and the values that were loosened.
 
-Imports: [Config Loosening](/tooling/config-loosening.md), [Craft Cov](/tooling/craft-cov.md), [Design Review](/tooling/design-review.md), [Gate Config](/tooling/gate-config.md), [Git Diff](/tooling/git-diff.md).
+Imports: [Config Loosening](config-loosening.md), [Craft Cov](craft-cov.md), [Design Review](design-review.md), [Gate Config](gate-config.md), [Git Diff](git-diff.md).
