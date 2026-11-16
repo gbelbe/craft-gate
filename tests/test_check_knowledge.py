@@ -93,6 +93,29 @@ def test_a_concept_without_a_type_is_reported(project) -> None:
     assert knowledge.problems_in(project) == [f"{FORMAT}: {ALPHA} has no type"]
 
 
+def test_frontmatter_that_is_not_valid_yaml_is_reported_not_raised(project) -> None:
+    faithful(project)
+    write(project, ALPHA, "---\ntype: Gate\ndescription: a: b\n---\n")
+
+    assert knowledge.problems_in(project) == [
+        f"{FORMAT}: {ALPHA} has frontmatter that is not valid YAML",
+        "coverage: scripts/alpha.py belongs to no concept",  # its `code` could not be read
+    ]
+
+
+def test_a_concept_with_the_placeholder_description_is_reported(project) -> None:
+    faithful(project)
+    write(
+        project,
+        ALPHA,
+        concept(ALPHA_CODE).replace("---\n\n", f"description: {knowledge.PLACEHOLDER!r}\n---\n\n"),
+    )
+
+    assert knowledge.problems_in(project) == [
+        f"todo: {ALPHA} still has the placeholder description"
+    ]
+
+
 def test_an_unknown_relation_is_reported(project) -> None:
     faithful(project, concept(ALPHA_CODE, {"befriends": [BETA]}, text=link(BETA)))
 
@@ -209,6 +232,7 @@ def test_this_repos_own_bundle_matches_the_repo() -> None:
 
 
 CHECK_COMMAND = "python3 tools/check_knowledge.py"
+SYNC_COMMAND = "python3 tools/sync_knowledge.py --check"
 
 
 def test_ci_runs_the_checker_in_this_repo() -> None:
@@ -218,5 +242,15 @@ def test_ci_runs_the_checker_in_this_repo() -> None:
     assert CHECK_COMMAND in runs
 
 
-def test_the_agents_guidance_lists_the_checker_among_the_commands_to_run_before_a_commit() -> None:
-    assert CHECK_COMMAND in (ROOT / "AGENTS.md").read_text()
+def test_ci_checks_that_the_relations_are_in_sync() -> None:
+    workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
+    runs = [s["run"] for job in workflow["jobs"].values() for s in job["steps"] if "run" in s]
+
+    assert SYNC_COMMAND in runs
+
+
+def test_the_agents_guidance_lists_both_commands_among_those_to_run_before_a_commit() -> None:
+    guidance = (ROOT / "AGENTS.md").read_text()
+
+    assert CHECK_COMMAND in guidance
+    assert SYNC_COMMAND in guidance

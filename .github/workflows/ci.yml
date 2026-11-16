@@ -60,6 +60,11 @@ jobs:
         # removed or re-wired without its concept page fails here, naming the rule.
         run: python3 tools/check_knowledge.py
 
+      - name: docs/knowledge relations are the ones the code has
+        # `python3 tools/sync_knowledge.py` writes the imports/installs relations and a stub page
+        # for any file no concept owns; this fails when that would change something.
+        run: python3 tools/sync_knowledge.py --check
+
       - name: craftcov.py compiles, catalog detector rules are well-formed
         run: |
           python3 -m py_compile scripts/craftcov.py

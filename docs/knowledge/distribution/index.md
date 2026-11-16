@@ -12,3 +12,4 @@ The files a consuming repo receives, and the repo's own tools that produce them.
 - [Craft Reviewer](craft-reviewer.md): A subagent that reads the diff with no knowledge of how the code was written.
 - [Craft Review Skill](craft-review-skill.md): Hands the diff to the reviewer subagent and runs the design-review prompts.
 - [Tidy First Skill](tidy-first-skill.md): The optional Claude Code wrapper around the procedure in the craftsmanship catalog.
+- [Sync Knowledge](sync-knowledge.md): Writes what the code already says into the bundle: imports and installs relations, and a placeholder page for every file no concept owns.
