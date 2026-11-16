@@ -70,6 +70,19 @@ a path the import checker cannot see (a dynamic import, a framework object passe
 type that is really a database row)? Is a line added to `known_violations` where the code should
 have moved? Does a touched module that carries known violations leave them as they were? Quote the line and cite the purpose the file's layer declares.
 
+## Documentation
+
+If the repo has a `docs/knowledge/` folder (an OKF bundle: one page per file or folder, with its
+`code`, typed `relations` and a sentence or two of text), read the page of every file the change
+**modifies**, then ask: does the page still say what the code now does? Did the change add
+behaviour, a dependency or a responsibility the page does not mention, or remove one it still
+claims? Does a hand-written relation (`writes`, `calls`, `runs`) still hold? The `imports` and
+`installs` relations are written and checked by tools (`sync_knowledge.py`,
+`check_knowledge_touch.py`): do not report them, and do not report a page the change did not
+need to touch. Quote the sentence on the page that is now untrue **and** the line of code that
+makes it untrue, and cite `DOC` where a finding gives a catalog code. A page that is merely
+terse is not a finding; one that is wrong is, and it is a `blocker` if a reader would act on it.
+
 ## What to look for
 
 - A function that does more than one thing, or that you can only describe with "and".
