@@ -14,6 +14,7 @@ uv run --extra dev pytest tests                                  # the suite
 uv run --extra dev ruff check scripts tools tests/*.py tests/features/*.py           # lint (what CI runs)
 uv run --extra dev ruff format --check scripts tools tests/*.py tests/features/*.py
 python3 tools/render_catalog.py --check                          # generated docs match catalog.yaml
+python3 tools/check_knowledge.py                                 # docs/knowledge matches the code
 bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit range earned its tidy
 ```
 
@@ -165,6 +166,10 @@ Mutation-quality rule for new tests:
 - `scripts/` is exactly what `bootstrap.sh` installs into other repos; this
   repo's own tooling goes in `tools/`. Files in `scripts/` import each other by
   bare name and must work when run by path from any directory.
+- `docs/knowledge/` is an OKF bundle with one page per file or folder under `scripts/`, `tools/`,
+  `templates/`, `agents/` and `skills/`. Add, remove or re-wire one of those and the matching page
+  changes with it (its `code`, its typed `relations`, its text); `python3 tools/check_knowledge.py`
+  names what is out of step, and CI runs it.
 - `skills/tidy-first/SKILL.md` is the distributable template — its wording
   is written to be correct once copied to `.claude/skills/tidy-first/` in
   *any* repo (including this one), not just as read in place. Don't add a
