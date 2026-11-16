@@ -282,3 +282,4 @@ def test_the_agents_guidance_tells_the_author_to_update_the_page_or_say_why_not(
 
     assert TOUCH_COMMAND in guidance
     assert "Docs-Exempt:" in guidance
+    assert "Before you propose or design a change, read `docs/knowledge/index.md`" in guidance

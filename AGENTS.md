@@ -168,6 +168,10 @@ Mutation-quality rule for new tests:
 - `scripts/` is exactly what `bootstrap.sh` installs into other repos; this
   repo's own tooling goes in `tools/`. Files in `scripts/` import each other by
   bare name and must work when run by path from any directory.
+- **Before you propose or design a change, read `docs/knowledge/index.md`** and the page of every file
+  you expect to touch, plus the pages it links to and the pages that link to it: that is what
+  already exists and what a change to it can break. Say in your proposal which pages you read and
+  which ones the change makes untrue.
 - `docs/knowledge/` is an OKF bundle with one page per file or folder under `scripts/`, `tools/`,
   `templates/`, `agents/` and `skills/`. Add, remove or re-wire one of those and the matching page
   changes with it (its `code`, its typed `relations`, its text). `python3 tools/sync_knowledge.py`
