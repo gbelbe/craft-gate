@@ -14,3 +14,4 @@ The files a consuming repo receives, and the repo's own tools that produce them.
 - [Tidy First Skill](tidy-first-skill.md): The optional Claude Code wrapper around the procedure in the craftsmanship catalog.
 - [Sync Knowledge](sync-knowledge.md): Writes what the code already says into the bundle: imports and installs relations, and a placeholder page for every file no concept owns.
 - [Check Knowledge Touch](check-knowledge-touch.md): Fails (or warns) when a change modifies a file that a page in `docs/knowledge/` describes without touching that page; a `Docs-Exempt:` trailer waives it.
+- [Build Site](build-site.md): Writes the source of a browsable site from `docs/knowledge/`, with relation tables, diagrams, usage and scenarios computed from the bundle and the code.

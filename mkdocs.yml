@@ -1,0 +1,22 @@
+# The knowledge bundle as a site. `python3 tools/build_site.py` writes the source (docs/knowledge plus
+# what is computed from it) to build/knowledge; this builds it. Preview: mkdocs serve.
+site_name: craft-gate
+docs_dir: build/knowledge
+site_dir: build/site
+theme:
+  name: material
+  features: [navigation.sections, navigation.indexes, navigation.top, search.suggest, toc.integrate]
+  palette:
+    - scheme: default
+      primary: indigo
+    - scheme: slate
+      primary: indigo
+markdown_extensions:
+  - tables
+  - admonition
+  - toc
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

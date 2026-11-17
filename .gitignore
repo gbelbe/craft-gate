@@ -8,3 +8,4 @@ mutants/
 # Written by bootstrap.sh for consuming repos; meaningless here, since this repo
 # is its own source and no release can contain the commit that records it.
 .craft-gate-version
+build/

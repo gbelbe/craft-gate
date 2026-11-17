@@ -40,6 +40,10 @@ mutation = [
 architecture = [
     "import-linter>=2.0",
 ]
+# tools/build_site.py writes the knowledge bundle's site source; mkdocs builds it.
+docs = [
+    "mkdocs-material>=9.5",
+]
 # Default developer installation includes every gate's toolchain. The split
 # extras remain available for CI jobs that only need one gate.
 dev = [
