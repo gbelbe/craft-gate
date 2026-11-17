@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -66,16 +67,23 @@ def breaches_by_importer(data: dict) -> Counter[str]:
     return Counter(importers)
 
 
-def _owned(data: dict, path: str) -> int:
-    module = module_of(path, data.get(SOURCE_ROOT_KEY, "."))
-    return breaches_by_importer(data)[module] if module else 0
+def owned_by(data: dict) -> Callable[[str], int]:
+    """A function giving the breaches a repo-relative path owns under *data*, counted once."""
+    counts, source_root = breaches_by_importer(data), data.get(SOURCE_ROOT_KEY, ".")
+
+    def owned(path: str) -> int:
+        module = module_of(path, source_root)
+        return counts[module] if module else 0
+
+    return owned
 
 
 def unpaid(pairs: list[tuple[str, str]], base: dict, head: dict) -> list[tuple[str, int, int]]:
     """(path, before, after) for each touched file that owned breaches and still owns as many."""
+    owned_before, owned_after = owned_by(base), owned_by(head)
     found = []
     for old, new in pairs:
-        before, after = _owned(base, old), _owned(head, new)
+        before, after = owned_before(old), owned_after(new)
         if before and after >= before:
             found.append((new, before, after))
     return found
@@ -93,6 +101,10 @@ def report(failures: list[tuple[str, int, int]]) -> None:
     )
 
 
+def ref_exists(repo: Path, ref: str) -> bool:
+    return bool(git(["rev-parse", "--verify", "--quiet", ref], cwd=repo, check=False).strip())
+
+
 def exempt(repo: Path, merge_base: str, head: str) -> bool:
     """True when a `Tidy-Exempt:` trailer in the range waives the legacy-debt rules here."""
     settings = load_settings(find_root(repo))
@@ -106,7 +118,7 @@ def main() -> int:
     args = parser.parse_args()
     repo = Path(args.path).resolve()
 
-    if not git(["rev-parse", "--verify", "--quiet", args.base], cwd=repo, check=False).strip():
+    if not ref_exists(repo, args.base):
         print(
             f"⚠ architecture ratchet: '{args.base}' not found locally — skipping", file=sys.stderr
         )
@@ -120,13 +132,14 @@ def main() -> int:
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return ERROR_EXIT
-    failures = (
-        [] if waived else unpaid(touched_python_files(repo, merge_base, args.head), base, head)
-    )
+    if waived:
+        print("✓ Architecture ratchet: waived by Tidy-Exempt.")
+        return 0
+    failures = unpaid(touched_python_files(repo, merge_base, args.head), base, head)
     if failures:
         report(failures)
         return 1
-    print("✓ Architecture ratchet: " + ("waived by Tidy-Exempt." if waived else "OK."))
+    print("✓ Architecture ratchet: OK.")
     return 0
 
 
