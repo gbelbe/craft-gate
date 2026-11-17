@@ -134,3 +134,32 @@ code. Start on an existing codebase by listing today's violations under `known_v
 can only shrink, and a PR that touches a module owning some of them must remove at least one
 (`scripts/check_architecture_ratchet.py`; a `Tidy-Exempt:` trailer waives it). `bootstrap.sh` already installs `scripts/render_architecture.py` and the AGENTS.md
 snippet carries the instructions agents follow. See `docs/architecture.md`.
+
+## Optional: keep the documentation faithful to the code
+
+The knowledge bundle is a folder of markdown pages, one per file or folder, whose frontmatter names the
+code it describes (`code`) and its typed links (`relations`). `bootstrap.sh` installs the four scripts
+(`check_knowledge.py`, `sync_knowledge.py`, `check_knowledge_touch.py`, `build_site.py`); the rest, in order:
+
+1. Create `docs/knowledge/bundle.yaml` saying what to cover:
+
+   ```yaml
+   covered: [src]            # every file below needs a page (omit for none)
+   import-roots: [.]         # where Python imports are rooted (`src` for a src layout)
+   # installer: bootstrap.sh # a file that lists what you ship, for `installs` relations
+   # relations: [owns]       # extra relation kinds you want to write down
+   # features: tests/features # where Gherkin features and their step files are (the default)
+   ```
+
+2. Run `python3 scripts/sync_knowledge.py`. It stubs a page for every covered file under
+   `docs/knowledge/unsorted/` and writes the `imports` relations. Write each stub's description and move
+   it where it belongs.
+3. Create `docs/knowledge/index.md`, and an `index.md` in each folder of pages, each linking its
+   pages: `check_knowledge.py` fails on a page nothing links to.
+4. Paste `templates/knowledge.yml` under your workflow's `jobs:` (the checks, a warning-only touch
+   rule, and a site build).
+5. For the site job, copy `templates/mkdocs.yml` to the repo root (set `site_name`) and add `build/` to
+   `.gitignore`. Browse it with `python3 scripts/build_site.py && uvx --with mkdocs-material==9.8.1 mkdocs serve`.
+
+The AGENTS.md snippet carries the instructions agents follow (read the pages before a change, update them
+after it).

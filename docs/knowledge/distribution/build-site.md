@@ -5,7 +5,7 @@ description: Writes the source of a browsable site from `docs/knowledge/`, with 
   a diagram of its neighbours, its script's `--help` and the Gherkin scenarios that exercise it, all computed
   from the bundle and the code, plus a folder-level map of the system.
 code:
-- tools/build_site.py
+- scripts/build_site.py
 - mkdocs.yml
 relations:
   imports:
@@ -21,6 +21,6 @@ Writes the source of a browsable site from `docs/knowledge/`, for MkDocs to buil
 - the Gherkin scenarios of every feature whose step file imports a module the page's code defines (modules named by the layout in `bundle.yaml`, as the checkers do);
 - `graph.md`, one box per folder with an arrow per relation kind and count.
 
-It reads the bundle through [Check Knowledge](check-knowledge.md)'s parser, so both agree on what a page is. CI builds the site with `mkdocs build --strict` on every pull request, so a broken link or diagram fails there; it publishes nothing. To browse it: `python3 tools/build_site.py && mkdocs serve`.
+It reads the bundle through [Check Knowledge](check-knowledge.md)'s parser, so both agree on what a page is. CI builds the site with `mkdocs build --strict` on every pull request, so a broken link or diagram fails there; it publishes nothing. To browse it: `python3 scripts/build_site.py && mkdocs serve`.
 
 Imports: [Check Knowledge](check-knowledge.md).

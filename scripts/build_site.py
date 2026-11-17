@@ -13,7 +13,7 @@ there is nothing to keep up to date by hand:
     system      graph.md: one box per folder, one arrow per relation kind and count
 
 Usage:
-    python3 tools/build_site.py [--path .] [--out build/knowledge]
+    python3 scripts/build_site.py [--path .] [--out build/knowledge]
     mkdocs build --strict        # or: mkdocs serve
 """
 
@@ -30,10 +30,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
-import check_knowledge as ck
-from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+import check_knowledge as ck  # noqa: E402
+from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle  # noqa: E402
 
-FEATURES = "tests/features"
 FEATURE_SUFFIX = ".feature"
 SCENARIOS = re.compile(r'scenarios\("([^"]+)"\)')
 RELATION_LINE = re.compile(r"^(Imports|Installs|Writes|Calls|Runs): .*\n?", re.M)
@@ -206,12 +208,13 @@ class Site(NamedTuple):
     root: Path
     steps: dict[str, frozenset[str]]  # feature -> the names its step file imports
     units: dict[str, ck.Unit]
+    features: str  # the folder of the features, from the layout
 
 
-def steps_by_feature(root: Path) -> dict[str, frozenset[str]]:
+def steps_by_feature(root: Path, features: str) -> dict[str, frozenset[str]]:
     """Each feature -> the dotted names its step files import."""
     found: dict[str, set[str]] = defaultdict(set)
-    for steps in sorted((root / FEATURES).glob("test_*.py")):
+    for steps in sorted((root / features).glob("test_*.py")):
         text = steps.read_text()
         names = ck.imported_names(ast.parse(text), "")
         for feature in SCENARIOS.findall(text):
@@ -223,12 +226,14 @@ def scenarios_of(site: Site, path: str) -> str:
     """The Gherkin of every feature whose step file imports a module the page's code defines."""
     defined = site.units[path].defines
     exercising = sorted(f for f, names in site.steps.items() if names & defined)
-    existing = [f for f in exercising if (site.root / FEATURES / (f + FEATURE_SUFFIX)).is_file()]
+    existing = [
+        f for f in exercising if (site.root / site.features / (f + FEATURE_SUFFIX)).is_file()
+    ]
     if not existing:
         return ""
     blocks = [
-        fenced("gherkin", (site.root / FEATURES / (f + FEATURE_SUFFIX)).read_text().rstrip())
-        + f"\n*Source: `{FEATURES}/{f}{FEATURE_SUFFIX}`, run by the behaviour-coverage gate.*"
+        fenced("gherkin", (site.root / site.features / (f + FEATURE_SUFFIX)).read_text().rstrip())
+        + f"\n*Source: `{site.features}/{f}{FEATURE_SUFFIX}`, run by the behaviour-coverage gate.*"
         for f in existing
     ]
     return "\n## How it behaves\n\n" + "\n\n".join(blocks) + "\n"
@@ -332,8 +337,9 @@ def build(root: Path, out: Path) -> int:
     """Write the site source under *out*; the number of pages written."""
     bundle = load_bundle(root)
     docs = [page.doc for page in bundle.pages.values()]
-    units = ck.units_of(docs, root, ck.load_layout(root))
-    site = Site(bundle, root, steps_by_feature(root), units)
+    layout = ck.load_layout(root)
+    units = ck.units_of(docs, root, layout)
+    site = Site(bundle, root, steps_by_feature(root, layout.features), units, layout.features)
     shutil.rmtree(out, ignore_errors=True)
     for path in bundle.pages:
         target = out / path.lstrip("/")

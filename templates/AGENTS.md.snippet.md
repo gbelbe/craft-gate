@@ -161,3 +161,16 @@ When you edit a module that appears as the importer in `known_violations`, move 
 its listed imports goes away and delete that line; `scripts/check_architecture_ratchet.py` fails the PR otherwise.
 `render_architecture.py --check` also fails until a workflow or pre-commit hook runs that script: paste the job
 from craft-gate's `templates/architecture.yml`.
+
+## Documentation (when the repo has a `docs/knowledge/` folder)
+
+`docs/knowledge/` is an Open Knowledge Format bundle: one page per file or folder, with the `code` it
+describes and typed `relations` to other pages in its frontmatter; `docs/knowledge/bundle.yaml` says
+what the rules cover. **Before you propose or design a change, read `docs/knowledge/index.md`** and the
+page of every file you expect to touch, plus the pages it links to and the pages that link to it: that
+is what already exists and what a change to it can break. Say in your proposal which pages you read and
+which ones the change makes untrue. When you add, remove, re-wire or modify a covered file, update its page
+(description, relations, text): `python3 scripts/sync_knowledge.py` writes the `imports` and `installs`
+relations and stubs a page for a new file, `python3 scripts/check_knowledge.py` names what is left, and CI
+runs both. `scripts/check_knowledge_touch.py` warns when a modified file's page is not in the change; a
+change that needs no page edit says why in a `Docs-Exempt: <reason>` trailer.

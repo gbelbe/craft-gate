@@ -1,4 +1,4 @@
-# The knowledge bundle as a site. `python3 tools/build_site.py` writes the source (docs/knowledge plus
+# The knowledge bundle as a site. `python3 scripts/build_site.py` writes the source (docs/knowledge plus
 # what is computed from it) to build/knowledge; this builds it. Preview: mkdocs serve.
 site_name: craft-gate
 docs_dir: build/knowledge

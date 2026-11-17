@@ -40,7 +40,7 @@ mutation = [
 architecture = [
     "import-linter>=2.0",
 ]
-# tools/build_site.py writes the knowledge bundle's site source; mkdocs builds it.
+# scripts/build_site.py writes the knowledge bundle's site source; mkdocs builds it.
 docs = [
     "mkdocs-material>=9.5",
 ]

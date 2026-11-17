@@ -11,7 +11,7 @@
              (or an agent) writes the sentence and moves the page where it belongs.
 
 Usage:
-    python3 tools/sync_knowledge.py [--path .] [--check]
+    python3 scripts/sync_knowledge.py [--path .] [--check]
 
 `--check` writes nothing and exits 1 when a file would change.
 """
@@ -25,8 +25,12 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-import check_knowledge as ck
 import yaml
+
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+import check_knowledge as ck  # noqa: E402
 
 DERIVED = (ck.IMPORTS, ck.INSTALLS)
 UNSORTED = "unsorted"
@@ -178,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     if not changed:
         print("✓ knowledge bundle already in sync with the code")
     elif args.check:
-        print("run: python3 tools/sync_knowledge.py", file=sys.stderr)
+        print("run: python3 scripts/sync_knowledge.py", file=sys.stderr)
     return 1 if changed and args.check else 0
 
 

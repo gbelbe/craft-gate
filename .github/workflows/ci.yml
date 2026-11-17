@@ -58,12 +58,12 @@ jobs:
       - name: docs/knowledge matches the repository
         # The OKF bundle describes scripts/, tools/, templates/, agents/ and skills/; a file added,
         # removed or re-wired without its concept page fails here, naming the rule.
-        run: python3 tools/check_knowledge.py
+        run: python3 scripts/check_knowledge.py
 
       - name: docs/knowledge relations are the ones the code has
-        # `python3 tools/sync_knowledge.py` writes the imports/installs relations and a stub page
+        # `python3 scripts/sync_knowledge.py` writes the imports/installs relations and a stub page
         # for any file no concept owns; this fails when that would change something.
-        run: python3 tools/sync_knowledge.py --check
+        run: python3 scripts/sync_knowledge.py --check
 
       - name: craftcov.py compiles, catalog detector rules are well-formed
         run: |
@@ -262,7 +262,7 @@ jobs:
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
-  # The knowledge bundle as a site: tools/build_site.py writes its source, mkdocs builds it strictly, so
+  # The knowledge bundle as a site: scripts/build_site.py writes its source, mkdocs builds it strictly, so
   # a broken link or diagram fails here. Nothing is published.
   knowledge-site:
     name: Knowledge site builds
@@ -273,7 +273,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
 
       - name: The site source is written from docs/knowledge (the architecture extra lets --help run)
-        run: uv run --extra docs --extra architecture python3 tools/build_site.py
+        run: uv run --extra docs --extra architecture python3 scripts/build_site.py
 
       - name: mkdocs builds it without a warning
         run: uv run --extra docs mkdocs build --strict
@@ -292,7 +292,7 @@ jobs:
           fetch-depth: 0
 
       - name: "A modified file's docs/knowledge page changes with it, or a Docs-Exempt trailer says why"
-        run: python3 tools/check_knowledge_touch.py --base "origin/${{ github.base_ref }}" --warn-only
+        run: python3 scripts/check_knowledge_touch.py --base "origin/${{ github.base_ref }}" --warn-only
 
   # Diff-aware like `tidy` above, but a mechanical count check rather than a
   # commit-message pattern — needs the full craftcov toolchain (it re-scans

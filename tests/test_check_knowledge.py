@@ -234,9 +234,9 @@ def test_this_repos_own_bundle_matches_the_repo() -> None:
     assert knowledge.problems_in(ROOT) == []
 
 
-CHECK_COMMAND = "python3 tools/check_knowledge.py"
-SYNC_COMMAND = "python3 tools/sync_knowledge.py --check"
-TOUCH_COMMAND = "python3 tools/check_knowledge_touch.py"
+CHECK_COMMAND = "python3 scripts/check_knowledge.py"
+SYNC_COMMAND = "python3 scripts/sync_knowledge.py --check"
+TOUCH_COMMAND = "python3 scripts/check_knowledge_touch.py"
 WORKFLOW = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
 
 
@@ -397,3 +397,17 @@ def test_a_relation_the_layout_names_is_allowed_and_not_verified(project) -> Non
 )
 def test_a_file_is_named_by_the_import_root_that_holds_it(path, roots, name) -> None:
     assert knowledge.module_name(path, roots) == name
+
+
+def test_the_features_folder_defaults_to_tests_features_and_the_layout_can_move_it(project) -> None:
+    faithful(project)
+    path = project / knowledge.DOCS / knowledge.CONFIG
+
+    assert knowledge.load_layout(project).features == "tests/features"
+
+    path.write_text(LAYOUT + "features: spec\n")
+    assert knowledge.load_layout(project).features == "spec"
+    assert knowledge.problems_in(project) == []
+
+    path.write_text(LAYOUT + "features: 3\n")
+    assert knowledge.load_layout(project).features == "tests/features"

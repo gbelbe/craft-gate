@@ -4,7 +4,7 @@ title: Check Knowledge Touch
 description: Fails (or warns) when a change modifies a file that a page in `docs/knowledge/` describes
   without touching that page; a `Docs-Exempt:` trailer waives it.
 code:
-- tools/check_knowledge_touch.py
+- scripts/check_knowledge_touch.py
 relations:
   imports:
   - /distribution/check-knowledge.md

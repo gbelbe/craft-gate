@@ -14,9 +14,9 @@ uv run --extra dev pytest tests                                  # the suite
 uv run --extra dev ruff check scripts tools tests/*.py tests/features/*.py           # lint (what CI runs)
 uv run --extra dev ruff format --check scripts tools tests/*.py tests/features/*.py
 python3 tools/render_catalog.py --check                          # generated docs match catalog.yaml
-python3 tools/sync_knowledge.py --check                          # docs/knowledge relations match the code
-python3 tools/check_knowledge.py                                 # docs/knowledge matches the code
-uv run --extra docs --extra architecture python3 tools/build_site.py && uv run --extra docs mkdocs build --strict  # the site builds
+python3 scripts/sync_knowledge.py --check                          # docs/knowledge relations match the code
+python3 scripts/check_knowledge.py                                 # docs/knowledge matches the code
+uv run --extra docs --extra architecture python3 scripts/build_site.py && uv run --extra docs mkdocs build --strict  # the site builds
 bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit range earned its tidy
 ```
 
@@ -26,7 +26,7 @@ commands on a PR, and they work locally too):
 ```bash
 uv run --extra dev python3 scripts/check_refactor_first.py --base origin/main
 uv run --extra dev python3 scripts/check_complexity_ratchet.py --base origin/main --path .
-python3 tools/check_knowledge_touch.py --base origin/main      # a changed file's docs/knowledge page changes with it
+python3 scripts/check_knowledge_touch.py --base origin/main      # a changed file's docs/knowledge page changes with it
 ```
 
 CI's `validate`, `craftcov`, `tidy`, `refactor-first` and `complexity` jobs
@@ -175,11 +175,11 @@ Mutation-quality rule for new tests:
   which ones the change makes untrue.
 - `docs/knowledge/` is an OKF bundle with one page per file or folder under `scripts/`, `tools/`,
   `templates/`, `agents/` and `skills/`. Add, remove or re-wire one of those and the matching page
-  changes with it (its `code`, its typed `relations`, its text). `python3 tools/sync_knowledge.py`
+  changes with it (its `code`, its typed `relations`, its text). `python3 scripts/sync_knowledge.py`
   writes the `imports` and `installs` relations and a stub page for a new file; you write the
-  stub's description and move it where it belongs. `python3 tools/check_knowledge.py` names what
+  stub's description and move it where it belongs. `python3 scripts/check_knowledge.py` names what
   is left, and CI runs both. When you modify a file, read its page against your change and update
-  what is no longer true: CI warns (`tools/check_knowledge_touch.py`) when the page is not in the
+  what is no longer true: CI warns (`scripts/check_knowledge_touch.py`) when the page is not in the
   change, and the `craft-reviewer` reads the page for a sentence your change made false. A change
   that needs no page edit says why in a `Docs-Exempt: <reason>` trailer.
 - `skills/tidy-first/SKILL.md` is the distributable template — its wording

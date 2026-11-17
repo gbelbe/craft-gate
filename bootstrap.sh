@@ -40,6 +40,10 @@ SHIPPED=(
   scripts/check_architecture_ratchet.py
   scripts/architecture_docs.py
   scripts/architecture_wiring.py
+  scripts/check_knowledge.py
+  scripts/sync_knowledge.py
+  scripts/check_knowledge_touch.py
+  scripts/build_site.py
   # helpers the gate scripts import — they must travel with them
   scripts/gate-requirements.txt
   scripts/gitdiff.py

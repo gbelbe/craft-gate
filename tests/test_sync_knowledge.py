@@ -152,7 +152,7 @@ def test_check_lists_what_would_change_and_writes_nothing(project, capsys) -> No
     assert text(project, ALPHA) == before
     seen = capsys.readouterr()
     assert f"would change {knowledge.DOCS}{ALPHA}" in seen.out
-    assert "run: python3 tools/sync_knowledge.py" in seen.err
+    assert "run: python3 scripts/sync_knowledge.py" in seen.err
 
 
 def test_main_writes_and_exits_zero_then_reports_nothing_to_do(project, capsys) -> None:

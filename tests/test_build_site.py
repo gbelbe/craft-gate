@@ -38,7 +38,7 @@ def bundle_of(texts: dict[str, str]) -> site.Bundle:
 
 def site_of(bundle, root=ALPHA_ROOT, steps=None, defines=()) -> site.Site:
     unit = ck.Unit(1, frozenset(defines), frozenset())
-    return site.Site(bundle, root, steps or {}, dict.fromkeys(bundle.pages, unit))
+    return site.Site(bundle, root, steps or {}, dict.fromkeys(bundle.pages, unit), ck.FEATURES_DIR)
 
 
 def many(count: int) -> dict[str, str]:
@@ -130,10 +130,10 @@ def test_a_code_anchor_that_is_not_python_has_no_usage(tmp_path) -> None:
 
 
 def test_a_feature_named_by_a_steps_file_without_the_feature_file_is_left_out(tmp_path) -> None:
-    (tmp_path / site.FEATURES).mkdir(parents=True)
-    (tmp_path / site.FEATURES / "test_a.py").write_text('import a\nscenarios("gone.feature")\n')
+    (tmp_path / ck.FEATURES_DIR).mkdir(parents=True)
+    (tmp_path / ck.FEATURES_DIR / "test_a.py").write_text('import a\nscenarios("gone.feature")\n')
 
-    steps = site.steps_by_feature(tmp_path)
+    steps = site.steps_by_feature(tmp_path, ck.FEATURES_DIR)
 
     assert steps == {"gone": frozenset({"a"})}
     assert (
@@ -206,3 +206,17 @@ def test_a_script_whose_help_hangs_has_no_usage_and_says_so(tmp_path, monkeypatc
 
     assert site.usage_of(tmp_path, ("a.py",)) == ""
     assert "'a.py --help' failed" in capsys.readouterr().err
+
+
+def test_features_are_read_from_the_folder_the_layout_names(tmp_path) -> None:
+    (tmp_path / "spec").mkdir()
+    (tmp_path / "spec" / "test_a.py").write_text('import a\nscenarios("x.feature")\n')
+    (tmp_path / "spec" / "x.feature").write_text("Feature: x\n")
+    steps = site.steps_by_feature(tmp_path, "spec")
+    bundle = bundle_of({ALPHA: page_text()})
+    one = site.Site(bundle, tmp_path, steps, site_of(bundle, defines={"a"}).units, "spec")
+
+    text = site.scenarios_of(one, ALPHA)
+
+    assert "Feature: x" in text
+    assert "`spec/x.feature`" in text
