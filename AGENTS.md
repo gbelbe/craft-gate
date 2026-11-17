@@ -16,6 +16,7 @@ uv run --extra dev ruff format --check scripts tools tests/*.py tests/features/*
 python3 tools/render_catalog.py --check                          # generated docs match catalog.yaml
 python3 tools/sync_knowledge.py --check                          # docs/knowledge relations match the code
 python3 tools/check_knowledge.py                                 # docs/knowledge matches the code
+uv run --extra docs --extra architecture python3 tools/build_site.py && uv run --extra docs mkdocs build --strict  # the site builds
 bash scripts/check_tidy_ratchet.sh --base origin/main            # this commit range earned its tidy
 ```
 

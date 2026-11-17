@@ -85,7 +85,7 @@ it, like the other legacy-debt rules.
 | Directory | Holds | Rule |
 |---|---|---|
 | `scripts/` | The gates and what they import | Exactly what `bootstrap.sh` installs into a consuming repo; a test enforces it |
-| `tools/` | `render_catalog.py`, `next_version.py` | This repo's own tooling; never shipped |
+| `tools/` | `render_catalog.py`, `next_version.py`, `build_site.py` | This repo's own tooling; never shipped |
 
 Scripts are copied, not installed as a package, so they import each other by
 bare name (`from gitdiff import git`). That works because Python puts a script's

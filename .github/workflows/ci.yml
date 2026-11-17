@@ -262,6 +262,24 @@ jobs:
       - name: "Tidy First ratchet: a tidy(<type>) / test(characterize) commit or Tidy-Exempt trailer"
         run: bash scripts/check_tidy_ratchet.sh --base "origin/${{ github.base_ref }}"
 
+  # The knowledge bundle as a site: tools/build_site.py writes its source, mkdocs builds it strictly, so
+  # a broken link or diagram fails here. Nothing is published.
+  knowledge-site:
+    name: Knowledge site builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: The site source is written from docs/knowledge (the architecture extra lets --help run)
+        run: uv run --extra docs --extra architecture python3 tools/build_site.py
+
+      - name: mkdocs builds it without a warning
+        run: uv run --extra docs mkdocs build --strict
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+
   # Diff-aware: a file a docs/knowledge page describes must not change without its page. Warning
   # only for now; drop --warn-only to make it block.
   knowledge-touch:
