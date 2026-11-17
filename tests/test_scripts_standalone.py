@@ -21,6 +21,10 @@ SCRIPTS = [
     "ci_history.py",
     "render_architecture.py",
     "check_architecture_ratchet.py",
+    "check_knowledge.py",
+    "sync_knowledge.py",
+    "check_knowledge_touch.py",
+    "build_site.py",
 ]
 
 

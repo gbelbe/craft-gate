@@ -1,0 +1,25 @@
+# The knowledge bundle as a site. Copy to the root of your repo and set site_name.
+# `python3 scripts/build_site.py` writes the source (docs/knowledge plus relation tables, graphs,
+# usage and scenarios computed from the bundle and the code) to build/knowledge; this builds it.
+# Preview: python3 scripts/build_site.py && uvx --with mkdocs-material==9.8.1 mkdocs serve
+# Add `build/` to .gitignore.
+site_name: CHANGE ME
+docs_dir: build/knowledge
+site_dir: build/site
+theme:
+  name: material
+  features: [navigation.sections, navigation.indexes, navigation.top, search.suggest, toc.integrate]
+  palette:
+    - scheme: default
+      primary: indigo
+    - scheme: slate
+      primary: indigo
+markdown_extensions:
+  - tables
+  - admonition
+  - toc
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

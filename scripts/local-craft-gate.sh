@@ -29,6 +29,12 @@ if [[ -f architecture.yaml ]]; then
   PYTHONPATH=. uv run --no-project --with-requirements scripts/gate-requirements.txt lint-imports --config .architecture.importlinter
   uv run --no-project --with-requirements scripts/gate-requirements.txt python scripts/check_architecture_ratchet.py --base "$BASE"
 fi
+# The documentation gate is opt-in too: it runs once the repo has a docs/knowledge/ bundle.
+if [[ -d docs/knowledge ]]; then
+  uv run --no-project --with-requirements scripts/gate-requirements.txt python scripts/check_knowledge.py
+  uv run --no-project --with-requirements scripts/gate-requirements.txt python scripts/sync_knowledge.py --check
+  uv run --no-project --with-requirements scripts/gate-requirements.txt python scripts/check_knowledge_touch.py --base "$BASE" --warn-only
+fi
 uv run --with-requirements scripts/gate-requirements.txt python scripts/check_refactor_first.py --base "$BASE"
 
 # Whether a test gate applies here is scripts/gate_config.py's call (pyproject.toml's

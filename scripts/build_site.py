@@ -13,7 +13,7 @@ there is nothing to keep up to date by hand:
     system      graph.md: one box per folder, one arrow per relation kind and count
 
 Usage:
-    python3 tools/build_site.py [--path .] [--out build/knowledge]
+    python3 scripts/build_site.py [--path .] [--out build/knowledge]
     mkdocs build --strict        # or: mkdocs serve
 """
 
@@ -30,8 +30,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
-import check_knowledge as ck
-from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+import check_knowledge as ck  # noqa: E402
+from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle  # noqa: E402
 
 FEATURES = "tests/features"
 FEATURE_SUFFIX = ".feature"

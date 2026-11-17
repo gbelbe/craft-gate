@@ -15,7 +15,7 @@ A `Docs-Exempt: <reason>` trailer anywhere in the commit range waives it. A repo
 docs/knowledge/ has nothing to check.
 
 Usage:
-    python3 tools/check_knowledge_touch.py --base <ref> [--head <ref>] [--path .] [--warn-only]
+    python3 scripts/check_knowledge_touch.py --base <ref> [--head <ref>] [--path .] [--warn-only]
 
 `--warn-only` reports without failing (exit 0), and adds a GitHub annotation in Actions.
 """
@@ -28,7 +28,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import check_knowledge as ck
+sys.path.insert(
+    0, str(Path(__file__).resolve().parent)
+)  # siblings by bare name, also when imported as scripts.<name>
+import check_knowledge as ck  # noqa: E402
 
 EXEMPT_TRAILER = "Docs-Exempt:"
 
@@ -75,7 +78,7 @@ def report(owed: list[tuple[str, list[str]]], warn_only: bool) -> None:
         print(f"  {page}  (for {', '.join(files)})", file=sys.stderr)
     print(
         "\n  Read the page against your change and update what is no longer true (description,\n"
-        "  relations, text; `python3 tools/sync_knowledge.py` writes the relations), or say why\n"
+        "  relations, text; `python3 scripts/sync_knowledge.py` writes the relations), or say why\n"
         f"  nothing needs saying in a {EXEMPT_TRAILER} trailer.",
         file=sys.stderr,
     )

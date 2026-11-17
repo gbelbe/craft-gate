@@ -134,3 +134,22 @@ code. Start on an existing codebase by listing today's violations under `known_v
 can only shrink, and a PR that touches a module owning some of them must remove at least one
 (`scripts/check_architecture_ratchet.py`; a `Tidy-Exempt:` trailer waives it). `bootstrap.sh` already installs `scripts/render_architecture.py` and the AGENTS.md
 snippet carries the instructions agents follow. See `docs/architecture.md`.
+
+## Optional: keep the documentation faithful to the code
+
+The knowledge bundle is a folder of markdown pages, one per file or folder, whose frontmatter names the
+code it describes (`code`) and its typed links (`relations`). Create `docs/knowledge/index.md` and a
+`docs/knowledge/bundle.yaml` saying what to cover:
+
+```yaml
+covered: [src]            # every file below needs a page (omit for none)
+import-roots: [.]         # where Python imports are rooted (`src` for a src layout)
+# installer: bootstrap.sh # a file that lists what you ship, for `installs` relations
+# relations: [owns]       # extra relation kinds you want to write down
+```
+
+Then `python3 scripts/sync_knowledge.py` stubs a page for every covered file and writes the `imports` relations; write each
+stub's description and move it where it belongs. Paste `templates/knowledge.yml` under your workflow's `jobs:`
+(checks, a warning-only touch rule, and a site build), and copy `templates/mkdocs.yml` and add `build/` to
+`.gitignore` to browse it: `python3 scripts/build_site.py && uvx --with mkdocs-material==9.8.1 mkdocs serve`.
+`bootstrap.sh` installs the four scripts, and the AGENTS.md snippet carries the instructions agents follow.

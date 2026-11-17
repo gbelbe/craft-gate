@@ -1,0 +1,58 @@
+# Keep the documentation faithful to the code. A fragment to merge into your CI workflow's `jobs:`,
+# not a complete file; opt in once the repo has a docs/knowledge/ bundle (see INSTALL.md).
+#
+# The bundle is an Open Knowledge Format folder: one markdown page per file or folder, with `code`
+# (what it describes) and `relations` (typed links) in its frontmatter. What the rules cover is
+# declared in docs/knowledge/bundle.yaml. Three checks, from the scripts bootstrap.sh installs:
+#   - check_knowledge.py: the frontmatter is valid, every `code` path exists, every covered file has
+#     a page, every link resolves, and every `imports`/`installs` relation is true;
+#   - sync_knowledge.py --check: the relations the code implies are the ones written (run it without
+#     --check to write them and to stub a page for a new file);
+#   - check_knowledge_touch.py: a PR that modifies a file must touch its page, or say why in a
+#     `Docs-Exempt:` trailer. A warning to start; drop --warn-only to make it block.
+# The last job builds the browsable site (relation graphs, usage, scenarios) so a broken page fails
+# here; it publishes nothing. It needs an mkdocs.yml (templates/mkdocs.yml).
+
+  knowledge:
+    name: Knowledge bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: docs/knowledge matches the repository
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/check_knowledge.py
+
+      - name: docs/knowledge relations are the ones the code has
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/sync_knowledge.py --check
+
+  knowledge-touch:
+    name: Docs touch (warning only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && !endsWith(github.actor, '[bot]')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: "A modified file's page changes with it, or a Docs-Exempt trailer says why"
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/check_knowledge_touch.py --base "origin/${{ github.base_ref }}" --warn-only
+
+  knowledge-site:
+    name: Knowledge site builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: The site source is written from docs/knowledge
+        run: uv run --no-project --with-requirements scripts/gate-requirements.txt python3 scripts/build_site.py
+
+      - name: mkdocs builds it without a warning
+        run: uv run --no-project --with mkdocs-material==9.8.1 mkdocs build --strict
+        env:
+          NO_MKDOCS_2_WARNING: "1"

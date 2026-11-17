@@ -4,7 +4,7 @@ title: Sync Knowledge
 description: Writes what the code already says into the bundle (imports and installs relations, and a
   placeholder page for every file no concept owns).
 code:
-- tools/sync_knowledge.py
+- scripts/sync_knowledge.py
 relations:
   imports:
   - /distribution/check-knowledge.md

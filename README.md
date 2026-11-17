@@ -138,7 +138,7 @@ scripts/report_tidy_history.sh
 | [DESIGN.md](DESIGN.md) | Why each gate works the way it does (calibration, engines, what's grandfathered) |
 | [docs/operating.md](docs/operating.md) | Staying current, reviewing what craft-gate changed, the badge |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Adding a heuristic or rule; development setup |
-| `docs/knowledge/` | One page per file, with typed relations; browse it as a site: `uv run --extra docs --extra architecture python3 tools/build_site.py && uv run --extra docs mkdocs serve` |
+| `docs/knowledge/` | One page per file, with typed relations; browse it as a site: `uv run --extra docs --extra architecture python3 scripts/build_site.py && uv run --extra docs mkdocs serve` |
 | [AGENTS.md](AGENTS.md) | The rules for coding agents working in this repo |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability, and what is in scope |

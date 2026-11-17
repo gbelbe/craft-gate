@@ -17,7 +17,7 @@ Rules, each a way for the documents to drift from the code:
 
   format     the frontmatter is valid YAML; a concept has a `type`; `relations` maps a known
              relation to a list
-  todo       no concept still has the placeholder description `tools/sync_knowledge.py` writes
+  todo       no concept still has the placeholder description `scripts/sync_knowledge.py` writes
   anchor     every `code` path exists
   coverage   every file under the covered roots belongs to some concept's `code`
   links      every link and relation target exists; every concept is linked from somewhere
@@ -33,7 +33,7 @@ The layout is the bundle's own: `docs/knowledge/bundle.yaml` (optional) says wha
     relations:     relation kinds allowed besides the built-in ones, described but not verified
 
 Usage:
-    python3 tools/check_knowledge.py [--path .]
+    python3 scripts/check_knowledge.py [--path .]
 """
 
 from __future__ import annotations

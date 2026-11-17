@@ -234,9 +234,9 @@ def test_this_repos_own_bundle_matches_the_repo() -> None:
     assert knowledge.problems_in(ROOT) == []
 
 
-CHECK_COMMAND = "python3 tools/check_knowledge.py"
-SYNC_COMMAND = "python3 tools/sync_knowledge.py --check"
-TOUCH_COMMAND = "python3 tools/check_knowledge_touch.py"
+CHECK_COMMAND = "python3 scripts/check_knowledge.py"
+SYNC_COMMAND = "python3 scripts/sync_knowledge.py --check"
+TOUCH_COMMAND = "python3 scripts/check_knowledge_touch.py"
 WORKFLOW = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
 
 
