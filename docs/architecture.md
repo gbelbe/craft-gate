@@ -68,7 +68,9 @@ point inward, every module must belong to a layer (`exhaustive`), and the known-
 baseline can only shrink. With `docs: <dir>` set, it also writes `<dir>/overview.md` (`scripts/architecture_docs.py`):
 the declared layers, and a Mermaid graph of the imports between layers that
 [grimp](https://grimp.readthedocs.io/) reads from the code, outward ones dashed. `--check` fails when
-any generated file is stale, so the documentation cannot drift from the code. Opt in with
+any generated file is stale, so the documentation cannot drift from the code, and fails when no
+workflow or pre-commit hook runs the ratchet (`scripts/architecture_wiring.py`), since the CI job
+is pasted in by hand and a repo that took the script in an update could otherwise never run it. Opt in with
 `templates/architecture.yaml` (the starter declaration), `templates/architecture.yml` (the CI job) and
 the `local-craft-gate.sh` step that runs once `architecture.yaml` exists. Agents are pointed at
 `docs/architecture/overview.md` by the AGENTS.md snippet, and `craft-reviewer` checks which layer a

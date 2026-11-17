@@ -159,3 +159,5 @@ to make a check pass: move the code. After any change to the layers or the impor
 `python3 scripts/render_architecture.py` and commit what it writes; `--check` fails CI otherwise.
 When you edit a module that appears as the importer in `known_violations`, move code so at least one of
 its listed imports goes away and delete that line; `scripts/check_architecture_ratchet.py` fails the PR otherwise.
+`render_architecture.py --check` also fails until a workflow or pre-commit hook runs that script: paste the job
+from craft-gate's `templates/architecture.yml`.

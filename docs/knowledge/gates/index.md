@@ -11,5 +11,6 @@ The checks a pull request must pass. Each is a script (or a CI job around a tool
 - [Architecture Ratchet](architecture-ratchet.md): Makes the list of known violations in `architecture.yaml` shrink: a touched module that is the importer of some must lose at least one.
 - [Mutation Run](mutation-run.md): Chooses which mutants to run for a diff.
 - [Test Impact](test-impact.md): Maps a diff to the tests it can affect.
-- [Render Architecture](render-architecture.md): Turns `architecture.yaml` into import-linter contracts and, through Architecture Docs, into the generated overview. `--check` fails when either is stale.
+- [Render Architecture](render-architecture.md): Turns `architecture.yaml` into import-linter contracts and, through Architecture Docs, into the generated overview. `--check` fails when either is stale, or when nothing runs the architecture ratchet.
+- [Architecture Wiring](architecture-wiring.md): Fails the architecture check until a workflow or pre-commit hook runs the ratchet, since the ratchet only counts once something runs it.
 - [Architecture Docs](architecture-docs.md): Draws the declared layers and the imports grimp reads from the code into `docs/architecture/overview.md`.
