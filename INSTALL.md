@@ -149,6 +149,7 @@ code it describes (`code`) and its typed links (`relations`). `bootstrap.sh` ins
    # installer: bootstrap.sh # a file that lists what you ship, for `installs` relations
    # relations: [owns]       # extra relation kinds you want to write down
    # features: tests/features # where Gherkin features and their step files are (the default)
+   # pages: child            # one stub page per top-level file or folder of a covered root (default: file)
    ```
 
 2. Run `python3 scripts/sync_knowledge.py`. It stubs a page for every covered file under
