@@ -11,6 +11,8 @@ ELSEWHERE = "shop.domain.pricing -> shop.adapters.db"
 BAD_PATH = "shop/domain/bad.py"
 BAD_MODULE = "shop.domain.bad"
 SRC_BAD_PATH = "src/shop/domain/bad.py"
+PRICING_PATH = "shop/domain/pricing.py"
+CLEAN_PATH = "shop/domain/clean.py"
 
 
 def declared(*violations: str, **extra) -> dict:
@@ -57,12 +59,7 @@ def test_swapping_a_breach_for_another_pays_nothing_down() -> None:
 
 
 def test_a_file_that_owned_none_owes_nothing() -> None:
-    assert (
-        gate.unpaid(
-            [("shop/domain/clean.py", "shop/domain/clean.py")], declared(BAD), declared(BAD)
-        )
-        == []
-    )
+    assert gate.unpaid([(CLEAN_PATH, CLEAN_PATH)], declared(BAD), declared(BAD)) == []
 
 
 def test_a_renamed_file_is_judged_by_its_old_and_its_new_module() -> None:
@@ -78,3 +75,12 @@ def test_each_end_uses_its_own_source_root() -> None:
     after = declared(BAD, **{gate.SOURCE_ROOT_KEY: "src"})
 
     assert gate.unpaid([(BAD_PATH, SRC_BAD_PATH)], before, after) == [(SRC_BAD_PATH, 1, 1)]
+
+
+def test_owned_by_gives_the_breaches_of_a_path_under_its_declaration() -> None:
+    owned = gate.owned_by(declared(BAD, OTHER, ELSEWHERE))
+
+    assert owned(BAD_PATH) == len([BAD, OTHER])
+    assert owned(PRICING_PATH) == len([ELSEWHERE])
+    assert owned(CLEAN_PATH) == 0
+    assert owned("tools/x.py") == 0
