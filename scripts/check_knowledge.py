@@ -31,6 +31,8 @@ The layout is the bundle's own: `docs/knowledge/bundle.yaml` (optional) says wha
     installer:     a file that lists what is shipped, for `installs` (default: none)
     import-roots:  directories Python imports are rooted at, to name modules (default: ".")
     relations:     relation kinds allowed besides the built-in ones, described but not verified
+    features:      where the Gherkin features and their step files live, for the site's scenarios
+                   (default: tests/features)
 
 Usage:
     python3 scripts/check_knowledge.py [--path .]
@@ -57,7 +59,8 @@ PLACEHOLDER = "TODO: say what this does."
 DESCRIPTION_KEY = "description"
 RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
 COVERED_KEY, INSTALLER_KEY, ROOTS_KEY = "covered", "installer", "import-roots"
-CONFIG_KEYS = (COVERED_KEY, INSTALLER_KEY, ROOTS_KEY, "relations")
+FEATURES_KEY, FEATURES_DIR = "features", "tests/features"
+CONFIG_KEYS = (COVERED_KEY, INSTALLER_KEY, ROOTS_KEY, "relations", FEATURES_KEY)
 ROOT_DIR = "."
 TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
 FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
@@ -70,6 +73,7 @@ class Layout(NamedTuple):
     installer: str | None = None
     import_roots: tuple[str, ...] = (ROOT_DIR,)
     relations: tuple[str, ...] = ()
+    features: str = FEATURES_DIR
 
     @property
     def known_relations(self) -> tuple[str, ...]:
@@ -106,6 +110,10 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
 
+def _directory(value: object) -> str:
+    return value if isinstance(value, str) and value else FEATURES_DIR
+
+
 def read_config(root: Path) -> tuple[dict, bool]:
     """(what `bundle.yaml` maps, whether it parsed); an absent file is ({}, True)."""
     path = root / DOCS / CONFIG
@@ -127,6 +135,7 @@ def load_layout(root: Path) -> Layout:
         installer=installer if isinstance(installer, str) and installer else None,
         import_roots=_strings(given.get(ROOTS_KEY)) or (ROOT_DIR,),
         relations=_strings(given.get(RELATIONS_KEY)),
+        features=_directory(given.get(FEATURES_KEY)),
     )
 
 

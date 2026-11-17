@@ -11,7 +11,9 @@
 #   - check_knowledge_touch.py: a PR that modifies a file must touch its page, or say why in a
 #     `Docs-Exempt:` trailer. A warning to start; drop --warn-only to make it block.
 # The last job builds the browsable site (relation graphs, usage, scenarios) so a broken page fails
-# here; it publishes nothing. It needs an mkdocs.yml (templates/mkdocs.yml).
+# here; it publishes nothing. It needs an mkdocs.yml (copy templates/mkdocs.yml), and a page's usage
+# section appears only for scripts that run `--help` with just gate-requirements.txt installed (add the
+# scripts' own dependencies to the build step's `uv run --with ...` to show the others).
 
   knowledge:
     name: Knowledge bundle
