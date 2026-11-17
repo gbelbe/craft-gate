@@ -43,6 +43,7 @@ def put(world, relative: str, text: str) -> None:
 
 def write_bundle(world) -> None:
     docs = "docs/knowledge"
+    put(world, f"{docs}/bundle.yaml", "import-roots: [scripts]\n")
     put(world, f"{docs}/index.md", "# Home\n")
     put(world, f"{docs}{GATES_HUB}", "# Gates\n")
     put(world, f"{docs}/tooling/index.md", "# Tooling\n")

@@ -20,6 +20,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import posixpath
 import re
 import shutil
@@ -29,7 +30,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
-from check_knowledge import DOCS, FRONT, INDEX, Doc, imported_modules, parse, read_bundle
+import check_knowledge as ck
+from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle
 
 FEATURES = "tests/features"
 FEATURE_SUFFIX = ".feature"
@@ -197,25 +199,37 @@ def _text(path: Path) -> str:
     return path.read_text() if path.is_file() else ""
 
 
-def features_by_module(root: Path) -> dict[str, list[str]]:
-    """Each module name -> the features whose step files import it."""
-    found: dict[str, list[str]] = defaultdict(list)
+class Site(NamedTuple):
+    """Everything a page is rendered against."""
+
+    bundle: Bundle
+    root: Path
+    steps: dict[str, frozenset[str]]  # feature -> the names its step file imports
+    units: dict[str, ck.Unit]
+
+
+def steps_by_feature(root: Path) -> dict[str, frozenset[str]]:
+    """Each feature -> the dotted names its step files import."""
+    found: dict[str, set[str]] = defaultdict(set)
     for steps in sorted((root / FEATURES).glob("test_*.py")):
-        for name in SCENARIOS.findall(steps.read_text()):
-            for module in imported_modules(steps):
-                found[module].append(name.removesuffix(FEATURE_SUFFIX))
-    return found
+        text = steps.read_text()
+        names = ck.imported_names(ast.parse(text), "")
+        for feature in SCENARIOS.findall(text):
+            found[feature.removesuffix(FEATURE_SUFFIX)] |= names
+    return {feature: frozenset(names) for feature, names in found.items()}
 
 
-def scenarios_of(root: Path, code: tuple[str, ...], features: dict[str, list[str]]) -> str:
-    names = sorted({n for c in code if c.endswith(".py") for n in features.get(Path(c).stem, [])})
-    existing = [n for n in names if (root / FEATURES / (n + FEATURE_SUFFIX)).is_file()]
+def scenarios_of(site: Site, path: str) -> str:
+    """The Gherkin of every feature whose step file imports a module the page's code defines."""
+    defined = site.units[path].defines
+    exercising = sorted(f for f, names in site.steps.items() if names & defined)
+    existing = [f for f in exercising if (site.root / FEATURES / (f + FEATURE_SUFFIX)).is_file()]
     if not existing:
         return ""
     blocks = [
-        fenced("gherkin", (root / FEATURES / (n + FEATURE_SUFFIX)).read_text().rstrip())
-        + f"\n*Source: `{FEATURES}/{n}{FEATURE_SUFFIX}`, run by the behaviour-coverage gate.*"
-        for n in existing
+        fenced("gherkin", (site.root / FEATURES / (f + FEATURE_SUFFIX)).read_text().rstrip())
+        + f"\n*Source: `{FEATURES}/{f}{FEATURE_SUFFIX}`, run by the behaviour-coverage gate.*"
+        for f in existing
     ]
     return "\n## How it behaves\n\n" + "\n\n".join(blocks) + "\n"
 
@@ -231,7 +245,8 @@ def with_header(page: Page) -> str:
     return body[: title.end()] + "\n" + header + body[title.end() :] if title else header + body
 
 
-def render_page(bundle: Bundle, path: str, root: Path, features: dict[str, list[str]]) -> str:
+def render_page(site: Site, path: str) -> str:
+    bundle, root = site.bundle, site.root
     page = bundle.pages[path]
     if not page.doc.is_concept:
         return page.body
@@ -240,7 +255,7 @@ def render_page(bundle: Bundle, path: str, root: Path, features: dict[str, list[
     return (
         with_header(page).rstrip()
         + "\n"
-        + scenarios_of(root, page.doc.code, features)
+        + scenarios_of(site, path)
         + usage_of(root, page.doc.code)
         + around
         + relation_table(bundle, "Depends on", page.doc.relations, path)
@@ -316,12 +331,14 @@ def overview(bundle: Bundle) -> str:
 def build(root: Path, out: Path) -> int:
     """Write the site source under *out*; the number of pages written."""
     bundle = load_bundle(root)
-    features = features_by_module(root)
+    docs = [page.doc for page in bundle.pages.values()]
+    units = ck.units_of(docs, root, ck.load_layout(root))
+    site = Site(bundle, root, steps_by_feature(root), units)
     shutil.rmtree(out, ignore_errors=True)
     for path in bundle.pages:
         target = out / path.lstrip("/")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(render_page(bundle, path, root, features))
+        target.write_text(render_page(site, path))
     (out / OVERVIEW.lstrip("/")).write_text(overview(bundle))
     return len(bundle.pages) + 1
 

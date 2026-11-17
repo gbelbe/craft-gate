@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import build_site as site
+import check_knowledge as ck
 import pytest
 from check_knowledge import parse
 
@@ -33,6 +34,11 @@ def bundle_of(texts: dict[str, str]) -> site.Bundle:
         for target in targets
     ]
     return site.Bundle(pages, edges)
+
+
+def site_of(bundle, root=ALPHA_ROOT, steps=None, defines=()) -> site.Site:
+    unit = ck.Unit(1, frozenset(defines), frozenset())
+    return site.Site(bundle, root, steps or {}, dict.fromkeys(bundle.pages, unit))
 
 
 def many(count: int) -> dict[str, str]:
@@ -81,7 +87,7 @@ def test_a_page_with_no_relation_has_no_table_and_no_diagram() -> None:
     bundle = bundle_of({ALPHA: page_text()})
 
     assert site.relation_table(bundle, "Depends on", {}, ALPHA) == ""
-    assert "Around this page" not in site.render_page(bundle, ALPHA, ALPHA_ROOT, {})
+    assert "Around this page" not in site.render_page(site_of(bundle), ALPHA)
 
 
 def test_the_relation_lines_of_the_text_are_replaced_by_the_tables() -> None:
@@ -127,14 +133,19 @@ def test_a_feature_named_by_a_steps_file_without_the_feature_file_is_left_out(tm
     (tmp_path / site.FEATURES).mkdir(parents=True)
     (tmp_path / site.FEATURES / "test_a.py").write_text('import a\nscenarios("gone.feature")\n')
 
-    features = site.features_by_module(tmp_path)
+    steps = site.steps_by_feature(tmp_path)
 
-    assert features == {"a": ["gone"]}
-    assert site.scenarios_of(tmp_path, (SCRIPT,), features) == ""
+    assert steps == {"gone": frozenset({"a"})}
+    assert (
+        site.scenarios_of(site_of(bundle_of({ALPHA: page_text()}), tmp_path, steps, {"a"}), ALPHA)
+        == ""
+    )
 
 
-def test_a_page_whose_script_no_feature_imports_has_no_scenarios(tmp_path) -> None:
-    assert site.scenarios_of(tmp_path, (SCRIPT, "x.yml"), {"b": ["f"]}) == ""
+def test_a_page_whose_modules_no_feature_imports_has_no_scenarios(tmp_path) -> None:
+    bundle = bundle_of({ALPHA: page_text()})
+
+    assert site.scenarios_of(site_of(bundle, tmp_path, {"f": frozenset({"b"})}, {"a"}), ALPHA) == ""
 
 
 def test_the_system_page_counts_relations_inside_a_folder_and_arrows_between_folders() -> None:
