@@ -149,6 +149,8 @@ code it describes (`code`) and its typed links (`relations`). `bootstrap.sh` ins
    # installer: bootstrap.sh # a file that lists what you ship, for `installs` relations
    # relations: [owns]       # extra relation kinds you want to write down
    # features: tests/features # where Gherkin features and their step files are (the default)
+   # steps: tests           # where step files that bind the features live (default: the features folder)
+   # layers: architecture.yaml # pages then live in the folder of their module's layer
    # pages: child            # one stub page per top-level file or folder of a covered root (default: file)
    ```
 

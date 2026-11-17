@@ -211,14 +211,27 @@ class Site(NamedTuple):
     features: str  # the folder of the features, from the layout
 
 
-def steps_by_feature(root: Path, features: str) -> dict[str, frozenset[str]]:
-    """Each feature -> the dotted names its step files import."""
+BINDING = re.compile(r"""scenarios?\(\s*["']([^"']+\.feature)["']""")
+
+
+def bound_features(steps: Path, features: Path) -> list[str]:
+    """The features (paths relative to *features*, without `.feature`) a step file binds."""
+    found = []
+    for argument in BINDING.findall(steps.read_text()):
+        feature = (steps.parent / argument).resolve()
+        if feature.is_relative_to(features.resolve()):
+            found.append(feature.relative_to(features.resolve()).with_suffix("").as_posix())
+    return found
+
+
+def steps_by_feature(root: Path, features: str, steps: str | None) -> dict[str, frozenset[str]]:
+    """Each feature -> the dotted names the step files binding it import."""
     found: dict[str, set[str]] = defaultdict(set)
-    for steps in sorted((root / features).glob("test_*.py")):
-        text = steps.read_text()
-        names = ck.imported_names(ast.parse(text), "")
-        for feature in SCENARIOS.findall(text):
-            found[feature.removesuffix(FEATURE_SUFFIX)] |= names
+    for path in sorted((root / (steps or features)).rglob("*.py")):
+        bound = bound_features(path, root / features)
+        names = ck.imported_names(ast.parse(path.read_text()), "") if bound else set()
+        for feature in bound:
+            found[feature] |= names
     return {feature: frozenset(names) for feature, names in found.items()}
 
 
@@ -339,7 +352,9 @@ def build(root: Path, out: Path) -> int:
     docs = [page.doc for page in bundle.pages.values()]
     layout = ck.load_layout(root)
     units = ck.units_of(docs, root, layout)
-    site = Site(bundle, root, steps_by_feature(root, layout.features), units, layout.features)
+    site = Site(
+        bundle, root, steps_by_feature(root, layout.features, layout.steps), units, layout.features
+    )
     shutil.rmtree(out, ignore_errors=True)
     for path in bundle.pages:
         target = out / path.lstrip("/")
