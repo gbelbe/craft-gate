@@ -15,6 +15,8 @@ HUB = "/g/index.md"
 ALPHA_CODE, BETA_CODE = "scripts/alpha.py", "scripts/beta.py"
 TYPE_GATE = "Gate"
 FORMAT, LINKS, IMPORTS = "format", "links", "imports"
+INSTALLER = "bootstrap.sh"
+LAYOUT = f"covered: [scripts]\ninstaller: {INSTALLER}\nimport-roots: [scripts]\n"
 
 
 def concept(code: str | None, relations: dict[str, list[str]] | None = None, text: str = "") -> str:
@@ -36,8 +38,9 @@ def project(tmp_path):
     (tmp_path / SCRIPTS).mkdir()
     (tmp_path / ALPHA_CODE).write_text("import beta\n")
     (tmp_path / BETA_CODE).write_text("")
-    (tmp_path / knowledge.INSTALLER).write_text(f"{ALPHA_CODE}\n")
+    (tmp_path / INSTALLER).write_text(f"{ALPHA_CODE}\n")
     (tmp_path / knowledge.DOCS / "g").mkdir(parents=True)
+    (tmp_path / knowledge.DOCS / knowledge.CONFIG).write_text(LAYOUT)
     return tmp_path
 
 
@@ -208,7 +211,7 @@ def test_an_installs_relation_must_name_something_the_installer_lists(project) -
     write(project, HUB, f"{link(ALPHA)} {link(BETA)} {link(boot)}\n")
 
     assert knowledge.problems_in(project) == [
-        f"installs: {knowledge.INSTALLER} does not list {BETA} (from {boot})"
+        f"installs: {INSTALLER} does not list {BETA} (from {boot})"
     ]
 
 
@@ -283,3 +286,114 @@ def test_the_agents_guidance_tells_the_author_to_update_the_page_or_say_why_not(
     assert TOUCH_COMMAND in guidance
     assert "Docs-Exempt:" in guidance
     assert "Before you propose or design a change, read `docs/knowledge/index.md`" in guidance
+
+
+DOMAIN, ADAPTERS = "/s/domain.md", "/s/adapters.md"
+NOT_IMPORTED = f"{IMPORTS}: {ADAPTERS} does not import {DOMAIN}"
+SCRIPT_ROOTS = (SCRIPTS, "tools")
+
+
+@pytest.fixture
+def packages(tmp_path):
+    """A package repo: adapters import domain, rooted at the repo, with a layout file."""
+    for folder in ("shop/domain", "shop/adapters"):
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "__init__.py").write_text("")
+    (tmp_path / "shop/domain/rules.py").write_text("")
+    (tmp_path / "shop/adapters/db.py").write_text("from shop.domain import rules\n")
+    base = tmp_path / knowledge.DOCS
+    (base / "s").mkdir(parents=True)
+    (base / knowledge.CONFIG).write_text("covered: [shop]\n")
+    (base / "s/domain.md").write_text(concept("shop/domain"))
+    (base / "s/adapters.md").write_text(
+        concept("shop/adapters", {IMPORTS: [DOMAIN]}, link(DOMAIN, "/s"))
+    )
+    (base / "s/index.md").write_text(f"{link(DOMAIN, '/s')} {link(ADAPTERS, '/s')}\n")
+    return tmp_path
+
+
+def rewrite_db(packages, code: str) -> None:
+    (packages / "shop/adapters/db.py").write_text(code)
+
+
+def test_a_folder_concept_imports_another_when_a_module_below_it_does(packages) -> None:
+    assert knowledge.problems_in(packages) == []
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import shop.domain.rules\n",
+        "from shop.domain.rules import x\n",
+        "from shop import domain\n",
+    ],
+)
+def test_each_way_to_import_a_module_counts(packages, code) -> None:
+    rewrite_db(packages, code)
+
+    assert knowledge.problems_in(packages) == []
+
+
+def test_a_relative_import_is_resolved_against_the_package(packages) -> None:
+    rewrite_db(packages, "from ..domain import rules\n")
+
+    assert knowledge.problems_in(packages) == []
+
+
+def test_an_import_of_something_else_does_not_count(packages) -> None:
+    rewrite_db(packages, "import os\nfrom shop.adapters import db\nfrom . import db\n")
+
+    assert knowledge.problems_in(packages) == [NOT_IMPORTED]
+
+
+def test_a_relative_import_that_climbs_above_the_root_reaches_nothing(packages) -> None:
+    rewrite_db(packages, "from ...... import domain\n")
+
+    assert knowledge.problems_in(packages) == [NOT_IMPORTED]
+
+
+def test_without_a_layout_file_nothing_has_to_be_covered_and_installs_are_not_checked(
+    project,
+) -> None:
+    faithful(project)
+    (project / knowledge.DOCS / knowledge.CONFIG).unlink()
+    (project / SCRIPTS / "new.py").write_text("")
+
+    assert knowledge.load_layout(project) == knowledge.Layout()
+    assert knowledge.problems_in(project) == []
+
+
+def test_a_layout_key_nothing_reads_and_a_layout_that_is_not_yaml_are_reported(project) -> None:
+    faithful(project)
+    path = project / knowledge.DOCS / knowledge.CONFIG
+
+    path.write_text(LAYOUT + "colour: red\n")
+    assert knowledge.problems_in(project) == [f"{FORMAT}: bundle.yaml has the unknown key 'colour'"]
+
+    path.write_text("covered: [a: b\n")
+    assert knowledge.problems_in(project) == [f"{FORMAT}: bundle.yaml is not valid YAML"]
+    assert knowledge.load_layout(project) == knowledge.Layout()
+
+
+def test_a_relation_the_layout_names_is_allowed_and_not_verified(project) -> None:
+    faithful(project, concept(ALPHA_CODE, {"owns": [BETA]}, text=link(BETA)))
+    assert knowledge.problems_in(project) == [f"{FORMAT}: {ALPHA} uses the unknown relation 'owns'"]
+
+    path = project / knowledge.DOCS / knowledge.CONFIG
+    path.write_text(LAYOUT + "relations: [owns]\n")
+    assert knowledge.problems_in(project) == []
+
+
+@pytest.mark.parametrize(
+    ("path", "roots", "name"),
+    [
+        ("scripts/a.py", SCRIPT_ROOTS, "a"),
+        ("tools/a.py", SCRIPT_ROOTS, "a"),
+        ("shop/domain/__init__.py", (".",), "shop.domain"),
+        ("shop/domain/rules.py", (".",), "shop.domain.rules"),
+        ("docs/a.py", (SCRIPTS,), None),
+        ("__init__.py", (".",), None),
+    ],
+)
+def test_a_file_is_named_by_the_import_root_that_holds_it(path, roots, name) -> None:
+    assert knowledge.module_name(path, roots) == name

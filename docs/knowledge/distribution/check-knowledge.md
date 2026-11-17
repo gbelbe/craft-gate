@@ -10,3 +10,5 @@ code:
 # Check Knowledge
 
 Keeps the documents in `docs/knowledge/` faithful to the repository: the frontmatter is valid YAML, every code anchor exists, every file has an owner, every link resolves, every typed relation is true (an `imports` relation is a real `import`, an `installs` relation is listed in `bootstrap.sh`), and no page still carries the placeholder description that `sync_knowledge.py` writes into a stub. It reads and reports; it never writes.
+
+What it covers is the bundle's own business: `docs/knowledge/bundle.yaml` (optional) names the roots whose every file needs a page (`covered`), the file that lists what is shipped (`installer`, for `installs`), the directories Python imports are rooted at (`import-roots`), and any further relation kinds a repo wants to write down (`relations`, described but not verified). Without it a repo has no coverage rule and no `installs` check, so the tool applies to any repository. An `imports` relation is checked on dotted module names, not file names: a concept that owns a folder imports another when any module below it imports a module below the other, with relative imports resolved against their package.

@@ -1,0 +1,4 @@
+# What check_knowledge.py, sync_knowledge.py and build_site.py read about this repo's layout.
+covered: [scripts, tools, templates, agents, skills]   # every file below needs a page
+installer: bootstrap.sh                                # lists what is shipped, for `installs`
+import-roots: [scripts, tools]                         # scripts import each other by bare name

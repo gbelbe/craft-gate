@@ -16,6 +16,8 @@ PROSE = "Alpha does the work."
 STUB_PAGE = "/unsorted/gamma-py.md"
 SCRIPTS, GAMMA, PATH_FLAG = "scripts", "gamma.py", "--path"
 IMPORTS, INSTALLS = "imports", "installs"
+INSTALLER = "bootstrap.sh"
+LAYOUT = f"covered: [scripts]\ninstaller: {INSTALLER}\nimport-roots: [scripts]\n"
 
 
 def page(title: str, code: str, relations: dict | None = None, body: str = "") -> str:
@@ -31,11 +33,12 @@ def project(tmp_path):
     (tmp_path / SCRIPTS).mkdir()
     (tmp_path / ALPHA_CODE).write_text("import beta\n")
     (tmp_path / BETA_CODE).write_text("")
-    (tmp_path / knowledge.INSTALLER).write_text("scripts/alpha.py\nscripts/beta.py\n")
+    (tmp_path / INSTALLER).write_text("scripts/alpha.py\nscripts/beta.py\n")
     (tmp_path / knowledge.DOCS / "g").mkdir(parents=True)
+    (tmp_path / knowledge.DOCS / knowledge.CONFIG).write_text(LAYOUT)
     put(tmp_path, ALPHA, page("Alpha", ALPHA_CODE, body=PROSE))
     put(tmp_path, BETA, page("Beta", BETA_CODE))
-    put(tmp_path, BOOT, page("Boot", knowledge.INSTALLER))
+    put(tmp_path, BOOT, page("Boot", INSTALLER))
     put(tmp_path, HUB, "[a](alpha.md) [b](beta.md) [c](boot.md)\n")
     return tmp_path
 
@@ -76,7 +79,7 @@ def test_the_installer_lists_the_files_a_page_installs_and_the_text_says_so(proj
 
 
 def test_a_name_that_only_contains_a_listed_path_is_not_installed(project) -> None:
-    (project / knowledge.INSTALLER).write_text("scripts/alpha.py\nscripts/beta.py.orig\n")
+    (project / INSTALLER).write_text("scripts/alpha.py\nscripts/beta.py.orig\n")
 
     sync.sync(project)
 
@@ -87,7 +90,7 @@ def test_a_directory_is_never_claimed_as_installed(project) -> None:
     (project / SCRIPTS / "pkg").mkdir()
     put(project, "/g/pkg.md", page("Pkg", "scripts/pkg"))
     put(project, HUB, text(project, HUB) + "[p](pkg.md)\n")
-    (project / knowledge.INSTALLER).write_text("scripts/alpha.py\nscripts/pkg/\n")
+    (project / INSTALLER).write_text("scripts/alpha.py\nscripts/pkg/\n")
 
     sync.sync(project)
 
@@ -162,3 +165,20 @@ def test_main_writes_and_exits_zero_then_reports_nothing_to_do(project, capsys) 
 
 def test_this_repos_bundle_is_in_sync_with_its_code() -> None:
     assert sync.sync(ROOT, write=False) == []
+
+
+def test_folder_concepts_get_the_imports_between_the_modules_below_them(tmp_path) -> None:
+    for folder in ("shop/domain", "shop/adapters"):
+        (tmp_path / folder).mkdir(parents=True)
+    (tmp_path / "shop/domain/rules.py").write_text("")
+    (tmp_path / "shop/adapters/db.py").write_text("from shop.domain import rules\n")
+    base = tmp_path / knowledge.DOCS
+    (base / "s").mkdir(parents=True)
+    (base / "s/domain.md").write_text(page("Domain", "shop/domain"))
+    (base / "s/adapters.md").write_text(page("Adapters", "shop/adapters"))
+    (base / "s/index.md").write_text("[d](domain.md) [a](adapters.md)\n")
+
+    assert sync.sync(tmp_path) == ["/s/adapters.md"]
+
+    assert relations(tmp_path, "/s/adapters.md") == {IMPORTS: ["/s/domain.md"]}
+    assert relations(tmp_path, "/s/domain.md") == {}
