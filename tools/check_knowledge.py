@@ -106,9 +106,21 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
 
+def read_config(root: Path) -> tuple[dict, bool]:
+    """(what `bundle.yaml` maps, whether it parsed); an absent file is ({}, True)."""
+    path = root / DOCS / CONFIG
+    if not path.is_file():
+        return {}, True
+    try:
+        raw = yaml.safe_load(path.read_text())
+    except yaml.YAMLError:
+        return {}, False
+    return (raw if isinstance(raw, dict) else {}), True
+
+
 def load_layout(root: Path) -> Layout:
     """The layout `bundle.yaml` declares; the defaults when the file is missing or unreadable."""
-    given = _config(root)
+    given, _ = read_config(root)
     installer = given.get(INSTALLER_KEY)
     return Layout(
         covered=_strings(given.get(COVERED_KEY)),
@@ -118,25 +130,11 @@ def load_layout(root: Path) -> Layout:
     )
 
 
-def _config(root: Path) -> dict:
-    path = root / DOCS / CONFIG
-    try:
-        raw = yaml.safe_load(path.read_text()) if path.is_file() else None
-    except yaml.YAMLError:
-        return {}
-    return raw if isinstance(raw, dict) else {}
-
-
 def config_problems(root: Path) -> list[str]:
     """What is wrong with `bundle.yaml` itself: invalid YAML, or a key no rule reads."""
-    path = root / DOCS / CONFIG
-    if not path.is_file():
-        return []
-    try:
-        raw = yaml.safe_load(path.read_text())
-    except yaml.YAMLError:
+    given, parsed = read_config(root)
+    if not parsed:
         return [f"{FORMAT}: {CONFIG} is not valid YAML"]
-    given = raw if isinstance(raw, dict) else {}
     return [
         f"{FORMAT}: {CONFIG} has the unknown key '{key}'" for key in given if key not in CONFIG_KEYS
     ]
@@ -248,16 +246,6 @@ def prose_problems(docs: list[Doc]) -> list[str]:
     ]
 
 
-def imported_modules(path: Path) -> set[str]:
-    found: set[str] = set()
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            found.add(node.module.split(".")[0])
-        elif isinstance(node, ast.Import):
-            found.update(alias.name.split(".")[0] for alias in node.names)
-    return found
-
-
 def _relations_of(docs: list[Doc], kind: str) -> list[tuple[Doc, Doc | None]]:
     by_path = {d.path: d for d in docs}
     return [(d, by_path.get(t)) for d in docs for t in d.relations.get(kind, ())]
@@ -311,18 +299,37 @@ def _absolute(node: ast.ImportFrom, package: str) -> str | None:
     return ".".join(filter(None, [".".join(parts[:keep]), node.module]))
 
 
+def _join(base: str, name: str) -> str:
+    return f"{base}.{name}" if base else name
+
+
+def _from_names(node: ast.ImportFrom, package: str) -> set[str]:
+    base = _absolute(node, package)
+    if base is None:
+        return set()
+    members = {_join(base, alias.name) for alias in node.names}
+    return members | {base} if base else members
+
+
 def imported_names(tree: ast.AST, package: str) -> set[str]:
-    """Every dotted name an `import` in *tree* could be reaching: the module and its members."""
+    """Every dotted name an `import` in *tree* may be reaching.
+
+    `from a import b` names both `a` and `a.b`, though `b` may be a member and not a module. The
+    over-match is deliberate: a name only counts when some concept defines a module of that name.
+    """
     found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
-            base = _absolute(node, package)
-            if base is not None:
-                found.update([base] if base else [])
-                found.update(f"{base}.{a.name}" if base else a.name for a in node.names)
+            found |= _from_names(node, package)
     return found
+
+
+def package_of(path: str, module: str | None) -> str:
+    """The package relative imports in the file at *path* are resolved against."""
+    name = module or ""
+    return name if path.endswith("__init__.py") else name.rpartition(".")[0]
 
 
 def unit_of(root: Path, doc: Doc, layout: Layout) -> Unit:
@@ -330,21 +337,21 @@ def unit_of(root: Path, doc: Doc, layout: Layout) -> Unit:
     defines, imports = set(), set()
     for path in files:
         module = module_name(path, layout.import_roots)
-        package = (
-            (module or "") if path.endswith("__init__.py") else (module or "").rpartition(".")[0]
-        )
-        imports |= imported_names(ast.parse((root / path).read_text()), package)
+        imports |= imported_names(ast.parse((root / path).read_text()), package_of(path, module))
         defines.update([module] if module else [])
     return Unit(len(files), frozenset(defines), frozenset(imports))
 
 
-def imports_problems(docs: list[Doc], root: Path, layout: Layout) -> list[str]:
+def units_of(docs: list[Doc], root: Path, layout: Layout) -> dict[str, Unit]:
+    """The Python unit of every concept, read once."""
+    return {d.path: unit_of(root, d, layout) for d in docs if d.is_concept}
+
+
+def imports_problems(docs: list[Doc], units: dict[str, Unit]) -> list[str]:
     problems = []
     for source, target in _relations_of(docs, IMPORTS):
-        if target is None:
-            continue
-        origin, wanted = unit_of(root, source, layout), unit_of(root, target, layout)
-        if origin.files and wanted.files and not origin.imports_from(wanted):
+        origin, wanted = units[source.path], units.get(target.path) if target else None
+        if wanted and origin.files and wanted.files and not origin.imports_from(wanted):
             problems.append(f"{IMPORTS}: {source.path} does not import {target.path}")
     return problems
 
@@ -370,7 +377,7 @@ def problems_in(root: Path) -> list[str]:
         *coverage_problems(docs, root, layout),
         *link_problems(docs),
         *prose_problems(docs),
-        *imports_problems(docs, root, layout),
+        *imports_problems(docs, units_of(docs, root, layout)),
         *installs_problems(docs, root, layout),
     ]
 

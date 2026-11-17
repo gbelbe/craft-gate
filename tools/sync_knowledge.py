@@ -23,6 +23,7 @@ import posixpath
 import re
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import check_knowledge as ck
 import yaml
@@ -51,23 +52,29 @@ def _imports_of(doc: ck.Doc, units: dict[str, ck.Unit]) -> list[str]:
     return [path for path, unit in units.items() if path != doc.path and mine.imports_from(unit)]
 
 
-def _installs_of(doc: ck.Doc, docs: list[ck.Doc], root: Path, layout: ck.Layout) -> list[str]:
+class Context(NamedTuple):
+    """What every page's derived relations are read against."""
+
+    docs: list[ck.Doc]
+    root: Path
+    layout: ck.Layout
+    units: dict[str, ck.Unit]
+
+
+def _installs_of(doc: ck.Doc, context: Context) -> list[str]:
+    layout, root = context.layout, context.root
     if layout.installer is None or layout.installer not in doc.code:
         return []
     installer = (root / layout.installer).read_text()
-    files = {d.path: [p for p in d.code if (root / p).is_file()] for d in docs if d is not doc}
+    files = {
+        d.path: [p for p in d.code if (root / p).is_file()] for d in context.docs if d is not doc
+    }
     return [path for path, owned in files.items() if any(_listed(p, installer) for p in owned)]
 
 
-def derived(
-    doc: ck.Doc, docs: list[ck.Doc], root: Path, units: dict[str, ck.Unit]
-) -> dict[str, list[str]]:
+def derived(doc: ck.Doc, context: Context) -> dict[str, list[str]]:
     """What the code says about *doc*: relation -> sorted target pages, for each non-empty one."""
-    layout = ck.load_layout(root)
-    found = {
-        ck.IMPORTS: _imports_of(doc, units),
-        ck.INSTALLS: _installs_of(doc, docs, root, layout),
-    }
+    found = {ck.IMPORTS: _imports_of(doc, context.units), ck.INSTALLS: _installs_of(doc, context)}
     return {kind: sorted(targets) for kind, targets in found.items() if targets}
 
 
@@ -146,9 +153,9 @@ def sync(root: Path, write: bool = True) -> list[str]:
     docs = [ck.parse(text, path) for path, text in after.items()]
     titles = {d.path: str(d.meta.get("title") or Path(d.path).stem) for d in docs}
     layout = ck.load_layout(root)
-    units = {d.path: ck.unit_of(root, d, layout) for d in docs if d.is_concept}
+    context = Context(docs, root, layout, ck.units_of(docs, root, layout))
     for doc in (d for d in docs if d.is_concept):
-        after[doc.path] = rewritten(after[doc.path], doc, derived(doc, docs, root, units), titles)
+        after[doc.path] = rewritten(after[doc.path], doc, derived(doc, context), titles)
     changed = {path: text for path, text in after.items() if text != before.get(path)}
     for path, text in changed.items() if write else ():
         page = root / ck.DOCS / path.lstrip("/")
