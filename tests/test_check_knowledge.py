@@ -429,6 +429,7 @@ ARCH = "architecture.yaml"
 DRIVING, DOMAIN_LAYER, SHARED = "driving", "domain", "shared"
 LAYERS = (DRIVING, DOMAIN_LAYER, SHARED)
 INDEX_MD = "index.md"
+TESTS_DIR = "tests"
 ARCH_TEXT = (
     "root_package: shop\nlayers:\n  - name: driving\n    modules: [web]\n"
     "  - - name: domain\n      modules: [rules, pkg]\nshared: [paths]\n"
@@ -519,4 +520,10 @@ def test_layers_and_steps_default_to_none_and_take_text(project) -> None:
     assert knowledge.load_layout(project).layers is None
     path.write_text(LAYOUT + "layers: architecture.yaml\nsteps: tests\n")
     layout = knowledge.load_layout(project)
-    assert (layout.layers, layout.steps) == ("architecture.yaml", "tests")
+    assert (layout.layers, layout.steps) == ("architecture.yaml", TESTS_DIR)
+
+
+def test_the_steps_folder_is_the_one_named_or_else_the_features_folder() -> None:
+    assert knowledge.Layout().steps_dir == "tests/features"
+    assert knowledge.Layout(features="spec").steps_dir == "spec"
+    assert knowledge.Layout(features="spec", steps=TESTS_DIR).steps_dir == TESTS_DIR

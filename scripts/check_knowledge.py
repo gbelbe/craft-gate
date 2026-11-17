@@ -96,6 +96,11 @@ class Layout(NamedTuple):
     steps: str | None = None
 
     @property
+    def steps_dir(self) -> str:
+        """Where step files are searched: the folder `steps` names, else the features folder."""
+        return self.steps or self.features
+
+    @property
     def known_relations(self) -> tuple[str, ...]:
         return RELATIONS + self.relations
 
@@ -256,30 +261,45 @@ def coverage_problems(docs: list[Doc], root: Path, layout: Layout) -> list[str]:
     ]
 
 
-def layer_of_units(root: Path, declaration: str) -> tuple[str, dict[str, str]]:
-    """(root package, unit -> layer) as the architecture declaration at *declaration* has them."""
+def read_declaration(root: Path, declaration: str) -> dict:
+    """The architecture declaration as a mapping; empty when it is missing or not one."""
     path = root / declaration
     data = yaml.safe_load(path.read_text()) if path.is_file() else None
-    data = data if isinstance(data, dict) else {}
+    return data if isinstance(data, dict) else {}
+
+
+def layer_map(data: dict) -> dict[str, str]:
+    """Each module the declaration names -> the layer it puts it in (`shared` included)."""
     layers = []
     for tier in data.get("layers") or []:
         layers += tier if isinstance(tier, list) else [tier]
     named = [(str(layer.get("name")), layer.get("modules") or []) for layer in layers]
     named.append((SHARED_LAYER, data.get(SHARED_LAYER) or []))
-    return str(data.get("root_package") or ""), {m: name for name, ms in named for m in ms}
+    return {module: name for name, modules in named for module in modules}
+
+
+def module_of(anchor: str, package: str) -> str | None:
+    """The top-level module of *package* that a code anchor (`pkg/x.py`, `pkg/x`) lies in."""
+    parts = PurePosixPath(anchor).parts
+    return PurePosixPath(parts[1]).stem if len(parts) > 1 and parts[0] == package else None
+
+
+def layer_folder(doc: Doc) -> str:
+    """The first folder of the page's bundle path: where the layers place it."""
+    return doc.path.split("/")[1]
 
 
 def placement_problems(docs: list[Doc], root: Path, layout: Layout) -> list[str]:
     """A page describing a module sits in the folder of the layer the declaration puts it in."""
     if layout.layers is None:
         return []
-    package, layer_of = layer_of_units(root, layout.layers)
+    data = read_declaration(root, layout.layers)
+    layer_of, package = layer_map(data), str(data.get("root_package") or "")
     problems = []
     for doc in (d for d in docs if d.is_concept):
         for anchor in doc.code:
-            parts = PurePosixPath(anchor).parts
-            layer = layer_of.get(PurePosixPath(parts[1]).stem) if len(parts) > 1 else None
-            if parts[0] == package and layer and doc.path.split("/")[1] != layer:
+            layer = layer_of.get(module_of(anchor, package) or "")
+            if layer and layer_folder(doc) != layer:
                 problems.append(
                     f"placement: {doc.path} describes {anchor}, which {layout.layers} puts in "
                     f"the '{layer}' layer: move the page to /{layer}/"

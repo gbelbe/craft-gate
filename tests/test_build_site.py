@@ -134,7 +134,7 @@ def test_a_feature_named_by_a_steps_file_without_the_feature_file_is_left_out(tm
     (tmp_path / ck.FEATURES_DIR).mkdir(parents=True)
     (tmp_path / ck.FEATURES_DIR / "test_a.py").write_text('import a\nscenarios("gone.feature")\n')
 
-    steps = site.steps_by_feature(tmp_path, ck.FEATURES_DIR, None)
+    steps = site.steps_by_feature(tmp_path, ck.FEATURES_DIR, ck.FEATURES_DIR)
 
     assert steps == {"gone": frozenset({"a"})}
     assert (
@@ -213,7 +213,7 @@ def test_features_are_read_from_the_folder_the_layout_names(tmp_path) -> None:
     (tmp_path / "spec").mkdir()
     (tmp_path / "spec" / "test_a.py").write_text('import a\nscenarios("x.feature")\n')
     (tmp_path / "spec" / "x.feature").write_text("Feature: x\n")
-    steps = site.steps_by_feature(tmp_path, "spec", None)
+    steps = site.steps_by_feature(tmp_path, "spec", "spec")
     bundle = bundle_of({ALPHA: page_text()})
     one = site.Site(bundle, tmp_path, steps, site_of(bundle, defines={"a"}).units, "spec")
 
@@ -243,4 +243,4 @@ def test_a_step_file_that_binds_nothing_is_not_a_step_file(tmp_path) -> None:
     (tmp_path / FEATURES_ROOT).mkdir(parents=True)
     (tmp_path / "tests/features/conftest.py").write_text("import a\n")
 
-    assert site.steps_by_feature(tmp_path, FEATURES_ROOT, None) == {}
+    assert site.steps_by_feature(tmp_path, FEATURES_ROOT, FEATURES_ROOT) == {}
