@@ -33,6 +33,8 @@ The layout is the bundle's own: `docs/knowledge/bundle.yaml` (optional) says wha
     relations:     relation kinds allowed besides the built-in ones, described but not verified
     features:      where the Gherkin features and their step files live, for the site's scenarios
                    (default: tests/features)
+    pages:         what `sync_knowledge.py` stubs a page for: each `file` (default), or each `child`
+                   (a file or folder directly under a covered root)
 
 Usage:
     python3 scripts/check_knowledge.py [--path .]
@@ -60,7 +62,8 @@ DESCRIPTION_KEY = "description"
 RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
 COVERED_KEY, INSTALLER_KEY, ROOTS_KEY = "covered", "installer", "import-roots"
 FEATURES_KEY, FEATURES_DIR = "features", "tests/features"
-CONFIG_KEYS = (COVERED_KEY, INSTALLER_KEY, ROOTS_KEY, "relations", FEATURES_KEY)
+PAGES_KEY, PAGES_FILE, PAGES_CHILD = "pages", "file", "child"
+CONFIG_KEYS = (COVERED_KEY, INSTALLER_KEY, ROOTS_KEY, "relations", FEATURES_KEY, PAGES_KEY)
 ROOT_DIR = "."
 TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
 FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
@@ -74,6 +77,7 @@ class Layout(NamedTuple):
     import_roots: tuple[str, ...] = (ROOT_DIR,)
     relations: tuple[str, ...] = ()
     features: str = FEATURES_DIR
+    pages: str = PAGES_FILE
 
     @property
     def known_relations(self) -> tuple[str, ...]:
@@ -136,6 +140,7 @@ def load_layout(root: Path) -> Layout:
         import_roots=_strings(given.get(ROOTS_KEY)) or (ROOT_DIR,),
         relations=_strings(given.get(RELATIONS_KEY)),
         features=_directory(given.get(FEATURES_KEY)),
+        pages=PAGES_CHILD if given.get(PAGES_KEY) == PAGES_CHILD else PAGES_FILE,
     )
 
 

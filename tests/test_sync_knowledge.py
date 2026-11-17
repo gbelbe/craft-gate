@@ -182,3 +182,55 @@ def test_folder_concepts_get_the_imports_between_the_modules_below_them(tmp_path
 
     assert relations(tmp_path, "/s/adapters.md") == {IMPORTS: ["/s/domain.md"]}
     assert relations(tmp_path, "/s/domain.md") == {}
+
+
+@pytest.fixture
+def packaged(tmp_path):
+    """One covered root: a package of two modules, a top-level module and a data folder."""
+    (tmp_path / "shop/pkg").mkdir(parents=True)
+    (tmp_path / "shop/assets").mkdir()
+    for name in ("shop/pkg/a.py", "shop/pkg/b.py", "shop/top.py", "shop/assets/x.json"):
+        (tmp_path / name).write_text("")
+    (tmp_path / knowledge.DOCS).mkdir(parents=True)
+    return tmp_path
+
+
+def layout(root, pages: str) -> None:
+    (root / knowledge.DOCS / knowledge.CONFIG).write_text(f"covered: [shop]\npages: {pages}\n")
+
+
+def test_by_default_every_unowned_file_gets_its_own_stub(packaged) -> None:
+    layout(packaged, "file")
+
+    changed = sync.sync(packaged)
+
+    files = ["a-py", "b-py", "top-py", "x-json"]
+
+    assert changed == sorted([f"/unsorted/{n}.md" for n in files] + ["/unsorted/index.md"])
+
+
+def test_with_pages_by_child_a_folder_gets_one_stub_and_a_top_level_file_its_own(
+    packaged,
+) -> None:
+    layout(packaged, "child")
+
+    changed = sync.sync(packaged)
+
+    assert changed == [
+        "/unsorted/assets.md",
+        "/unsorted/index.md",
+        "/unsorted/pkg.md",
+        "/unsorted/top-py.md",
+    ]
+    meta = yaml.safe_load(text(packaged, "/unsorted/pkg.md").split("---\n")[1])
+    assert meta["code"] == ["shop/pkg"]
+    assert meta["type"] == "Package"
+    assert knowledge.problems_in(packaged)  # still undescribed
+    assert not [p for p in knowledge.problems_in(packaged) if "coverage" in p]
+
+
+def test_a_stub_for_a_folder_owns_every_file_below_it(packaged) -> None:
+    layout(packaged, "child")
+    sync.sync(packaged)
+
+    assert sync.sync(packaged, write=False) == []

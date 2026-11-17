@@ -113,11 +113,24 @@ def rewritten(text: str, doc: ck.Doc, found: dict[str, list[str]], titles: dict[
     return f"---\n{_frontmatter(meta)}---\n{body}"
 
 
-def _stub(path: str) -> tuple[str, str]:
-    """(page, text) of a placeholder concept for the unowned file *path*."""
+def _anchor(path: str, layout: ck.Layout) -> str:
+    """What a stub stands for: the file, or its top-level file or folder under a covered root."""
+    if layout.pages != ck.PAGES_CHILD:
+        return path
+    root = next(r for r in layout.covered if path.startswith(r + "/"))
+    return f"{root}/{Path(path).relative_to(root).parts[0]}"
+
+
+def _kind(root: Path, path: str) -> str:
+    if (root / path).is_dir():
+        return "Package"
+    return "Tool" if path.endswith(SCRIPT_SUFFIXES) else "Asset"
+
+
+def _stub(path: str, kind: str) -> tuple[str, str]:
+    """(page, text) of a placeholder concept of the given kind for the unowned *path*."""
     name = Path(path)
     slug = re.sub(r"[^a-z0-9]+", "-", name.name.lower()).strip("-")
-    kind = "Tool" if path.endswith(SCRIPT_SUFFIXES) else "Asset"
     meta = {
         ck.TYPE_KEY: kind,
         "title": name.stem,
@@ -141,9 +154,10 @@ def _listed_in(index: str, pages: dict[str, str]) -> str:
 def stubs(texts: dict[str, str], root: Path) -> dict[str, str]:
     """The pages to add so every unowned file has one, and the unsorted index that lists them."""
     docs = [ck.parse(text, path) for path, text in texts.items()]
-    pages = dict(
-        _stub(p) for p in ck.covered_files(root, ck.load_layout(root)) if not ck.owned(p, docs)
-    )
+    layout = ck.load_layout(root)
+    unowned = [p for p in ck.covered_files(root, layout) if not ck.owned(p, docs)]
+    anchors = sorted({_anchor(p, layout) for p in unowned})
+    pages = dict(_stub(a, _kind(root, a)) for a in anchors)
     pages = {path: text for path, text in pages.items() if path not in texts}
     if not pages:
         return {}

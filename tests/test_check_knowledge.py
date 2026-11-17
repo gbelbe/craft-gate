@@ -411,3 +411,15 @@ def test_the_features_folder_defaults_to_tests_features_and_the_layout_can_move_
 
     path.write_text(LAYOUT + "features: 3\n")
     assert knowledge.load_layout(project).features == "tests/features"
+
+
+def test_pages_per_file_is_the_default_and_only_child_changes_it(project) -> None:
+    faithful(project)
+    path = project / knowledge.DOCS / knowledge.CONFIG
+
+    assert knowledge.load_layout(project).pages == "file"
+    path.write_text(LAYOUT + "pages: child\n")
+    assert knowledge.load_layout(project).pages == "child"
+    path.write_text(LAYOUT + "pages: folder\n")
+    assert knowledge.load_layout(project).pages == "file"
+    assert knowledge.problems_in(project) == []
