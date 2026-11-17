@@ -423,3 +423,107 @@ def test_pages_per_file_is_the_default_and_only_child_changes_it(project) -> Non
     path.write_text(LAYOUT + "pages: folder\n")
     assert knowledge.load_layout(project).pages == "file"
     assert knowledge.problems_in(project) == []
+
+
+ARCH = "architecture.yaml"
+DRIVING, DOMAIN_LAYER, SHARED = "driving", "domain", "shared"
+LAYERS = (DRIVING, DOMAIN_LAYER, SHARED)
+INDEX_MD = "index.md"
+TESTS_DIR = "tests"
+ARCH_TEXT = (
+    "root_package: shop\nlayers:\n  - name: driving\n    modules: [web]\n"
+    "  - - name: domain\n      modules: [rules, pkg]\nshared: [paths]\n"
+)
+
+
+@pytest.fixture
+def layered(tmp_path):
+    """shop/web.py (driving), shop/rules.py (domain), shop/paths.py (shared), one page each."""
+    (tmp_path / "shop").mkdir()
+    (tmp_path / ARCH).write_text(ARCH_TEXT)
+    base = tmp_path / knowledge.DOCS
+    for folder in LAYERS:
+        (base / folder).mkdir(parents=True)
+    (base / knowledge.CONFIG).write_text(f"layers: {ARCH}\n")
+    for layer, name in ((DRIVING, "web"), (DOMAIN_LAYER, "rules"), (SHARED, "paths")):
+        (tmp_path / f"shop/{name}.py").write_text("")
+        (base / layer / f"{name}.md").write_text(concept(f"shop/{name}.py"))
+        (base / layer / INDEX_MD).write_text(f"{link(f'/{layer}/{name}.md', f'/{layer}')}\n")
+    (base / INDEX_MD).write_text("".join(link(f"/{n}/index.md", "") for n in LAYERS))
+    return tmp_path
+
+
+def test_pages_in_the_folder_of_their_layer_have_no_placement_problem(layered) -> None:
+    assert knowledge.problems_in(layered) == []
+
+
+def test_a_page_in_the_wrong_layer_folder_is_reported_with_where_it_belongs(layered) -> None:
+    base = layered / knowledge.DOCS
+    (base / DOMAIN_LAYER / "web.md").write_text(concept("shop/web.py"))
+    (base / DOMAIN_LAYER / INDEX_MD).write_text(
+        link(f"/{DOMAIN_LAYER}/rules.md", f"/{DOMAIN_LAYER}")
+        + link(f"/{DOMAIN_LAYER}/web.md", f"/{DOMAIN_LAYER}")
+        + "\n"
+    )
+    (base / DRIVING / "web.md").unlink()
+    (base / DRIVING / INDEX_MD).write_text("# Driving\n")
+    (base / INDEX_MD).write_text("".join(link(f"/{n}/index.md", "") for n in LAYERS))
+
+    assert knowledge.problems_in(layered) == [
+        "placement: /domain/web.md describes shop/web.py, which architecture.yaml puts in the "
+        "'driving' layer: move the page to /driving/"
+    ]
+
+
+def test_a_module_the_declaration_does_not_name_and_a_page_without_layers_are_left_alone(
+    layered,
+) -> None:
+    (layered / "shop" / "extra.py").write_text("")
+    base = layered / knowledge.DOCS
+    (base / SHARED / "extra.md").write_text(concept("shop/extra.py"))
+    (base / SHARED / INDEX_MD).write_text(
+        link(f"/{SHARED}/paths.md", f"/{SHARED}") + link(f"/{SHARED}/extra.md", f"/{SHARED}") + "\n"
+    )
+    assert knowledge.problems_in(layered) == []
+
+    (base / knowledge.CONFIG).write_text("")
+    (base / DOMAIN_LAYER / "paths.md").write_text(concept("shop/paths.py"))
+    (base / SHARED / "paths.md").unlink()
+    (base / SHARED / INDEX_MD).write_text(link(f"/{SHARED}/extra.md", f"/{SHARED}") + "\n")
+    (base / DOMAIN_LAYER / INDEX_MD).write_text(
+        link(f"/{DOMAIN_LAYER}/rules.md", f"/{DOMAIN_LAYER}")
+        + link(f"/{DOMAIN_LAYER}/paths.md", f"/{DOMAIN_LAYER}")
+        + "\n"
+    )
+    assert knowledge.problems_in(layered) == []
+
+
+def test_a_folder_page_is_placed_by_its_module_name(layered) -> None:
+    (layered / "shop" / "pkg").mkdir()
+    (layered / "shop" / "pkg" / "a.py").write_text("")
+    base = layered / knowledge.DOCS
+    (base / DRIVING / "pkg.md").write_text(concept("shop/pkg"))
+    (base / DRIVING / INDEX_MD).write_text(
+        link(f"/{DRIVING}/web.md", f"/{DRIVING}") + link(f"/{DRIVING}/pkg.md", f"/{DRIVING}") + "\n"
+    )
+
+    assert knowledge.problems_in(layered) == [
+        "placement: /driving/pkg.md describes shop/pkg, which architecture.yaml puts in the "
+        "'domain' layer: move the page to /domain/"
+    ]
+
+
+def test_layers_and_steps_default_to_none_and_take_text(project) -> None:
+    faithful(project)
+    path = project / knowledge.DOCS / knowledge.CONFIG
+
+    assert knowledge.load_layout(project).layers is None
+    path.write_text(LAYOUT + "layers: architecture.yaml\nsteps: tests\n")
+    layout = knowledge.load_layout(project)
+    assert (layout.layers, layout.steps) == ("architecture.yaml", TESTS_DIR)
+
+
+def test_the_steps_folder_is_the_one_named_or_else_the_features_folder() -> None:
+    assert knowledge.Layout().steps_dir == "tests/features"
+    assert knowledge.Layout(features="spec").steps_dir == "spec"
+    assert knowledge.Layout(features="spec", steps=TESTS_DIR).steps_dir == TESTS_DIR

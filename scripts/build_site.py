@@ -37,7 +37,6 @@ import check_knowledge as ck  # noqa: E402
 from check_knowledge import DOCS, FRONT, INDEX, Doc, parse, read_bundle  # noqa: E402
 
 FEATURE_SUFFIX = ".feature"
-SCENARIOS = re.compile(r'scenarios\("([^"]+)"\)')
 RELATION_LINE = re.compile(r"^(Imports|Installs|Writes|Calls|Runs): .*\n?", re.M)
 TITLE = re.compile(r"# .*\n")
 HEADING_MARK = re.compile(r"^#+\s*")
@@ -211,14 +210,30 @@ class Site(NamedTuple):
     features: str  # the folder of the features, from the layout
 
 
-def steps_by_feature(root: Path, features: str) -> dict[str, frozenset[str]]:
-    """Each feature -> the dotted names its step files import."""
+BINDING = re.compile(r"""scenarios?\(\s*["']([^"']+\.feature)["']""")
+
+
+def bound_features(steps: Path, features: Path) -> list[str]:
+    """The features (paths relative to *features*, without `.feature`) a step file binds.
+
+    A binding that points outside *features* is not a feature of this bundle and is left out.
+    """
+    base = features.resolve()
+    bound = [(steps.parent / argument).resolve() for argument in BINDING.findall(steps.read_text())]
+    return [f.relative_to(base).with_suffix("").as_posix() for f in bound if f.is_relative_to(base)]
+
+
+def steps_by_feature(root: Path, features: str, search: str) -> dict[str, frozenset[str]]:
+    """Each feature -> the dotted names the step files binding it import.
+
+    Every `.py` file under *search* is read; one that binds no feature is not a step file.
+    """
     found: dict[str, set[str]] = defaultdict(set)
-    for steps in sorted((root / features).glob("test_*.py")):
-        text = steps.read_text()
-        names = ck.imported_names(ast.parse(text), "")
-        for feature in SCENARIOS.findall(text):
-            found[feature.removesuffix(FEATURE_SUFFIX)] |= names
+    for path in sorted((root / search).rglob("*.py")):
+        bound = bound_features(path, root / features)
+        names = ck.imported_names(ast.parse(path.read_text()), "") if bound else set()
+        for feature in bound:
+            found[feature] |= names
     return {feature: frozenset(names) for feature, names in found.items()}
 
 
@@ -339,7 +354,13 @@ def build(root: Path, out: Path) -> int:
     docs = [page.doc for page in bundle.pages.values()]
     layout = ck.load_layout(root)
     units = ck.units_of(docs, root, layout)
-    site = Site(bundle, root, steps_by_feature(root, layout.features), units, layout.features)
+    site = Site(
+        bundle,
+        root,
+        steps_by_feature(root, layout.features, layout.steps_dir),
+        units,
+        layout.features,
+    )
     shutil.rmtree(out, ignore_errors=True)
     for path in bundle.pages:
         target = out / path.lstrip("/")

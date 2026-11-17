@@ -35,6 +35,10 @@ The layout is the bundle's own: `docs/knowledge/bundle.yaml` (optional) says wha
                    (default: tests/features)
     pages:         what `sync_knowledge.py` stubs a page for: each `file` (default), or each `child`
                    (a file or folder directly under a covered root)
+    steps:         where the step files that bind those features live, searched recursively
+                   (default: the features folder)
+    layers:        an architecture.yaml; a page then lives in the folder named for the layer that
+                   file puts the module it describes in
 
 Usage:
     python3 scripts/check_knowledge.py [--path .]
@@ -63,7 +67,17 @@ RELATIONS = (IMPORTS, INSTALLS, "writes", "calls", "runs")
 COVERED_KEY, INSTALLER_KEY, ROOTS_KEY = "covered", "installer", "import-roots"
 FEATURES_KEY, FEATURES_DIR = "features", "tests/features"
 PAGES_KEY, PAGES_FILE, PAGES_CHILD = "pages", "file", "child"
-CONFIG_KEYS = (COVERED_KEY, INSTALLER_KEY, ROOTS_KEY, "relations", FEATURES_KEY, PAGES_KEY)
+LAYERS_KEY, STEPS_KEY, SHARED_LAYER = "layers", "steps", "shared"
+CONFIG_KEYS = (
+    COVERED_KEY,
+    INSTALLER_KEY,
+    ROOTS_KEY,
+    "relations",
+    FEATURES_KEY,
+    PAGES_KEY,
+    LAYERS_KEY,
+    STEPS_KEY,
+)
 ROOT_DIR = "."
 TYPE_KEY, CODE_KEY, RELATIONS_KEY = "type", "code", "relations"
 FRONT = re.compile(r"\A---\n(.*?)\n---\n(.*)\Z", re.S)
@@ -78,6 +92,13 @@ class Layout(NamedTuple):
     relations: tuple[str, ...] = ()
     features: str = FEATURES_DIR
     pages: str = PAGES_FILE
+    layers: str | None = None
+    steps: str | None = None
+
+    @property
+    def steps_dir(self) -> str:
+        """Where step files are searched: the folder `steps` names, else the features folder."""
+        return self.steps or self.features
 
     @property
     def known_relations(self) -> tuple[str, ...]:
@@ -114,6 +135,10 @@ def _strings(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value) if isinstance(value, list) else ()
 
 
+def _optional_text(value: object) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
 def _directory(value: object) -> str:
     return value if isinstance(value, str) and value else FEATURES_DIR
 
@@ -141,6 +166,8 @@ def load_layout(root: Path) -> Layout:
         relations=_strings(given.get(RELATIONS_KEY)),
         features=_directory(given.get(FEATURES_KEY)),
         pages=PAGES_CHILD if given.get(PAGES_KEY) == PAGES_CHILD else PAGES_FILE,
+        layers=_optional_text(given.get(LAYERS_KEY)),
+        steps=_optional_text(given.get(STEPS_KEY)),
     )
 
 
@@ -232,6 +259,52 @@ def coverage_problems(docs: list[Doc], root: Path, layout: Layout) -> list[str]:
         for path in covered_files(root, layout)
         if not owned(path, docs)
     ]
+
+
+def read_declaration(root: Path, declaration: str) -> dict:
+    """The architecture declaration as a mapping; empty when it is missing or not one."""
+    path = root / declaration
+    data = yaml.safe_load(path.read_text()) if path.is_file() else None
+    return data if isinstance(data, dict) else {}
+
+
+def layer_map(data: dict) -> dict[str, str]:
+    """Each module the declaration names -> the layer it puts it in (`shared` included)."""
+    layers = []
+    for tier in data.get("layers") or []:
+        layers += tier if isinstance(tier, list) else [tier]
+    named = [(str(layer.get("name")), layer.get("modules") or []) for layer in layers]
+    named.append((SHARED_LAYER, data.get(SHARED_LAYER) or []))
+    return {module: name for name, modules in named for module in modules}
+
+
+def module_of(anchor: str, package: str) -> str | None:
+    """The top-level module of *package* that a code anchor (`pkg/x.py`, `pkg/x`) lies in."""
+    parts = PurePosixPath(anchor).parts
+    return PurePosixPath(parts[1]).stem if len(parts) > 1 and parts[0] == package else None
+
+
+def layer_folder(doc: Doc) -> str:
+    """The first folder of the page's bundle path: where the layers place it."""
+    return doc.path.split("/")[1]
+
+
+def placement_problems(docs: list[Doc], root: Path, layout: Layout) -> list[str]:
+    """A page describing a module sits in the folder of the layer the declaration puts it in."""
+    if layout.layers is None:
+        return []
+    data = read_declaration(root, layout.layers)
+    layer_of, package = layer_map(data), str(data.get("root_package") or "")
+    problems = []
+    for doc in (d for d in docs if d.is_concept):
+        for anchor in doc.code:
+            layer = layer_of.get(module_of(anchor, package) or "")
+            if layer and layer_folder(doc) != layer:
+                problems.append(
+                    f"placement: {doc.path} describes {anchor}, which {layout.layers} puts in "
+                    f"the '{layer}' layer: move the page to /{layer}/"
+                )
+    return problems
 
 
 def link_problems(docs: list[Doc]) -> list[str]:
@@ -389,6 +462,7 @@ def problems_in(root: Path) -> list[str]:
         *todo_problems(docs),
         *anchor_problems(docs, root),
         *coverage_problems(docs, root, layout),
+        *placement_problems(docs, root, layout),
         *link_problems(docs),
         *prose_problems(docs),
         *imports_problems(docs, units_of(docs, root, layout)),

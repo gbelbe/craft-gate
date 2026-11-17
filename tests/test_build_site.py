@@ -12,6 +12,7 @@ from check_knowledge import parse
 ALPHA, BETA = "/g/alpha.md", "/g/beta.md"
 ALPHA_ROOT = Path("/nonexistent")
 SCRIPT = "scripts/a.py"
+FEATURES_ROOT = "tests/features"
 
 
 def page_text(code: str | None = None, relations: dict | None = None, body: str = "# A\n\nText.\n"):
@@ -133,7 +134,7 @@ def test_a_feature_named_by_a_steps_file_without_the_feature_file_is_left_out(tm
     (tmp_path / ck.FEATURES_DIR).mkdir(parents=True)
     (tmp_path / ck.FEATURES_DIR / "test_a.py").write_text('import a\nscenarios("gone.feature")\n')
 
-    steps = site.steps_by_feature(tmp_path, ck.FEATURES_DIR)
+    steps = site.steps_by_feature(tmp_path, ck.FEATURES_DIR, ck.FEATURES_DIR)
 
     assert steps == {"gone": frozenset({"a"})}
     assert (
@@ -212,7 +213,7 @@ def test_features_are_read_from_the_folder_the_layout_names(tmp_path) -> None:
     (tmp_path / "spec").mkdir()
     (tmp_path / "spec" / "test_a.py").write_text('import a\nscenarios("x.feature")\n')
     (tmp_path / "spec" / "x.feature").write_text("Feature: x\n")
-    steps = site.steps_by_feature(tmp_path, "spec")
+    steps = site.steps_by_feature(tmp_path, "spec", "spec")
     bundle = bundle_of({ALPHA: page_text()})
     one = site.Site(bundle, tmp_path, steps, site_of(bundle, defines={"a"}).units, "spec")
 
@@ -220,3 +221,26 @@ def test_features_are_read_from_the_folder_the_layout_names(tmp_path) -> None:
 
     assert "Feature: x" in text
     assert "`spec/x.feature`" in text
+
+
+def test_a_step_file_outside_the_features_folder_binds_features_by_a_relative_path(
+    tmp_path,
+) -> None:
+    (tmp_path / "tests/features/ci").mkdir(parents=True)
+    (tmp_path / "tests/features/ci/x.feature").write_text("Feature: x\n")
+    (tmp_path / "tests/brick/step_defs").mkdir(parents=True)
+    (tmp_path / "tests/brick/step_defs/test_x.py").write_text(
+        'from a import b\nscenarios("../../features/ci/x.feature")\n'
+        'scenarios("../../../elsewhere/y.feature")\n'
+    )
+
+    steps = site.steps_by_feature(tmp_path, FEATURES_ROOT, "tests/brick")
+
+    assert steps == {"ci/x": frozenset({"a", "a.b"})}
+
+
+def test_a_step_file_that_binds_nothing_is_not_a_step_file(tmp_path) -> None:
+    (tmp_path / FEATURES_ROOT).mkdir(parents=True)
+    (tmp_path / "tests/features/conftest.py").write_text("import a\n")
+
+    assert site.steps_by_feature(tmp_path, FEATURES_ROOT, FEATURES_ROOT) == {}
