@@ -39,6 +39,7 @@ SHIPPED=(
   scripts/render_architecture.py
   scripts/check_architecture_ratchet.py
   scripts/architecture_docs.py
+  scripts/architecture_wiring.py
   # helpers the gate scripts import — they must travel with them
   scripts/gate-requirements.txt
   scripts/gitdiff.py

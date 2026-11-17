@@ -139,6 +139,13 @@ def write_source(root, text: str = f"{ROOT}: shop\n{LAYERS}: [adapters, domain]\
     (root / arch.SOURCE).write_text(text)
 
 
+def wire(root) -> None:
+    """A workflow that runs the ratchet, as `templates/architecture.yml` does."""
+    workflow = root / ".github" / "workflows" / "ci.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("run: python3 scripts/check_architecture_ratchet.py --base origin/main\n")
+
+
 def test_main_writes_the_contracts_file(tmp_path, capsys) -> None:
     write_source(tmp_path)
 
@@ -150,6 +157,7 @@ def test_main_writes_the_contracts_file(tmp_path, capsys) -> None:
 
 def test_check_passes_when_the_file_is_current(tmp_path, capsys) -> None:
     write_source(tmp_path)
+    wire(tmp_path)
     arch.main([PATH, str(tmp_path)])
     capsys.readouterr()
 
@@ -159,6 +167,7 @@ def test_check_passes_when_the_file_is_current(tmp_path, capsys) -> None:
 
 def test_check_fails_when_the_declaration_moved_on(tmp_path, capsys) -> None:
     write_source(tmp_path)
+    wire(tmp_path)
     arch.main([PATH, str(tmp_path)])
     write_source(tmp_path, "root_package: shop\nlayers: [adapters, application, domain]\n")
     capsys.readouterr()
@@ -169,8 +178,26 @@ def test_check_fails_when_the_declaration_moved_on(tmp_path, capsys) -> None:
 
 def test_check_fails_when_the_file_was_never_generated(tmp_path) -> None:
     write_source(tmp_path)
+    wire(tmp_path)
 
     assert arch.main([PATH, str(tmp_path), CHECK]) == 1
+
+
+def test_check_fails_when_nothing_runs_the_ratchet_even_if_the_files_are_current(
+    tmp_path, capsys
+) -> None:
+    write_source(tmp_path)
+    arch.main([PATH, str(tmp_path)])
+    capsys.readouterr()
+
+    assert arch.main([PATH, str(tmp_path), CHECK]) == 1
+    assert "check_architecture_ratchet.py" in capsys.readouterr().err
+
+
+def test_writing_the_files_does_not_need_the_ratchet_to_be_wired(tmp_path) -> None:
+    write_source(tmp_path)
+
+    assert arch.main([PATH, str(tmp_path)]) == 0
 
 
 def test_main_reports_a_bad_declaration_and_exits_2(tmp_path, capsys) -> None:

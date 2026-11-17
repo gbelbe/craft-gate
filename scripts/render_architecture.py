@@ -28,7 +28,8 @@ so the list can only shrink.
 
 Usage:
     python scripts/render_architecture.py [--path .]            # write the generated files
-    python scripts/render_architecture.py [--path .] --check    # exit 1 if it is out of date
+    python scripts/render_architecture.py [--path .] --check    # exit 1 if it is out of date, or
+                                                                # nothing runs the ratchet
     python scripts/render_architecture.py [--path .] --breaches # today's breaches, for the baseline
 """
 
@@ -52,6 +53,7 @@ from architecture_docs import (  # noqa: E402
     layer_tiers,
     render_docs,
 )
+from architecture_wiring import unwired  # noqa: E402
 
 SOURCE = "architecture.yaml"
 TARGET = ".architecture.importlinter"
@@ -218,18 +220,26 @@ def stale(files: dict[Path, str]) -> list[Path]:
     return [p for p, text in files.items() if not p.is_file() or p.read_text() != text]
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--path", default=".", help="repository root (default: .)")
-    parser.add_argument("--check", action="store_true", help="fail if a generated file is stale")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="fail if a generated file is stale or the ratchet is not wired",
+    )
     parser.add_argument(
         "--breaches",
         action="store_true",
         help="print today's outward imports, ready to paste under known_violations",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     root = Path(args.path)
     try:
         files = outputs(root)
@@ -239,7 +249,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.breaches:
         return print_breaches(root)
     if args.check:
-        return report_stale(stale(files), root)
+        return check(files, root)
+    return write(files, root)
+
+
+def check(files: dict[Path, str], root: Path) -> int:
+    """1 when a generated file is stale or nothing runs the ratchet; both are always reported."""
+    return max(report_stale(stale(files), root), report_unwired(root))
+
+
+def write(files: dict[Path, str], root: Path) -> int:
     for path, text in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
@@ -266,6 +285,13 @@ def report_stale(paths: list[Path], root: Path) -> int:
     if not paths:
         print(f"✓ generated files match {SOURCE}")
     return 1 if paths else 0
+
+
+def report_unwired(root: Path) -> int:
+    reason = unwired(root)
+    if reason:
+        print(f"✗ {reason}", file=sys.stderr)
+    return 1 if reason else 0
 
 
 if __name__ == "__main__":

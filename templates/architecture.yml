@@ -8,6 +8,8 @@
 #     baseline of known violations has no stale line;
 #   - check_architecture_ratchet.py: a change that touches a module owning known violations removes at
 #     least one of them (or carries a Tidy-Exempt: trailer), so the baseline actually shrinks.
+#     render_architecture.py --check fails in any repo where no workflow or pre-commit hook runs it,
+#     so a repo that updates craft-gate cannot leave this job out unnoticed.
 #
 # The contracts are a file of their own, so a repo's other import-linter contracts (pyproject.toml,
 # setup.cfg) keep running under a plain `lint-imports`; run both.
